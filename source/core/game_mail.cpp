@@ -147,7 +147,7 @@ bool Game::openMail() {
     if (mailbox.empty()) return false;
     std::string key = mailbox.front();
     auto it = data.mail.find(key);
-    letter = parseLetter(key, it != data.mail.end() ? it->second : "", data.layout.farmerName);
+    letter = parseLetter(key, it != data.mail.end() ? it->second : "", me.name);
     letterOpen = true;
     return true;
 }

@@ -27,6 +27,8 @@ public:
                bool flipX, uint32_t tint) override;
     void imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py, float dx,
                       float dy, float radians, uint32_t tint) override;
+    void imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy, float scale,
+                     bool flipX, uint32_t tint) override;
     void rect(float x, float y, float w, float h, uint32_t color) override;
     void line(float x1, float y1, float x2, float y2, uint32_t color, float width) override;
     void text(float x, float y, float scale, uint32_t color, const std::string& s, int align) override;

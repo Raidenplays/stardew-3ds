@@ -155,6 +155,10 @@ struct EventActor {
     std::string bubble;          // textAboveHead
     float bubbleT = 0;
     float speed = 40;            // px/s
+    float shakeT = 0;            // seconds of shaking left
+    std::vector<std::pair<int, int>> route;   // advancedMove: tile steps still to walk
+    bool routeLoop = false;
+    size_t routeAt = 0;
 };
 
 struct Cutscene {
@@ -240,7 +244,17 @@ class Game {
 public:
     explicit Game(const GameData& data);
 
+    // Who you are (from character creation; saved with the game).
+    struct Character {
+        std::string name = "Farmer", farm = "Stardew", favorite = "";
+        Outfit outfit;
+        int farmType = 0;          // index into GameData::farmTypes
+    };
+    Character me;
+    const std::string& farmerName() const { return me.name; }
+
     bool newGame(uint32_t seed, std::string* err = nullptr);
+    bool newGame(uint32_t seed, const Character& who, std::string* err = nullptr);
     void update(float dt, const Input& in);
 
     // Things the UI can trigger.
@@ -421,6 +435,9 @@ public:
 
     // Cutscenes
     bool startEvent(const std::string& location, const std::string& key, const std::string& script);
+    // New farm: play the arrival cutscene from your Data/Events (the bus stop
+    // event marked for day 0). Returns false if there isn't one.
+    bool startOpening();
     bool checkEvents();                 // run the first eligible event here, if any
     bool eventConditionsMet(const std::string& key) const;
     void skipEvent();

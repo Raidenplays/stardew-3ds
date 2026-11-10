@@ -266,6 +266,14 @@ bool GameData::load(const std::string& root, std::string* err) {
     }
 
     lines.clear();
+    readLines(root + "data/farmtypes.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() >= 3) farmTypes.push_back({f[0], f[1], f[2]});
+    }
+    if (farmTypes.empty()) farmTypes.push_back({"Standard", "Standard", "Farm"});
+
+    lines.clear();
     readLines(root + "data/mail.dat", lines);
     for (auto& l : lines) {
         size_t t = l.find('\t');

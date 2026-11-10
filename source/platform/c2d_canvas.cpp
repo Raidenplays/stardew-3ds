@@ -48,6 +48,19 @@ void C2DCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, int
     }
 }
 
+void C2DCanvas::imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+                            float scale, bool flipX, uint32_t tint) {
+    const Texture* t = get(tex);
+    if (!t) return;
+    if (tint) {
+        C2D_ImageTint it;
+        C2D_PlainImageTint(&it, toC2D(tint), 1.0f);
+        t->draw(sx, sy, sw, sh, dx, dy, flipX, &it, scale);
+    } else {
+        t->draw(sx, sy, sw, sh, dx, dy, flipX, nullptr, scale);
+    }
+}
+
 void C2DCanvas::rect(float x, float y, float w, float h, uint32_t color) {
     C2D_DrawRectSolid(x, y, 0.5f, w, h, toC2D(color));
 }

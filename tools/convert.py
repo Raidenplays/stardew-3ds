@@ -598,6 +598,7 @@ def write_data(content, out_dir):
     write_quests(content, out_dir)
     write_mail(content, out_dir)
     write_professions(content, out_dir)
+    write_farm_types(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -922,6 +923,30 @@ def write_professions(content, out_dir):
                 desc = ui.get(f"LevelUp_ProfessionDescription_{key}", "")
                 f.write("\t".join(_clean(x) for x in [pid, si, level, parent, key, name, desc]) + "\n")
     print("  professions.dat: 30")
+
+
+# farm types: the game's built-in ones by map, plus Data/AdditionalFarms
+FARM_TYPES = [("Standard", "Standard", "Farm"), ("Fishing", "Riverland", "Farm_Fishing"),
+              ("Foraging", "Forest", "Farm_Foraging"), ("Mining", "Hill-top", "Farm_Mining"),
+              ("Combat", "Wilderness", "Farm_Combat"), ("FourCorners", "Four Corners", "Farm_FourCorners"),
+              ("Beach", "Beach", "Farm_Island")]
+
+
+def write_farm_types(content, out_dir):
+    maps = os.path.join(content, "Maps")
+    rows = [(k, n, m) for k, n, m in FARM_TYPES if os.path.isfile(os.path.join(maps, m + ".tmx"))]
+    for extra in _load_json(content, "Data/AdditionalFarms.json") or []:
+        mp = extra.get("MapName")
+        if not mp or not os.path.isfile(os.path.join(maps, mp + ".tmx")):
+            continue
+        key = str(extra.get("Id", mp))
+        name = key.replace("Farm", " Farm").strip() if key.endswith("Farm") else key
+        name = name.split(".")[-1].replace("_", " ")
+        rows.append((key, name, mp))
+    with open(os.path.join(out_dir, "farmtypes.dat"), "w", encoding="utf-8") as f:
+        for k, n, m in rows:
+            f.write(f"{_clean(k)}\t{_clean(n)}\t{_clean(m)}\n")
+    print(f"  farmtypes.dat: {len(rows)} farm types")
 
 
 # ---------------------------------------------------------------- crafting / machines

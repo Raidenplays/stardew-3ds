@@ -190,6 +190,23 @@ bool Game::checkEvents() {
     return false;
 }
 
+bool Game::startOpening() {
+    std::vector<std::pair<std::string, std::string>> evs;
+    if (!readEventFile(data.vfs, "BusStop", evs)) return false;
+    const std::pair<std::string, std::string>* pick = nullptr;
+    for (auto& e : evs) {
+        // the arrival is the bus stop event whose condition is "day 0"
+        std::vector<std::string> pre = splitSlash(e.first);
+        for (size_t i = 1; i < pre.size(); i++)
+            if (pre[i] == "u 0") pick = &e;
+        if (pick) break;
+    }
+    if (!pick || !hasMap("BusStop")) return false;
+    if (!warpTo("BusStop", 10, 10)) return false;
+    timeOfDay = DAY_START;
+    return startEvent("BusStop", pick->first, pick->second);
+}
+
 bool Game::startEvent(const std::string& location, const std::string& key, const std::string& script) {
     std::vector<std::string> cmds = splitSlash(script);
     if (cmds.size() < 3) return false;
@@ -236,6 +253,13 @@ void Game::endEvent() {
     if (!cs.active) return;
     cs.active = false;
     eventsSeen.insert(cs.id);
+    if (cs.after == "beginGame") {   // the arrival is over: wake up at home, day 1
+        timeOfDay = DAY_START;
+        clockAcc = 0;
+        wakeUp();
+        npcsEnterLocation();
+        return;
+    }
     // put the player back
     if (cs.after == "warpOut" && !cur->map.warps.empty()) {
         Warp w = cur->map.warps[0];
@@ -288,6 +312,17 @@ void Game::eventUpdate(float dt) {
                 a.y = a.ty;
                 a.moving = false;
                 a.facing = a.endFacing;
+                // advancedMove: carry on with the next leg of the route
+                if (a.routeAt < a.route.size() || (a.routeLoop && !a.route.empty())) {
+                    if (a.routeAt >= a.route.size()) a.routeAt = 0;
+                    auto leg = a.route[a.routeAt++];
+                    a.tx = a.x + leg.first * TILE;
+                    a.ty = a.y + leg.second * TILE;
+                    a.facing = std::abs(leg.first) > std::abs(leg.second) ? (leg.first > 0 ? FACE_RIGHT : FACE_LEFT)
+                                                                           : (leg.second > 0 ? FACE_DOWN : FACE_UP);
+                    a.endFacing = a.facing;
+                    a.moving = leg.first || leg.second;
+                }
             } else {
                 a.x += dx / d * st;
                 a.y += dy / d * st;
@@ -300,6 +335,7 @@ void Game::eventUpdate(float dt) {
             if (a.jumpT > 0.45f) a.jumpT = -1;
         }
         if (a.emoteT > 0) a.emoteT -= dt;
+        if (a.shakeT > 0) a.shakeT -= dt;
         if (a.bubbleT > 0) a.bubbleT -= dt;
     }
     if (cs.panT > 0) {
@@ -355,7 +391,7 @@ bool Game::eventStep(const std::string& raw) {
             }
             return true;
         }
-        std::vector<DialoguePage> pages = parseDialogue(text, data.layout.farmerName);
+        std::vector<DialoguePage> pages = parseDialogue(text, me.name);
         if (pages.empty()) return true;
         dialogue.active = true;
         dialogue.npc = data.npc(who) ? who : "";
@@ -554,9 +590,58 @@ bool Game::eventStep(const std::string& raw) {
         return true;
     }
     if (c == "removeTemporarySprites") return true;
+    if (c == "shake") {
+        if (EventActor* a = eventActor(arg(1))) a->shakeT = std::max(0.1f, iarg(2) / 1000.0f);
+        return true;
+    }
+    if (c == "startJittering" || c == "stopJittering") {
+        if (EventActor* a = eventActor("farmer")) a->shakeT = c == "startJittering" ? 60.0f : 0.0f;
+        return true;
+    }
+    if (c == "halt") {   // everyone stops where they are
+        for (auto& a : cs.actors) {
+            a.moving = false;
+            a.route.clear();
+            a.tx = a.x;
+            a.ty = a.y;
+        }
+        return true;
+    }
+    if (c == "proceedPosition") {   // wait for someone to finish walking
+        cs.waitMoves = true;
+        return false;
+    }
+    if (c == "advancedMove") {
+        // advancedMove <who> <loop> <dx> <dy> ...: walk a route of tile steps,
+        // without holding up the rest of the script
+        if (EventActor* a = eventActor(arg(1))) {
+            a->route.clear();
+            a->routeAt = 0;
+            a->routeLoop = truthy(arg(2));
+            for (size_t i = 3; i + 1 < w.size(); i += 2) {
+                if (!isNum(w[i]) || !isNum(w[i + 1])) break;
+                int dx = atoi(w[i].c_str()), dy = atoi(w[i + 1].c_str());
+                // a pair with one zero and one facing number + delay is a turn; keep only real steps
+                if (dx && dy) continue;
+                if (dx || dy) a->route.push_back({dx, dy});
+            }
+            if (!a->route.empty() && !a->moving) {
+                auto leg = a->route[a->routeAt++];
+                a->tx = a->x + leg.first * TILE;
+                a->ty = a->y + leg.second * TILE;
+                a->facing = std::abs(leg.first) > std::abs(leg.second) ? (leg.first > 0 ? FACE_RIGHT : FACE_LEFT)
+                                                                       : (leg.second > 0 ? FACE_DOWN : FACE_UP);
+                a->endFacing = a->facing;
+                a->moving = true;
+                a->frame = -1;
+            }
+        }
+        return true;
+    }
     if (c == "end") {
         std::string kind = arg(1);
         if (kind == "newDay") cs.after = "newDay";
+        else if (kind == "beginGame") cs.after = "beginGame";
         else if (kind == "warpOut" || kind == "dialogueWarpOut") cs.after = "warpOut";
         else if (kind == "position" && w.size() > 3) {
             cs.retX = iarg(2) * TILE + TILE / 2.0f;
@@ -571,7 +656,7 @@ bool Game::eventStep(const std::string& raw) {
         }
         endEvent();
         if (!lastLine.empty()) {
-            auto pages = parseDialogue(lastLine, data.layout.farmerName);
+            auto pages = parseDialogue(lastLine, me.name);
             if (!pages.empty()) {
                 dialogue.active = true;
                 dialogue.npc = lastNpc;

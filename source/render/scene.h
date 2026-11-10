@@ -53,3 +53,8 @@ void summaryMove(sv::Game& g, Ui& ui, int dir);   // left/right between professi
 void fishingTouch(const sv::Game& g, bool down, bool held, int x, int y, sv::Input& in);   // A pressed while someone is talking
 std::string shopTitle(const std::string& id);
 std::string placeName(const std::string& id);   // "Town" -> "Pelican Town"
+// shared bits for other screens (title, character creation)
+void drawFarmerPreview(Canvas& c, const sv::Game& g, const sv::Outfit& o, float feetX, float feetY, int facing,
+                       float walkTime, float scale);
+void uiFrame(Canvas& c, float x, float y, float w, float h, bool dark = false);
+void uiSlot(Canvas& c, float x, float y, float w, float h, bool selected);

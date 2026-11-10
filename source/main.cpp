@@ -11,6 +11,7 @@
 #include "render/fonts.h"
 #include "render/modscreen.h"
 #include "render/scene.h"
+#include "render/title.h"
 
 using namespace sv;
 
@@ -103,7 +104,59 @@ int main() {
     backupSaveIfModsChanged(root, savePath, data.vfs.signature());
     bool ok = data.load(root, &err);
     loadUiFonts(canvas, [&data](const std::string& rel) { return data.vfs.path(rel); });
-    if (ok && !game.load(savePath)) ok = game.newGame((uint32_t)osGetTime(), &err);
+    bool newFarm = false;
+    if (ok) {
+        // ---- title screen: Continue your farm, or make a new one
+        FILE* sf = fopen(savePath.c_str(), "rb");
+        bool hasSave = sf != nullptr;
+        if (sf) fclose(sf);
+        TitleUi title;
+        titleInit(title, data, hasSave);
+        title.keyboard = [](const std::string& hint, const std::string& cur, int maxLen) {
+            SwkbdState kb;
+            char buf[64] = {0};
+            swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, std::min(maxLen, 63));
+            swkbdSetHintText(&kb, hint.c_str());
+            swkbdSetInitialText(&kb, cur.c_str());
+            swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+            SwkbdButton b = swkbdInputText(&kb, buf, sizeof buf);
+            return b == SWKBD_BUTTON_RIGHT ? std::string(buf) : cur;
+        };
+        if (hasSave) game.load(savePath);   // the title shows your farmer
+        while (aptMainLoop() && (title.screen == TS_TITLE || title.screen == TS_CREATE)) {
+            hidScanInput();
+            u32 k = hidKeysDown();
+            if (k & KEY_UP) titleKey(title, data, TK_UP);
+            if (k & KEY_DOWN) titleKey(title, data, TK_DOWN);
+            if (k & KEY_LEFT) titleKey(title, data, TK_LEFT);
+            if (k & KEY_RIGHT) titleKey(title, data, TK_RIGHT);
+            if (k & KEY_A) titleKey(title, data, TK_A);
+            if (k & KEY_B) titleKey(title, data, TK_B);
+            if (k & KEY_START) titleKey(title, data, TK_START);
+            if (k & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                titleTouch(title, data, tp.px, tp.py);
+            }
+            C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+            canvas.beginFrame();
+            C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
+            C2D_SceneBegin(top);
+            drawTitleTop(canvas, game, title);
+            C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 0xFF));
+            C2D_SceneBegin(bot);
+            drawTitleBottom(canvas, game, title);
+            C3D_FrameEnd(0);
+        }
+        if (title.screen == TS_DONE_NEW) {
+            ok = game.newGame((uint32_t)osGetTime(), title.draft, &err);
+            newFarm = true;
+        } else if (!hasSave || !game.load(savePath)) {
+            ok = game.newGame((uint32_t)osGetTime(), &err);
+        }
+        canvas.dropTextures();
+    }
+    if (ok && newFarm) game.startOpening();   // the arrival cutscenes
     if (!ok) {
         fatalScreen(canvas, top,
                     "Couldn't load game files: " + err +
