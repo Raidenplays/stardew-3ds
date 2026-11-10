@@ -1,0 +1,59 @@
+// Tile map loaded from a converted .smap file.
+#pragma once
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace sv {
+
+enum MapLayer : int { L_BACK = 0, L_BUILDINGS, L_PATHS, L_FRONT, L_ALWAYSFRONT, L_COUNT };
+
+enum CellFlag : uint8_t {
+    CF_DIGGABLE = 1,
+    CF_WATER = 2,
+    CF_BLOCKED = 4,
+    CF_NOSPAWN = 8,
+    CF_PASSABLE = 16,
+};
+
+struct TileAnim {
+    uint16_t durationMs = 250;
+    std::vector<uint16_t> frames;
+};
+
+struct Tileset {
+    std::string texture;        // may contain "{S}" for the season
+    int columns = 0;
+    int tileCount = 0;
+    std::vector<int16_t> animIndex;   // per tile: index into anims or -1
+    std::vector<TileAnim> anims;
+    std::string textureFor(int season) const;
+};
+
+static const uint16_t NO_TILE = 0xFFFF;
+
+class TileMap {
+public:
+    bool load(const std::string& path, std::string* err);
+
+    int width() const { return w; }
+    int height() const { return h; }
+    bool inBounds(int x, int y) const { return x >= 0 && y >= 0 && x < w && y < h; }
+
+    uint16_t tile(int layer, int x, int y) const { return tiles[layer][y * w + x]; }
+    uint8_t tileset(int layer, int x, int y) const { return tsIdx[layer][y * w + x]; }
+    uint8_t flags(int x, int y) const { return inBounds(x, y) ? cellFlags[y * w + x] : (uint8_t)CF_BLOCKED; }
+
+    // Tile index to draw right now (resolves animations).
+    uint16_t animatedTile(int ts, uint16_t t, uint32_t timeMs) const;
+
+    std::vector<Tileset> tilesets;
+
+private:
+    int w = 0, h = 0;
+    std::vector<uint16_t> tiles[L_COUNT];
+    std::vector<uint8_t> tsIdx[L_COUNT];
+    std::vector<uint8_t> cellFlags;
+};
+
+} // namespace sv
