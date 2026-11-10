@@ -594,6 +594,7 @@ def write_data(content, out_dir):
     write_crafting(content, out_dir, objs)
     write_trees(content, out_dir)
     write_fish(content, out_dir)
+    write_quests(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -827,6 +828,33 @@ def write_fish(content, out_dir):
                     1 if e.get("IgnoreFishDataRequirements") else 0]) + "\n")
                 n += 1
     print(f"  fishspots.dat: {n} entries")
+
+
+def write_quests(content, out_dir):
+    """data/quests.dat: id, type, title, description, objective, target, next, reward."""
+    quests = _load_json(content, "Data/Quests.json")
+    n = 0
+    with open(os.path.join(out_dir, "quests.dat"), "w", encoding="utf-8") as f:
+        for qid, raw in quests.items():
+            p = str(raw).split("/")
+            if len(p) < 8:
+                continue
+            target = p[4].strip()
+            # item targets become engine ids ("(O)24" -> 24, "Name 24 1" keeps the name)
+            parts = target.split()
+            conv = []
+            for t in parts:
+                if t.startswith("(BC)") and BIG_IDS.get(t[4:]) is not None:
+                    conv.append(f"B{BIG_IDS[t[4:]]}")
+                    continue
+                iid = ITEM_IDS.get(t) if (t.startswith("(O)") or t.isdigit()) else None
+                conv.append(str(iid) if iid is not None else t)
+            nxt = " ".join(x.lstrip("h") for x in p[5].split()) if p[5].strip() else "-1"
+            f.write("\t".join(_clean(x) for x in [
+                qid, p[0], p[1], p[2], p[3], " ".join(conv) or "-", nxt,
+                int(p[6]) if p[6].strip().lstrip("-").isdigit() else 0]) + "\n")
+            n += 1
+    print(f"  quests.dat: {n} quests")
 
 
 # ---------------------------------------------------------------- crafting / machines

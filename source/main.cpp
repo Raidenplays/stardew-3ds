@@ -155,7 +155,7 @@ int main() {
             in = Input();
         }
         if (ui.showSummary) {
-            if (kDown & KEY_A) ui.showSummary = false;
+            if (kDown & KEY_A) summaryAdvance(game, ui);
             in = Input();
             dt = 0;
         }

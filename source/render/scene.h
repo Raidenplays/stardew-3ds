@@ -9,7 +9,7 @@
 
 static const int TOP_W = 400, TOP_H = 240, BOT_W = 320, BOT_H = 240;
 
-enum Tab { TAB_ITEMS = 0, TAB_CRAFT, TAB_SOCIAL, TAB_MAP, TAB_OPTIONS, TAB_COUNT };
+enum Tab { TAB_ITEMS = 0, TAB_CRAFT, TAB_QUESTS, TAB_SOCIAL, TAB_MAP, TAB_OPTIONS, TAB_COUNT };
 
 struct Ui {
     int tab = TAB_ITEMS;
@@ -29,6 +29,8 @@ struct Ui {
     int socialScroll = 0;
     int craftSel = 0;         // index into GameData::recipes
     int craftScroll = 0;      // first row shown
+    int questSel = 0;         // journal: selected quest
+    int questScroll = 0;
     int dlgLine = 0;          // first wrapped line shown of a long dialogue page
     int dlgLines = 0;         // wrapped line count of the current page (set while drawing)
 
@@ -44,6 +46,7 @@ void drawTop(Canvas& c, sv::Game& g, Ui& ui, uint32_t timeMs);
 void drawBottom(Canvas& c, sv::Game& g, Ui& ui);
 void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath);
 void dialogueAdvance(sv::Game& g, Ui& ui);
+void summaryAdvance(sv::Game& g, Ui& ui);    // A / tap on the morning screens (level-ups first)
 // While fishing, the touch screen feeds the game input (hold to reel, tap to hook).
 void fishingTouch(const sv::Game& g, bool down, bool held, int x, int y, sv::Input& in);   // A pressed while someone is talking
 std::string shopTitle(const std::string& id);

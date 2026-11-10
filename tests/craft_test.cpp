@@ -291,6 +291,40 @@ int main(int argc, char** argv) {
         gf.update(1.0f / 60, none);
         assert(!gf.fishingActive() || gf.fishing.state == FS_CAST);
     }
+    // ---- quests: a new farm starts with the harvest + social quests
+    {
+        Game gq(d);
+        assert(gq.newGame(11, &err));
+        assert(gq.quests.size() == 2);
+        auto find = [&](const std::string& id) -> QuestState* {
+            for (auto& q : gq.quests) if (q.id == id) return &q;
+            return nullptr;
+        };
+        assert(find("6") && find("9") && !find("6")->done);
+        gq.questItem(24, 1);                       // harvesting a parsnip
+        assert(find("6")->done && find("7"));       // its follow-up arrives
+        gq.questEntered("Town");
+        assert(find("7")->done);
+        int money = gq.money;
+        size_t idx = 0;
+        for (size_t i = 0; i < gq.quests.size(); i++) if (gq.quests[i].id == "6") idx = i;
+        assert(gq.collectQuest(idx) && gq.money == money + 100 && !find("6"));
+        assert(!gq.addQuest("6"));                 // finished quests don't come back
+        gq.addQuest("8");
+        gq.questCrafted(true, 130);
+        assert(find("8")->done);
+        // social: meeting both villagers finishes it
+        for (auto& n : gq.npcs) n.introduced = true;
+        gq.questMet();
+        assert(find("9")->done);
+        // level-ups queue for the morning screen
+        gq.gainXp(SK_MINING, 400);
+        assert(gq.levelUps.size() == 2 && gq.levelUps[1].second == 2);
+        assert(gq.save("/tmp/quest_test.sav"));
+        Game gq2(d);
+        assert(gq2.load("/tmp/quest_test.sav"));
+        assert(gq2.quests.size() == gq.quests.size() && gq2.questsFinished.count("6"));
+    }
     printf("all crafting tests passed\n");
     return 0;
 }

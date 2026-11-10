@@ -27,6 +27,7 @@ void Game::gainXp(int skill, int xp) {
         if (recipeKnown(r)) knewBefore.push_back(r.name);
     skillXp[skill] += xp;
     int after = skillLevel(skill);
+    for (int l = before + 1; l <= after; l++) levelUps.push_back({skill, l});
     if (after > before) {
         std::string msg = std::string(SKILL_NAMES[skill]) + " level " + std::to_string(after) + "!";
         int fresh = 0;
@@ -129,6 +130,7 @@ bool Game::craft(const Recipe& r) {
     }
     addSlot(out);
     say("Crafted " + itemName(out));
+    questCrafted(r.outBig, r.outId);
     return true;
 }
 
@@ -328,6 +330,7 @@ bool Game::interactPlaced(Placed& p) {
         Slot out = p.held;
         if (!addSlot(out)) return true;
         say("+" + std::to_string(out.count) + " " + itemName(out));
+        questItem(out.id, out.count);
         const MachineRule& r = data.machineRules[p.rule];
         p.rule = -1;
         p.held = Slot();
