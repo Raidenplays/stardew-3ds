@@ -734,6 +734,24 @@ void Game::update(float dt, const Input& in) {
         return;
     }
 
+    if (fishingActive()) {
+        fishingUpdate(dt, in);
+        return;
+    }
+    if (in.action) {   // fishing rod: start charging a cast
+        const Slot& sel = inv[selected];
+        const ToolDef* st = sel.type == SLOT_TOOL ? data.tool(sel.id) : nullptr;
+        if (st && st->kind == TOOL_ROD) {
+            int tx, ty;
+            targetTile(tx, ty);
+            if (!tryInteract(tx, ty)) {
+                if (energy <= 0) say("Too tired...");
+                else startFishing();
+            }
+            return;
+        }
+    }
+
     // Upgraded hoe / watering can: hold A to charge, let go to swing.
     {
         const Slot& sel = inv[selected];

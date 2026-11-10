@@ -593,6 +593,7 @@ def write_data(content, out_dir):
     write_furniture(content, out_dir)
     write_crafting(content, out_dir, objs)
     write_trees(content, out_dir)
+    write_fish(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -780,6 +781,52 @@ def write_trees(content, out_dir):
                 tid, seed if seed is not None else -1, *seasons, float(t.get("GrowthChance", 0.2) or 0.2)]) + "\n")
             n += 1
     print(f"  trees.dat: {n} tree types")
+
+
+def write_fish(content, out_dir):
+    """data/fish.dat (how each fish behaves) and data/fishspots.dat (what bites where)."""
+    fish = _load_json(content, "Data/Fish.json")
+    sb = {"spring": 1, "summer": 2, "fall": 4, "winter": 8}
+    n = 0
+    with open(os.path.join(out_dir, "fish.dat"), "w", encoding="utf-8") as f:
+        for fid, raw in fish.items():
+            p = str(raw).split("/")
+            if len(p) < 13 or p[1] == "trap":
+                continue
+            iid = ITEM_IDS.get(fid)
+            if iid is None:
+                continue
+            mask = 0
+            for ss in p[6].split():
+                mask |= sb.get(ss.lower(), 0)
+            weather = {"sunny": 1, "rainy": 2}.get(p[7].strip().lower(), 0)
+            f.write("\t".join(_clean(x) for x in [
+                iid, int(p[1]), p[2], int(p[3]), int(p[4]), p[5].replace(" ", ","), mask or 15, weather,
+                int(p[12]) if p[12].strip().lstrip("-").isdigit() else 0]) + "\n")
+            n += 1
+    print(f"  fish.dat: {n} fish")
+
+    locs = _load_json(content, "Data/Locations.json")
+    n = 0
+    with open(os.path.join(out_dir, "fishspots.dat"), "w", encoding="utf-8") as f:
+        for loc, d in locs.items():
+            for e in (d or {}).get("Fish") or []:
+                if e.get("Condition") or e.get("IsBossFish") or e.get("RequireMagicBait") or e.get("FishAreaId"):
+                    continue
+                ids = e.get("RandomItemId") or [e.get("ItemId")]
+                ids = [ITEM_IDS.get(i) for i in ids if i and str(i).startswith("(O)")]
+                ids = [i for i in ids if i is not None]
+                if not ids:
+                    continue
+                mask = 0
+                if e.get("Season"):
+                    mask = sb.get(str(e["Season"]).lower(), 0)
+                f.write("\t".join(_clean(x) for x in [
+                    loc, ",".join(map(str, ids)), float(e.get("Chance", 1.0) or 1.0), mask or 15,
+                    int(e.get("MinFishingLevel", 0) or 0), int(e.get("Precedence", 0) or 0),
+                    1 if e.get("IgnoreFishDataRequirements") else 0]) + "\n")
+                n += 1
+    print(f"  fishspots.dat: {n} entries")
 
 
 # ---------------------------------------------------------------- crafting / machines

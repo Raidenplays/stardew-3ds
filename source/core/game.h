@@ -187,6 +187,24 @@ struct Input {
     bool hold = false;      // A is held down (charging upgraded tools)
 };
 
+enum FishState : int { FS_NONE = 0, FS_CHARGE, FS_CAST, FS_WAIT, FS_BITE, FS_REEL, FS_DONE };
+
+struct Fishing {
+    FishState state = FS_NONE;
+    float t = 0;               // time in this state
+    float power = 0;           // cast strength 0..1
+    float waitFor = 0;
+    int bobX = 0, bobY = 0;    // bobber tile
+    int fish = -1;             // object id on the line
+    // reeling meter, 0 = bottom .. 1 = top
+    float fishPos = 0.3f, fishVel = 0, fishTarget = 0.3f, nextMove = 0;
+    float barPos = 0.0f, barVel = 0, barSize = 0.2f;
+    float progress = 0.3f;
+    bool perfect = true;
+    bool caught = false;
+    int size = 0;
+};
+
 struct UpgradeOffer {
     int slot = -1;          // inventory slot of the tool
     int next = -1;          // tool index it becomes
@@ -272,6 +290,11 @@ public:
     Placed* openChest();
     void chestTransfer(bool toChest, int index);   // whole stack
     void closeChest() { chestOpen = false; }
+
+    // ---- fishing (game_fish.cpp) ----
+    Fishing fishing;
+    int pickFish();                 // what bites here right now (-1 = nothing)
+    bool fishingActive() const { return fishing.state != FS_NONE; }
 
     // ---- tool upgrades (game_tools.cpp) ----
     std::vector<UpgradeOffer> upgradeOffers() const;
@@ -378,6 +401,8 @@ private:
     void machinesDayStart();
     void sprinklersWater();
     void treesFromMap(Location& loc);
+    void fishingUpdate(float dt, const Input& in);
+    void startFishing();
     void treesGrow();
     bool chopTree(int tx, int ty, int axeLevel);
     bool plantTree(int tx, int ty);

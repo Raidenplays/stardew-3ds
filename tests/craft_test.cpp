@@ -233,6 +233,64 @@ int main(int argc, char** argv) {
     for (int hit = 0; hit < 5 && g3.treeAt(tx, ty); hit++) pressA(g3);
     assert(!g3.treeAt(tx, ty));
     assert(g3.save("/tmp/craft_test3.sav"));
+    // ---- fishing: cast at water, wait, hook, reel
+    {
+        Game gf(d);
+        assert(gf.newGame(9, &err));
+        gf.teleport("Farm", 10, 10);
+        // find a land tile next to water, facing the water
+        int wx = -1, wy = -1, fx = 0, fy = 0, fdir = 0;
+        const TileMap& fm = gf.map();
+        for (int y = 2; y < fm.height() - 2 && wx < 0; y++)
+            for (int x = 2; x < fm.width() - 2 && wx < 0; x++) {
+                if (!(fm.flags(x, y) & CF_WATER)) continue;
+                const int dirs[4][3] = {{0, -1, FACE_DOWN}, {0, 1, FACE_UP}, {-1, 0, FACE_RIGHT}, {1, 0, FACE_LEFT}};
+                for (auto& dd : dirs) {
+                    int lx = x + dd[0], ly = y + dd[1];
+                    if (!(fm.flags(lx, ly) & (CF_WATER | CF_BLOCKED)) && gf.debris(lx, ly) == DEB_NONE &&
+                        !gf.buildingAt(lx, ly) && !gf.treeAt(lx, ly)) {
+                        wx = x; wy = y; fx = lx; fy = ly; fdir = dd[2];
+                        break;
+                    }
+                }
+            }
+        assert(wx >= 0);
+        gf.teleport("Farm", fx, fy);
+        gf.facing = fdir;
+        int rod = -1;
+        for (int i = 0; i < d.toolCount(); i++)
+            if (d.tool(i)->kind == TOOL_ROD) rod = i;
+        assert(rod >= 0);
+        Slot rs; rs.type = SLOT_TOOL; rs.id = rod; rs.count = 1;
+        gf.inv[3] = rs;
+        gf.selectSlot(3);
+        Input pressHold; pressHold.action = true; pressHold.hold = true;
+        gf.update(1.0f / 60, pressHold);
+        assert(gf.fishing.state == FS_CHARGE);
+        Input none;
+        gf.update(1.0f / 60, none);   // weak cast lands one tile out
+        assert(gf.fishing.state == FS_CAST && gf.fishing.bobX == wx && gf.fishing.bobY == wy);
+        for (int i = 0; i < 60 * 15 && gf.fishing.state != FS_BITE; i++) gf.update(1.0f / 60, none);
+        assert(gf.fishing.state == FS_BITE && gf.fishing.fish == 145);
+        Input press; press.action = true;
+        gf.update(1.0f / 60, press);
+        assert(gf.fishing.state == FS_REEL);
+        // a simple player: hold A while the fish is above the middle of the bar
+        for (int i = 0; i < 60 * 30 && gf.fishing.state == FS_REEL; i++) {
+            Input in;
+            in.hold = gf.fishing.fishPos > gf.fishing.barPos + gf.fishing.barSize * 0.5f + gf.fishing.barVel * 0.35f;
+            gf.update(1.0f / 60, in);
+        }
+        assert(gf.fishing.state == FS_DONE && gf.fishing.caught);
+        assert(count(gf, 145) == 1 && gf.skillXp[SK_FISHING] > 0);
+        for (int i = 0; i < 120; i++) gf.update(1.0f / 60, none);
+        assert(!gf.fishingActive());
+        // casting at dry land does nothing
+        gf.facing = (fdir + 2) % 4;
+        gf.update(1.0f / 60, pressHold);
+        gf.update(1.0f / 60, none);
+        assert(!gf.fishingActive() || gf.fishing.state == FS_CAST);
+    }
     printf("all crafting tests passed\n");
     return 0;
 }

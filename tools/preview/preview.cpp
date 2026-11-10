@@ -74,7 +74,8 @@ int main(int argc, char** argv) {
     std::string tourArg;
     std::string modsArg;    // "a,b" or "auto" (mods.txt + new mods)
     bool modScreenShot = false;
-    bool craftDemo = false;   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    bool craftDemo = false;
+    bool fishDemo = false;    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
@@ -82,6 +83,7 @@ int main(int argc, char** argv) {
         else if (a.rfind("--mods=", 0) == 0) modsArg = a.substr(7);
         else if (a == "--modscreen") modScreenShot = true;
         else if (a == "--craft") craftDemo = true;
+        else if (a == "--fish") fishDemo = true;
         else font = a;
     }
 
@@ -126,6 +128,33 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (fishDemo) {
+        g.timeOfDay = 9 * 60;
+        g.teleport("Forest", 40, 40);
+        const TileMap& m = g.map();
+        int best = 1 << 30, fx = 40, fy = 40, wx = 40, wy = 39;
+        for (int y = 2; y < m.height() - 2; y++)
+            for (int x = 2; x < m.width() - 2; x++)
+                if ((m.flags(x, y) & CF_WATER) && !(m.flags(x, y + 2) & (CF_WATER | CF_BLOCKED))) {
+                    int dd = (x - 40) * (x - 40) + (y - 40) * (y - 40);
+                    if (dd < best) { best = dd; fx = x; fy = y + 2; wx = x; wy = y; }
+                }
+        g.teleport("Forest", fx, fy);
+        g.facing = FACE_UP;
+        for (int i = 0; i < g.data.toolCount(); i++)
+            if (g.data.tool(i)->kind == TOOL_ROD) { Slot r; r.type = SLOT_TOOL; r.id = i; r.count = 1; g.inv[5] = r; g.selectSlot(5); break; }
+        step(g, ui, none, 5);
+        Fishing& f = g.fishing;
+        f.state = FS_REEL;
+        f.bobX = wx; f.bobY = wy;
+        f.fish = 142;   // a carp, if your data has it
+        if (!g.data.object(f.fish) && !g.data.fish.empty()) f.fish = g.data.fish.begin()->first;
+        f.barSize = 0.2f; f.barPos = 0.35f; f.fishPos = 0.5f; f.progress = 0.62f;
+        ui.tab = TAB_ITEMS;
+        shot(c, g, ui, "fishing");
+        return 0;
+    }
 
     if (craftDemo) {
         g.timeOfDay = 10 * 60;

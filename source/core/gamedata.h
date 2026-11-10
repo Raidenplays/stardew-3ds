@@ -38,7 +38,7 @@ struct ObjectDef {
     std::string stringId;            // the game's own id ("24", "Rafseazz.RSVCP_Ridge_Cherry")
 };
 
-enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER };
+enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER, TOOL_ROD };
 
 struct ToolDef {
     std::string key, className, name, texture;
@@ -87,6 +87,28 @@ struct TreeDef {
     int seed = -1;                   // object id that plants it
     std::string texture[4];          // per season
     float growthChance = 0.2f;
+};
+
+enum FishMotion : int { FM_MIXED = 0, FM_DART, FM_SMOOTH, FM_SINKER, FM_FLOATER };
+
+struct FishDef {
+    int id = 0;
+    int difficulty = 30;             // 0..110
+    FishMotion motion = FM_MIXED;
+    int minSize = 1, maxSize = 10;   // inches
+    std::vector<int> times;          // pairs of hhmm (600 1900)
+    uint8_t seasonMask = 15;
+    int weather = 0;                 // 0 any, 1 sun, 2 rain
+    int minLevel = 0;
+};
+
+struct FishSpot {
+    std::vector<int> items;          // one of these (random)
+    float chance = 1.0f;
+    uint8_t seasonMask = 15;
+    int minLevel = 0;
+    int precedence = 0;
+    bool ignoreFishRules = false;
 };
 
 struct BuildingDef {
@@ -191,6 +213,8 @@ public:
     std::vector<Recipe> recipes;
     std::vector<MachineRule> machineRules;
     std::unordered_map<int, TreeDef> trees;   // by type
+    std::unordered_map<int, FishDef> fish;
+    std::unordered_map<std::string, std::vector<FishSpot>> fishSpots;   // by location ("Default" = everywhere)
     const TreeDef* treeForSeed(int objId) const;
     const BigDef* big(int id) const;
     bool isMachine(int bigId) const;

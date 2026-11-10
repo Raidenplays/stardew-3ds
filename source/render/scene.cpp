@@ -437,6 +437,46 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     drawLayer(L_FRONT, 1.0f);
     drawLayer(L_ALWAYSFRONT, 1.5f);
 
+    if (g.fishingActive() && !cs.active) {
+        const Fishing& f = g.fishing;
+        float pxs = std::floor(g.px - camX), pys = std::floor(g.py - camY);
+        if (f.state == FS_CHARGE) {   // cast power meter above the farmer
+            c.rect(pxs - 3, pys - 62, 6, 26, RGBA(0x30, 0x20, 0x10, 0xD0));
+            float h = 24 * f.power;
+            uint32_t col = f.power > 0.8f ? RGBA(0x7C, 0xD0, 0x42) : RGBA(0xFF, 0xD0, 0x40);
+            c.rect(pxs - 2, pys - 37 - h, 4, h, col);
+        } else if (f.state != FS_DONE || f.caught) {
+            float bx = f.bobX * TILE + 8 - camX, by = f.bobY * TILE + 8 - camY;
+            if (f.state == FS_CAST) {   // bobber flying out
+                float k = std::min(1.0f, f.t / 0.5f);
+                bx = pxs + (bx - pxs) * k;
+                by = (pys - 20) + (by - (pys - 20)) * k - std::sin(k * 3.14159f) * 24;
+            }
+            float bob = (f.state == FS_WAIT) ? std::sin(f.t * 4) * 1.0f : (f.state == FS_BITE ? 2.0f : 0.0f);
+            c.line(pxs + (g.facing == FACE_LEFT ? -10 : 10), pys - 26, bx, by + bob, RGBA(0xF0, 0xF0, 0xF0, 0xA0), 1);
+            c.rect(bx - 2, by - 2 + bob, 4, 4, RGBA(0xE0, 0x30, 0x30));
+            c.rect(bx - 2, by + bob, 4, 2, RGBA(0xF8, 0xF8, 0xF8));
+            if (f.state == FS_BITE) {
+                c.rect(pxs - 5, pys - 58, 10, 16, RGBA(0xFF, 0xFF, 0xFF, 0xE0));
+                c.text(pxs, pys - 58, 0.55f, RGBA(0xD0, 0x20, 0x20), "!", ALIGN_CENTER);
+            }
+        }
+        if (f.state == FS_REEL) {   // the reeling meter, beside the farmer
+            float mx = std::min(pxs + 24.0f, (float)TOP_W - 64), my = 56;
+            const float H = 140;
+            c.rect(mx - 3, my - 3, 36, H + 6, RGBA(0x85, 0x3D, 0x1A));
+            c.rect(mx, my, 24, H, RGBA(0x3A, 0x7C, 0xC8));
+            float barY = my + H * (1 - f.barPos - f.barSize);
+            c.rect(mx + 1, barY, 22, H * f.barSize, RGBA(0x7C, 0xD0, 0x42, 0xD0));
+            float fy = my + H * (1 - f.fishPos) - 8;
+            itemIcon(c, g.data.object(f.fish), mx + 4, std::max(my, std::min(my + H - 16, fy)));
+            c.rect(mx + 26, my, 4, H, RGBA(0x30, 0x20, 0x10));
+            float ph = H * std::max(0.0f, std::min(1.0f, f.progress));
+            uint32_t pc = f.progress > 0.66f ? RGBA(0x7C, 0xD0, 0x42)
+                        : f.progress > 0.33f ? RGBA(0xFF, 0xD0, 0x40) : RGBA(0xE0, 0x50, 0x30);
+            c.rect(mx + 26, my + H - ph, 4, ph, pc);
+        }
+    }
     if (g.charging && !cs.active) {   // charged hoe / can: show the area and a meter
         std::vector<std::pair<int, int>> tiles;
         int lv = g.chargeLevel();
@@ -451,7 +491,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         c.rect(bx + 1, by + 1, 22.0f * lv / max, 3, RGBA(0xFF, 0xD0, 0x40));
     }
     const Slot& sel = g.inv[g.selected];
-    if (!sel.empty() && g.toolTimer <= 0 && !cs.active && !g.charging) {
+    if (!sel.empty() && g.toolTimer <= 0 && !cs.active && !g.charging && !g.fishingActive()) {
         int tx, ty;
         g.targetTile(tx, ty);
         float cx = tx * TILE - camX + c.shift(-1.0f), cy = ty * TILE - camY;
@@ -630,7 +670,9 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
         int p = g.sellPrice(sel);
         if (p > 0) info += (info.empty() ? "" : "  ") + std::string("Sells ") + std::to_string(p) + "g";
     } else if (sel.type == SLOT_TOOL) {
-        info = "Press A to use. Hold A to keep going.";
+        const ToolDef* td = g.data.tool(sel.id);
+        info = td && td->kind == TOOL_ROD ? "Hold A to cast, A when it bites, hold A to reel."
+                                          : "Press A to use. Hold A to keep going.";
     } else if (sel.type == SLOT_BIG) {
         info = "Press A to put it down. Pickaxe picks it back up.";
     }

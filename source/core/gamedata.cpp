@@ -49,6 +49,7 @@ static ToolKind classify(const std::string& cls, const std::string& key) {
     if (c == "pickaxe") return TOOL_PICKAXE;
     if (c == "meleeweapon" && k.find("scythe") != std::string::npos) return TOOL_SCYTHE;
     if (k.find("scythe") != std::string::npos) return TOOL_SCYTHE;
+    if (c == "fishingrod" || k.find("rod") != std::string::npos || k.find("pole") != std::string::npos) return TOOL_ROD;
     return TOOL_OTHER;
 }
 
@@ -163,6 +164,53 @@ bool GameData::load(const std::string& root, std::string* err) {
         t.growthChance = (float)atof(f[6].c_str());
         trees[t.type] = t;
     }
+    lines.clear();
+    readLines(root + "data/fish.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 9) continue;
+        FishDef d;
+        d.id = atoi(f[0].c_str());
+        d.difficulty = atoi(f[1].c_str());
+        const std::string& m = f[2];
+        d.motion = m == "dart" ? FM_DART : m == "smooth" ? FM_SMOOTH : m == "sinker" ? FM_SINKER
+                 : m == "floater" ? FM_FLOATER : FM_MIXED;
+        d.minSize = atoi(f[3].c_str());
+        d.maxSize = std::max(d.minSize, atoi(f[4].c_str()));
+        for (size_t p = 0; p < f[5].size();) {
+            d.times.push_back(atoi(f[5].c_str() + p));
+            size_t c = f[5].find(',', p);
+            if (c == std::string::npos) break;
+            p = c + 1;
+        }
+        d.seasonMask = (uint8_t)atoi(f[6].c_str());
+        d.weather = atoi(f[7].c_str());
+        d.minLevel = atoi(f[8].c_str());
+        fish[d.id] = d;
+    }
+    lines.clear();
+    readLines(root + "data/fishspots.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 7) continue;
+        FishSpot s;
+        for (size_t p = 0; p < f[1].size();) {
+            s.items.push_back(atoi(f[1].c_str() + p));
+            size_t c = f[1].find(',', p);
+            if (c == std::string::npos) break;
+            p = c + 1;
+        }
+        s.chance = (float)atof(f[2].c_str());
+        s.seasonMask = (uint8_t)atoi(f[3].c_str());
+        s.minLevel = atoi(f[4].c_str());
+        s.precedence = atoi(f[5].c_str());
+        s.ignoreFishRules = f[6] == "1";
+        fishSpots[f[0]].push_back(s);
+    }
+    for (auto& kv : fishSpots)
+        std::stable_sort(kv.second.begin(), kv.second.end(),
+                         [](const FishSpot& a, const FishSpot& b) { return a.precedence < b.precedence; });
+
     lines.clear();
     readLines(root + "data/machines.dat", lines);
     for (auto& l : lines) {
