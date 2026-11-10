@@ -9,7 +9,7 @@
 
 static const int TOP_W = 400, TOP_H = 240, BOT_W = 320, BOT_H = 240;
 
-enum Tab { TAB_ITEMS = 0, TAB_MAP, TAB_OPTIONS, TAB_COUNT };
+enum Tab { TAB_ITEMS = 0, TAB_SOCIAL, TAB_MAP, TAB_OPTIONS, TAB_COUNT };
 
 struct Ui {
     int tab = TAB_ITEMS;
@@ -25,6 +25,10 @@ struct Ui {
     int shopScroll = 0;
     std::map<int, int> cart;  // itemId -> qty
 
+    int socialScroll = 0;
+    int dlgLine = 0;          // first wrapped line shown of a long dialogue page
+    int dlgLines = 0;         // wrapped line count of the current page (set while drawing)
+
     int loadedSeason = -1;
     std::string loadedMap;
 };
@@ -36,5 +40,6 @@ bool sceneAfterUpdate(sv::Game& g, Ui& ui, const std::string& savePath);
 void drawTop(Canvas& c, sv::Game& g, Ui& ui, uint32_t timeMs);
 void drawBottom(Canvas& c, sv::Game& g, Ui& ui);
 void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath);
+void dialogueAdvance(sv::Game& g, Ui& ui);   // A pressed while someone is talking
 std::string shopTitle(const std::string& id);
 std::string placeName(const std::string& id);   // "Town" -> "Pelican Town"

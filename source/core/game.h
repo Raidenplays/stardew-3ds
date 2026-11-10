@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "gamedata.h"
+#include "npc.h"
 #include "tilemap.h"
 
 namespace sv {
@@ -42,6 +43,50 @@ struct Location {
     std::vector<Soil> soils;
     std::vector<uint8_t> debris, debrisVar;
     void initState();
+};
+
+// A villager's live state.
+struct NpcState {
+    const NpcDef* def = nullptr;
+    std::string loc;
+    float x = 0, y = 0;       // feet, map pixels
+    int facing = 0;
+    bool moving = false;
+    float walkTime = 0;
+
+    std::vector<SchedEntry> sched;
+    size_t next = 0;          // next schedule entry to start
+
+    struct Leg {
+        std::string loc;      // map this leg is walked on
+        int fx = 0, fy = 0;   // start tile
+        int tx = 0, ty = 0;   // end tile
+        bool warp = false;    // end of leg warps to (wloc, wx, wy)
+        std::string wloc;
+        int wx = 0, wy = 0;
+    };
+    std::vector<Leg> legs;
+    size_t leg = 0;
+    float legDone = 0;        // tiles walked on this leg (off-screen)
+    std::vector<std::pair<int, int>> path;   // on-screen A* path
+    size_t pathIdx = 0;
+    int endFacing = 0;
+
+    int friendship = 0;       // 250 per heart
+    bool introduced = false;
+    bool talkedToday = false;
+    int giftsToday = 0, giftsWeek = 0;
+
+    int hearts() const { return friendship / 250; }
+    int tileX() const { return (int)(x / 16); }
+    int tileY() const { return (int)((y - 4) / 16); }
+};
+
+struct DialogueBox {
+    bool active = false;
+    std::string npc;          // internal name ("" for plain messages)
+    std::vector<DialoguePage> pages;
+    size_t page = 0;
 };
 
 struct Input {
@@ -87,6 +132,13 @@ public:
 
     // Debug / preview tool: jump straight to a map tile.
     bool teleport(const std::string& name, int tx, int ty) { return warpTo(name, tx, ty); }
+
+    // Dialogue (UI drives these while dialogue.active)
+    void dialogueNext();
+    void dialogueChoose(int i);
+    const NpcState* npcByName(const std::string& name) const;
+    bool isBirthday(const NpcDef& n) const { return n.birthSeason == season && n.birthDay == day; }
+    ScheduleContext scheduleContext(const NpcState& n) const;
 
     bool save(const std::string& path) const;
     bool load(const std::string& path, std::string* err = nullptr);
@@ -136,7 +188,19 @@ public:
     std::string toast;
     float toastTime = 0;
 
+    std::vector<NpcState> npcs;
+    DialogueBox dialogue;
+
 private:
+    void npcsStartDay();
+    void npcsUpdate(float dt);
+    void npcPlan(NpcState& n, const SchedEntry& e);
+    void npcFinishLeg(NpcState& n);
+    void npcsEnterLocation();          // place villagers when the player arrives
+    NpcState* npcAt(int tx, int ty);
+    void talkTo(NpcState& n);
+    void giveGift(NpcState& n, int slot);
+    void showDialogue(const NpcState& n, const std::vector<DialoguePage>& pages);
     Location* loadLocation(const std::string& name, std::string* err = nullptr);
     bool hasMap(const std::string& name) const;
     bool warpTo(const std::string& name, int tx, int ty);

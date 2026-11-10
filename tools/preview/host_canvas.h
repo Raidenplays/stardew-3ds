@@ -25,6 +25,7 @@ public:
     void rect(float x, float y, float w, float h, uint32_t color) override;
     void line(float x1, float y1, float x2, float y2, uint32_t color, float width) override;
     void text(float x, float y, float scale, uint32_t color, const std::string& s, int align) override;
+    float textWidth(const std::string& s, float scale) override { return textWidthPx(s, 30.0f * scale); }
     int texWidth(const std::string& tex) override;
     void dropTextures() override { cache.clear(); }
 
@@ -36,7 +37,7 @@ public:
 private:
     const HostTexture* get(const std::string& name);
     void blend(int x, int y, uint32_t c);
-    float textWidth(const std::string& s, float px);
+    float textWidthPx(const std::string& s, float px);
 
     std::string root;
     std::map<std::string, HostTexture> cache;

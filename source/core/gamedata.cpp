@@ -151,6 +151,75 @@ bool GameData::load(const std::string& root, std::string* err) {
     }
     this->root = root;
 
+    // Villagers (optional: older conversions have none)
+    lines.clear();
+    if (readLines(root + "data/npcs.dat", lines)) {
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 9) continue;
+            NpcDef n;
+            n.name = f[0];
+            n.display = f[1];
+            n.birthSeason = atoi(f[2].c_str());
+            n.birthDay = atoi(f[3].c_str());
+            n.homeMap = f[4];
+            n.homeX = atoi(f[5].c_str());
+            n.homeY = atoi(f[6].c_str());
+            n.homeDir = atoi(f[7].c_str());
+            n.social = atoi(f[8].c_str()) != 0;
+            for (int t = 0; t < TASTE_COUNT; t++) {
+                if (9 + t < (int)f.size()) {
+                    const char* p = f[9 + t].c_str();
+                    while (*p) {
+                        char* end;
+                        long v = strtol(p, &end, 10);
+                        if (end == p) break;
+                        n.tastes[t].push_back((int)v);
+                        p = end;
+                    }
+                }
+                if (14 + t < (int)f.size()) n.tasteText[t] = f[14 + t];
+            }
+            std::vector<std::string> sub;
+            if (readLines(root + "data/schedules/" + n.name + ".dat", sub))
+                for (auto& sl : sub) {
+                    size_t tab = sl.find('\t');
+                    if (tab != std::string::npos) n.schedules[sl.substr(0, tab)] = sl.substr(tab + 1);
+                }
+            sub.clear();
+            if (readLines(root + "data/dialogue/" + n.name + ".dat", sub))
+                for (auto& dl : sub) {
+                    size_t tab = dl.find('\t');
+                    if (tab != std::string::npos) n.dialogue[dl.substr(0, tab)] = dl.substr(tab + 1);
+                }
+            npcs.push_back(std::move(n));
+        }
+    }
+    lines.clear();
+    if (readLines(root + "data/universal_tastes.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 2) continue;
+            int t = atoi(f[0].c_str());
+            if (t < 0 || t >= TASTE_COUNT) continue;
+            const char* p = f[1].c_str();
+            while (*p) {
+                char* end;
+                long v = strtol(p, &end, 10);
+                if (end == p) break;
+                universalTastes[t].push_back((int)v);
+                p = end;
+            }
+        }
+    lines.clear();
+    if (readLines(root + "data/graph.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 6) continue;
+            graph[f[0]].push_back({atoi(f[1].c_str()), atoi(f[2].c_str()), f[3],
+                                   atoi(f[4].c_str()), atoi(f[5].c_str())});
+        }
+
     // layout.txt is optional -- defaults live in Layout.
     lines.clear();
     if (readLines(root + "layout.txt", lines)) {
@@ -182,6 +251,8 @@ bool GameData::load(const std::string& root, std::string* err) {
                 char m[64];
                 if (sscanf(l.c_str(), "wake %63s %d %d", m, &layout.wakeX, &layout.wakeY) == 3)
                     layout.wakeMap = m;
+            } else if (!strcmp(kw, "farmer")) {
+                if (l.size() > 7) layout.farmerName = l.substr(7);
             } else if (!strcmp(kw, "bin")) {
                 int x, y;
                 if (sscanf(l.c_str(), "bin %d %d", &x, &y) == 2) layout.bins.push_back({x, y});
@@ -189,6 +260,12 @@ bool GameData::load(const std::string& root, std::string* err) {
         }
     }
     return true;
+}
+
+const NpcDef* GameData::npc(const std::string& name) const {
+    for (auto& n : npcs)
+        if (n.name == name) return &n;
+    return nullptr;
 }
 
 const CropDef* GameData::cropForSeed(int seedId) const {

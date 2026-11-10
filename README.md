@@ -6,7 +6,42 @@ art, maps or data from the game. You convert your own Steam install's content
 on your PC, and the 3DS reads the result from the SD card. This is the same
 model as ScummVM or OpenMW. Personal use only.
 
-## Milestone 2: the world (this build)
+## Milestone 3: villagers (this build)
+
+- **Everyone from your files:** the converter reads `Data/Characters.json`
+  (or the older `NPCDispositions`), each villager's schedule and dialogue,
+  rainy-day lines, gift tastes, sprites and portraits. On real 1.6 files
+  that's 43 villagers.
+- **Schedules** follow the documented key order (date, hearts, rain,
+  season and weekday, `spring`, `default`), including `GOTO`, `NOT` and
+  `MAIL`. Villagers route between maps over the warp and door graph. Where
+  you are, they walk visible A* paths. Elsewhere, their travel is timed
+  so they show up part-way along when you arrive.
+- **Talking:** Introduction first, then the date/weekday/hearts lines, with
+  `$h $s $u $l $a` portraits, `@` for your name (`farmer <name>` in
+  `layout.txt`), `$q` and `$y` questions with choices, and long pages that
+  scroll. +20 friendship once a day, and time stops while someone's talking.
+- **Gifts:** hold an item and press A. Uses each villager's own love, like,
+  dislike and hate lists plus the universal ones and their own reaction
+  lines. One a day, two a week, x8 on birthdays.
+- **Bottom screen:** a dialogue takeover with portrait and name plate, a
+  Social tab (hearts, gifts this week, talked today, birthdays), and
+  villager dots on the mini-map.
+
+### Tested against real 1.6 files
+All 190 maps convert. The farm, farmhouse, Bus Stop, Pelican Town and
+Pierre's all render and connect. Pierre's counter (`Buy General`) opens the
+real spring stock, and villagers stand where their schedules put them,
+with real portraits and lines.
+Still to do from that run:
+- The farmer is drawn as the base body only. Shirt, pants and arms
+  layering is next.
+- 1.6 farmhouse furniture (bed, TV, table) is placed by the game itself,
+  not the map, so the house starts empty.
+- Textures wider than 1024px (`pants.png`, a couple of map sheets) get
+  cropped. They need splitting into horizontal pages too.
+
+## Milestone 2: the world
 
 - **Every map gets converted**, along with its warps, door actions and
   indoor/outdoor flag. Walk off the edge of the farm to the Bus Stop and
@@ -130,8 +165,9 @@ mkdir -p shots && tools/preview/preview out/3ds/stardew3ds/ shots
 
 1. **Farm loop**: done
 2. **World**: done (warps, farmhouse, town, Pierre's, mini-map)
-3. **People**: villagers with schedules and pathfinding, dialogue from your
-   `Characters/Dialogue`, portraits, gifts and friendship, birthdays
+3. **People**: done (schedules, pathfinding, dialogue, portraits, gifts,
+   hearts, Social tab). Still to come: events, heart-level cutscenes,
+   marriage
 4. **Systems**: tool upgrades, crafting, artisan machines, cooking, trees and
    foraging, fishing minigame
 5. **Mines and combat**: floors, monsters, weapons, ore
@@ -151,7 +187,7 @@ mkdir -p shots && tools/preview/preview out/3ds/stardew3ds/ shots
 ## Layout
 
 ```
-source/core/      game rules, maps, warps, shops, data (pure C++17, host-testable)
+source/core/      game rules, maps, warps, shops, villagers, data (pure C++17, host-testable)
 source/render/    all drawing + touch UI, through a Canvas interface
 source/platform/  3DS: textures and the citro2d Canvas
 source/main.cpp   3DS main loop, input, stereo 3D

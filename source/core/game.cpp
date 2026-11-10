@@ -75,6 +75,15 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
         return false;
     }
     Location* prev = cur;
+    if (prev)
+        for (auto& n : npcs)
+            if (n.leg < n.legs.size() && n.legs[n.leg].loc == prev->name) {
+                n.legs[n.leg].fx = n.tileX();
+                n.legs[n.leg].fy = n.tileY();
+                n.legDone = 0;
+                n.path.clear();
+                n.pathIdx = 0;
+            }
     cur = dest;
     // Only the farm and where you are stay in memory.
     if (prev && prev != farm && prev != cur) {
@@ -102,6 +111,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
     fade = 1.0f;
     warpCooldown = 0.35f;
     toolTimer = 0;
+    npcsEnterLocation();
     return true;
 }
 
@@ -184,6 +194,8 @@ uint8_t Game::debrisVariant(int x, int y) const {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    npcs.clear();
+    dialogue = DialogueBox();
     locations.clear();
     farm = loadLocation("Farm", err);
     if (!farm) return false;
@@ -255,6 +267,7 @@ void Game::spawnDebris(int count, uint32_t& r) {
 }
 
 void Game::startDay() {
+    npcsStartDay();
     timeOfDay = DAY_START;
     clockAcc = 0;
     energy = MAX_ENERGY;
@@ -479,6 +492,11 @@ bool Game::sellSlot(int i) {
 bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap; }
 
 bool Game::tryInteract(int tx, int ty) {
+    if (NpcState* n = npcAt(tx, ty)) {
+        if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
+        else talkTo(*n);
+        return true;
+    }
     if (cur->isFarm) {
         if (cropReady(tx, ty)) {
             Soil& s = cur->soils[(size_t)ty * cur->map.width() + tx];
@@ -625,6 +643,10 @@ void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
     if (fade > 0) fade = std::max(0.0f, fade - dt * 3.0f);
     if (warpCooldown > 0) warpCooldown -= dt;
+    if (dialogue.active) {           // the world waits while someone's talking
+        moving = false;   // the UI advances pages (it knows about long-page scrolling)
+        return;
+    }
 
     clockAcc += dt;
     while (clockAcc >= SECONDS_PER_10MIN) {
@@ -636,6 +658,8 @@ void Game::update(float dt, const Input& in) {
             return;
         }
     }
+
+    npcsUpdate(dt);
 
     if (in.prev) selected = (selected + HOTBAR - 1) % HOTBAR;
     if (in.next) selected = (selected + 1) % HOTBAR;
@@ -760,7 +784,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 1;
+static const uint32_t SAVE_VERSION = 2;   // 2: villager friendships
 
 namespace {
 struct W {
@@ -807,6 +831,15 @@ bool Game::save(const std::string& path) const {
         w.u8(farm->debris[i]);
         if (farm->debris[i]) w.u8(farm->debrisVar[i]);
     }
+    w.u32((uint32_t)npcs.size());
+    for (auto& n : npcs) {
+        const std::string& nm = n.def->name;
+        w.u8((uint8_t)std::min<size_t>(nm.size(), 255));
+        fwrite(nm.data(), 1, std::min<size_t>(nm.size(), 255), f);
+        w.i32(n.friendship);
+        w.u8(n.introduced ? 1 : 0);
+        w.u8((uint8_t)n.giftsWeek);
+    }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -823,7 +856,8 @@ bool Game::load(const std::string& path, std::string* err) {
     if (!f) return false;
     R r{f};
     const TileMap& m = farm->map;
-    if (r.u32() != SAVE_MAGIC || r.u32() != SAVE_VERSION ||
+    uint32_t version = 0;
+    if (r.u32() != SAVE_MAGIC || (version = r.u32()) < 1 || version > SAVE_VERSION ||
         r.i32() != m.width() || r.i32() != m.height()) {
         fclose(f);
         return false;
@@ -850,6 +884,25 @@ bool Game::load(const std::string& path, std::string* err) {
         }
         farm->debris[i] = r.u8();
         if (farm->debris[i]) farm->debrisVar[i] = r.u8();
+    }
+    npcs.clear();
+    dialogue = DialogueBox();
+    npcsStartDay();   // creates the villager list
+    if (version >= 2 && r.ok) {
+        uint32_t nn = r.u32();
+        for (uint32_t i = 0; i < nn && r.ok && i < 1000; i++) {
+            uint8_t len = r.u8();
+            std::string nm(len, ' ');
+            if (len && fread(&nm[0], 1, len, f) != len) r.ok = false;
+            int fr = r.i32();
+            uint8_t intro = r.u8(), gw = r.u8();
+            for (auto& n : npcs)
+                if (n.def->name == nm) {
+                    n.friendship = fr;
+                    n.introduced = intro != 0;
+                    n.giftsWeek = gw;
+                }
+        }
     }
     fclose(f);
     if (!r.ok) return false;

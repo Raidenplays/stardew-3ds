@@ -24,6 +24,7 @@ public:
     // scale 0.5 is roughly a 15px-tall line, like the 3DS system font
     virtual void text(float x, float y, float scale, uint32_t color, const std::string& s,
                       int align = ALIGN_LEFT) = 0;
+    virtual float textWidth(const std::string& s, float scale) = 0;
     virtual int texWidth(const std::string& tex) = 0;   // 0 if missing
     virtual void dropTextures() = 0;                    // free everything (map/season change)
 

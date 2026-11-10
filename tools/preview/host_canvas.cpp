@@ -134,7 +134,7 @@ void HostCanvas::line(float x1, float y1, float x2, float y2, uint32_t color, fl
     }
 }
 
-float HostCanvas::textWidth(const std::string& s, float px) {
+float HostCanvas::textWidthPx(const std::string& s, float px) {
     if (!g_fontOk) return s.size() * px * 0.5f;
     float sc = stbtt_ScaleForPixelHeight(&g_font, px), w = 0;
     for (unsigned char ch : s) {
@@ -151,7 +151,7 @@ void HostCanvas::text(float x, float y, float scale, uint32_t color, const std::
     float sc = stbtt_ScaleForPixelHeight(&g_font, px);
     int asc, desc, gap;
     stbtt_GetFontVMetrics(&g_font, &asc, &desc, &gap);
-    float tw = textWidth(s, px);
+    float tw = textWidthPx(s, px);
     if (align == ALIGN_CENTER) x -= tw / 2;
     else if (align == ALIGN_RIGHT) x -= tw;
     float baseline = y + asc * sc;

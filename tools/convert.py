@@ -191,8 +191,6 @@ def _decode_layer_data(data_el, w, h):
         raise ValueError(f"unsupported layer encoding {enc}")
     if data_el.find("chunk") is not None:
         raise ValueError("infinite maps not supported")
-    if len(vals) != w * h:
-        raise ValueError(f"layer has {len(vals)} cells, expected {w * h}")
     return vals
 
 
@@ -228,6 +226,7 @@ def _load_tileset(ts_el, map_dir):
 
 def _image_content_path(content, image_src, image_dir):
     """Resolve tileset image to a content path like 'Maps/spring_town'."""
+    image_src = image_src.replace("\\", "/")
     full = os.path.normpath(os.path.join(image_dir, image_src))
     if not full.lower().endswith(".png"):
         full += ".png"
@@ -246,7 +245,7 @@ def convert_map(content, name, out_dir, textures_needed):
     tmx = os.path.join(content, "Maps", name + ".tmx")
     if not os.path.isfile(tmx):
         print(f"  ! map {name}.tmx not found, skipped")
-        return False
+        return None
     root = ET.parse(tmx).getroot()
     w, h = int(root.get("width")), int(root.get("height"))
     tilesets = [_load_tileset(t, os.path.dirname(tmx)) for t in root.findall("tileset")]
@@ -287,7 +286,17 @@ def convert_map(content, name, out_dir, textures_needed):
     for lay in root.findall("layer"):
         lname = lay.get("name")
         if lname in LAYERS:
-            layers[lname] = _decode_layer_data(lay.find("data"), w, h)
+            lw = int(lay.get("width", w))
+            lh = int(lay.get("height", h))
+            raw = _decode_layer_data(lay.find("data"), lw, lh)
+            # some maps have layers smaller than the map: pad / crop to fit
+            vals = [0] * (w * h)
+            for yy in range(min(h, lh)):
+                for xx in range(min(w, lw)):
+                    k = yy * lw + xx
+                    if k < len(raw):
+                        vals[yy * w + xx] = raw[k]
+            layers[lname] = vals
 
     flags = bytearray(w * h)
     actions = {}          # cell -> action string
@@ -396,7 +405,15 @@ def convert_map(content, name, out_dir, textures_needed):
     nd = sum(1 for b in flags if b & F_DIGGABLE)
     print(f"  map {name}: {w}x{h}, {len(tilesets)} sheets, {len(warps)} warps, "
           f"{len(actions)} actions, {nd} diggable")
-    return True
+    edges = [(x, y, tgt, tx, ty) for (x, y, tgt, tx, ty) in warps]
+    for cell, a in actions.items():
+        parts = a.split()
+        if parts and parts[0] in ("Warp", "LockedDoorWarp", "MagicWarp") and len(parts) >= 4:
+            try:
+                edges.append((cell % w, cell // w, parts[3], int(parts[1]), int(parts[2])))
+            except ValueError:
+                pass
+    return {"w": w, "h": h, "edges": edges}
 
 
 # --------------------------------------------------------------------------
@@ -530,6 +547,122 @@ def write_shops(content, out_dir, season_bits):
     print(f"  shops.dat: {n} shop items ({skipped} with conditions not supported yet)")
 
 
+
+SEASON_IDX = {"spring": 0, "summer": 1, "fall": 2, "winter": 3}
+DIR_IDX = {"down": 0, "right": 1, "up": 2, "left": 3}
+
+
+def _flat(v):
+    return str(v).replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def _display(name, raw):
+    if not raw or str(raw).startswith("["):
+        return name    # localisation token -> use the internal name
+    return str(raw)
+
+
+def _dir(v):
+    if isinstance(v, int):
+        # Stardew numbers: 0 up, 1 right, 2 down, 3 left -> ours: 0 down 1 right 2 up 3 left
+        return {0: 2, 1: 1, 2: 0, 3: 3}.get(v, 0)
+    return DIR_IDX.get(str(v).lower(), 0)
+
+
+def _load_npc_defs(content):
+    """Returns {name: dict(display, bseason, bday, home, hx, hy, hdir, social)}."""
+    out = {}
+    chars = _load_json(content, "Data/Characters.json") if os.path.isfile(
+        os.path.join(content, "Data", "Characters.json")) else {}
+    for name, c in chars.items():
+        home = None
+        for h in c.get("Home") or []:
+            if h.get("Location") and h.get("Tile") is not None:
+                home = h
+                break
+        if not home:
+            continue
+        t = home["Tile"]
+        hx, hy = (t.get("X", 0), t.get("Y", 0)) if isinstance(t, dict) else (0, 0)
+        cs = str(c.get("CanSocialize") or "TRUE").strip().upper()
+        out[name] = dict(display=_display(name, c.get("DisplayName")),
+                         bseason=SEASON_IDX.get(str(c.get("BirthSeason") or "").lower(), -1),
+                         bday=int(c.get("BirthDay") or 0), home=home["Location"], hx=int(hx), hy=int(hy),
+                         hdir=_dir(home.get("Direction", "down")), social=0 if cs == "FALSE" else 1)
+    if out:
+        return out
+    # pre-1.6 fallback: Data/NPCDispositions
+    disp = _load_json(content, "Data/NPCDispositions.json") if os.path.isfile(
+        os.path.join(content, "Data", "NPCDispositions.json")) else {}
+    for name, line in disp.items():
+        f = str(line).split("/")
+        if len(f) < 11:
+            continue
+        bs, bd = (f[8].split() + ["", "0"])[:2]
+        hp = f[10].split()
+        if len(hp) < 3:
+            continue
+        out[name] = dict(display=f[11] if len(f) > 11 and f[11] else name,
+                         bseason=SEASON_IDX.get(bs.lower(), -1), bday=int(bd or 0),
+                         home=hp[0], hx=int(hp[1]), hy=int(hp[2]), hdir=0, social=1)
+    return out
+
+
+def write_npcs(content, out_dir, textures):
+    defs = _load_npc_defs(content)
+    tastes = _load_json(content, "Data/NPCGiftTastes.json") if os.path.isfile(
+        os.path.join(content, "Data", "NPCGiftTastes.json")) else {}
+    os.makedirs(os.path.join(out_dir, "schedules"), exist_ok=True)
+    os.makedirs(os.path.join(out_dir, "dialogue"), exist_ok=True)
+
+    def ids(txt):
+        return " ".join(t.replace("(O)", "") for t in str(txt).split()
+                        if t.replace("(O)", "").lstrip("-").isdigit())
+
+    with open(os.path.join(out_dir, "universal_tastes.dat"), "w", encoding="utf-8") as f:
+        for i, key in enumerate(("Universal_Love", "Universal_Like", "Universal_Dislike",
+                                 "Universal_Hate", "Universal_Neutral")):
+            f.write(f"{i}\t{ids(tastes.get(key, ''))}\n")
+
+    rainy_path = os.path.join(content, "Characters", "Dialogue", "rainy.json")
+    rainy = json.load(open(rainy_path, encoding="utf-8-sig")) if os.path.isfile(rainy_path) else {}
+    n_sched = n_dia = n_spr = 0
+    with open(os.path.join(out_dir, "npcs.dat"), "w", encoding="utf-8") as f:
+        for name, d in sorted(defs.items()):
+            parts = str(tastes.get(name, "")).split("/")
+            parts += [""] * (10 - len(parts))
+            texts = [_flat(parts[i]) for i in (0, 2, 4, 6, 8)]
+            lists = [ids(parts[i]) for i in (1, 3, 5, 7, 9)]
+            f.write("\t".join([name, _flat(d["display"]), str(d["bseason"]), str(d["bday"]), d["home"],
+                               str(d["hx"]), str(d["hy"]), str(d["hdir"]), str(d["social"])]
+                              + lists + texts) + "\n")
+            sp = os.path.join(content, "Characters", "schedules", name + ".json")
+            if not os.path.isfile(sp):
+                sp = os.path.join(content, "Characters", "Schedules", name + ".json")
+            if os.path.isfile(sp):
+                sched = json.load(open(sp, encoding="utf-8-sig"))
+                with open(os.path.join(out_dir, "schedules", name + ".dat"), "w", encoding="utf-8") as g:
+                    for k, v in sched.items():
+                        g.write(f"{_flat(k)}\t{_flat(v)}\n")
+                n_sched += 1
+            dp = os.path.join(content, "Characters", "Dialogue", name + ".json")
+            lines = {}
+            if os.path.isfile(dp):
+                lines = json.load(open(dp, encoding="utf-8-sig"))
+            if name in rainy:
+                lines["__rain"] = rainy[name]
+            if lines:
+                with open(os.path.join(out_dir, "dialogue", name + ".dat"), "w", encoding="utf-8") as g:
+                    for k, v in lines.items():
+                        g.write(f"{_flat(k)}\t{_flat(v)}\n")
+                n_dia += 1
+            for folder in ("Characters", "Portraits"):
+                if find_png(content, f"{folder}/{name}"):
+                    textures.add(f"{folder}/{name}")
+                    n_spr += 1
+    print(f"  {len(defs)} villagers, {n_sched} schedules, {n_dia} dialogue files, {n_spr} sprites/portraits")
+
+
 DEFAULT_LAYOUT = """\
 # stardew3ds farm layout -- editable, no rebuild needed.
 # Positions are in tiles. Lines starting with # are ignored.
@@ -552,6 +685,9 @@ bin 72 14
 bed FarmHouse 9 4 2 3
 # wake <map> <tileX> <tileY>          where you wake up (nearest open tile is used)
 wake FarmHouse 9 8
+#
+# farmer <name>                       what villagers call you
+farmer Farmer
 """
 
 
@@ -573,16 +709,27 @@ def main():
         if m not in names:
             sys.exit(f"Maps/{m}.tmx missing -- is this really an unpacked Content folder?")
     ok = 0
+    graph = {}
     for m in names:
         try:
-            if convert_map(content, m, os.path.join(out_root, "maps"), textures):
+            info = convert_map(content, m, os.path.join(out_root, "maps"), textures)
+            if info:
                 ok += 1
+                graph[m] = info
         except Exception as e:   # one odd map shouldn't stop the rest
             print(f"  ! {m}: {e}")
     print(f"  {ok}/{len(names)} maps converted")
+    os.makedirs(os.path.join(out_root, "data"), exist_ok=True)
+    with open(os.path.join(out_root, "data", "graph.dat"), "w", encoding="utf-8") as f:
+        for m, info in sorted(graph.items()):
+            for (x, y, tgt, tx, ty) in info["edges"]:
+                if tgt in graph:   # only routes to maps we actually have
+                    f.write(f"{m}\t{x}\t{y}\t{tgt}\t{tx}\t{ty}\n")
 
     print("Data...")
     write_data(content, os.path.join(out_root, "data"))
+    print("Villagers...")
+    write_npcs(content, os.path.join(out_root, "data"), textures)
 
     for cp, required in EXTRA_TEXTURES:
         if find_png(content, cp):

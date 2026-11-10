@@ -5,6 +5,7 @@
 //   ./core_test out/3ds/stardew3ds/
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 
 #include "game.h"
 using namespace sv;
@@ -122,12 +123,67 @@ int main(int argc, char** argv) {
     // the planted parsnip survived the trip (farm stays loaded)
     assert(g.farmLocation().soils[ty * g.farmLocation().map.width() + tx].seed == 472);
 
+    // ---- villagers
+    assert(g.npcs.size() == 2);
+    const NpcState* jun = g.npcByName("Juniper");
+    const NpcState* row = g.npcByName("Rowan");
+    assert(jun && row && jun->loc == "Town" && row->loc == "SeedShop");
+    // Juniper's spring schedule takes her to the Bus Stop at 10:00, off-screen
+    g.teleport("FarmHouse", 5, 6);
+    g.timeOfDay = 9 * 60 + 50;
+    run(g, none, 60 * 40);                       // ~40 s: past 10:00, time to walk there
+    assert(jun->loc == "BusStop");
+    // walk over and watch her stand there
+    g.teleport("BusStop", 12, 22);
+    run(g, none, 60 * 5);
+    assert(jun->leg >= jun->legs.size());       // arrived
+    assert(std::abs(jun->tileX() - 15) <= 1 && std::abs(jun->tileY() - 22) <= 1);
+
+    // talking: introduction first, +20 friendship once a day
+    g.teleport("BusStop", jun->tileX(), jun->tileY() + 1);
+    g.facing = FACE_UP;
+    g.selectSlot(0);
+    run(g, none, 30);
+    run(g, act, 1);
+    assert(g.dialogue.active && g.dialogue.npc == "Juniper");
+    assert(g.dialogue.pages.size() == 2 && g.dialogue.pages[1].portrait == 1);   // $h -> happy
+    run(g, none, 120);
+    assert(g.timeOfDay == g.timeOfDay);          // (time is paused while talking)
+    while (g.dialogue.active) g.dialogueNext();
+    assert(jun->friendship == 20 && jun->introduced && jun->talkedToday);
+    run(g, act, 1);
+    while (g.dialogue.active) g.dialogueNext();
+    assert(jun->friendship == 20);               // no double points
+
+    // gifts: Juniper loves kale (250), max one a day
+    for (auto& sl : g.inv) if (sl.empty()) { sl.type = SLOT_OBJECT; sl.id = 250; sl.count = 3; break; }
+    for (int i = 0; i < INV_SIZE; i++) if (g.inv[i].type == SLOT_OBJECT && g.inv[i].id == 250) g.selectSlot(i);
+    run(g, act, 1);
+    assert(g.dialogue.active && g.dialogue.pages[0].portrait == 4);   // love face
+    while (g.dialogue.active) g.dialogueNext();
+    assert(jun->friendship == 100 && jun->giftsToday == 1);
+    run(g, act, 1);
+    assert(!g.dialogue.active && jun->friendship == 100);            // refused: already gifted today
+
+    // dialogue parser: question with choices and a response key
+    auto pages = parseDialogue(g.data.npc("Rowan")->dialogue.at("spring_Tue"), "Raiden");
+    assert(pages.size() == 1 && pages[0].choices.size() == 2 && pages[0].choices[0].points == 20);
+    assert(pages[0].choices[0].responseKey == "rowan_yes");
+    auto intro = parseDialogue("Hi @!$h#$b#Bye.", "Raiden");
+    assert(intro.size() == 2 && intro[0].text == "Hi Raiden!" && intro[0].portrait == 1);
+
+    // schedule resolution: rain key wins on rainy days
+    ScheduleContext ctx; ctx.season = 0; ctx.day = 5; ctx.weekday = 4; ctx.raining = true;
+    auto rs = resolveSchedule(*g.data.npc("Juniper"), ctx);
+    assert(rs.size() == 2 && rs[0].time == 9 * 60 && rs[0].x == 30);
+
     // save / load round trip
     assert(g.save("/tmp/sv_test.sav"));
     Game g2(d);
     assert(g2.load("/tmp/sv_test.sav"));
     assert(g2.day == g.day && g2.money == g.money);
     assert(g2.farmLocation().soils[ty * g2.farmLocation().map.width() + tx].seed == 472);
+    assert(g2.npcByName("Juniper")->friendship == 100 && g2.npcByName("Juniper")->introduced);
     printf("all core tests passed\n");
     return 0;
 }

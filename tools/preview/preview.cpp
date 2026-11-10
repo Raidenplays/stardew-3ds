@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
         const TileMap& shop = g.map();
         for (int y = 0; y < shop.height(); y++)
             for (int x = 0; x < shop.width(); x++)
-                if (shop.action(x, y).rfind("OpenShop", 0) == 0) {
+                if (shop.action(x, y).rfind("OpenShop", 0) == 0 || shop.action(x, y) == "Buy General") {
                     g.teleport(g.location().name, x, y + 1);
                     g.facing = FACE_UP;
                     y = shop.height();
@@ -171,6 +171,26 @@ int main(int argc, char** argv) {
             tap(g, ui, 90, 45);             // Sell tab
             shot(c, g, ui, "pierres_shop_sell");
             tap(g, ui, BOT_W - 24, 20);     // close
+            // talk to whoever is in the shop
+            for (auto& n : g.npcs) {
+                if (n.loc != g.location().name) continue;
+                g.teleport(g.location().name, n.tileX(), n.tileY() + 1);
+                g.facing = FACE_UP;
+                g.selectSlot(0);   // a tool, so A talks instead of giving a gift
+                step(g, ui, none, 1);
+                Input a1; a1.action = true;
+                step(g, ui, a1, 1);
+                break;
+            }
+            if (g.dialogue.active) shot(c, g, ui, "talking");
+            while (g.dialogue.active) {
+                const DialogueBox& d = g.dialogue;
+                if (d.page < d.pages.size() && !d.pages[d.page].choices.empty()) g.dialogueChoose(0);
+                else dialogueAdvance(g, ui);
+            }
+            ui.tab = TAB_SOCIAL;
+            shot(c, g, ui, "social_tab");
+            ui.tab = TAB_ITEMS;
         } else {
             printf("  ! shop didn't open\n");
         }
