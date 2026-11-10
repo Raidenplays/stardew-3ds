@@ -242,6 +242,30 @@ bool GameData::load(const std::string& root, std::string* err) {
     }
 
     lines.clear();
+    readLines(root + "data/professions.dat", lines);
+    professions.assign(30, ProfessionDef());
+    for (int i = 0; i < 30; i++) {   // defaults if the table is missing
+        professions[i].id = i;
+        professions[i].skill = i / 6;
+        professions[i].level = (i % 6) < 2 ? 5 : 10;
+        professions[i].parent = (i % 6) < 2 ? -1 : (i / 6) * 6 + ((i % 6) < 4 ? 0 : 1);
+        professions[i].name = "Profession " + std::to_string(i);
+    }
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 7) continue;
+        int id = atoi(f[0].c_str());
+        if (id < 0 || id >= 30) continue;
+        ProfessionDef& p = professions[id];
+        p.skill = atoi(f[1].c_str());
+        p.level = atoi(f[2].c_str());
+        p.parent = atoi(f[3].c_str());
+        p.key = f[4];
+        p.name = f[5];
+        p.description = f[6];
+    }
+
+    lines.clear();
     readLines(root + "data/mail.dat", lines);
     for (auto& l : lines) {
         size_t t = l.find('\t');

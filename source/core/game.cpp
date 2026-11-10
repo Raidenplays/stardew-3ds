@@ -232,6 +232,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     triggersApplied.clear();
     totalEarned = 0;
     letterOpen = false;
+    professions.clear();
     eventsSeen.clear();
     mailReceived.clear();
     cutscene = Cutscene();
@@ -551,6 +552,7 @@ bool Game::tryInteract(int tx, int ty) {
             if (addItem(id, 1)) {
                 gainXp(SK_FORAGING, 7);
                 questItem(id, 1);
+                if (has(PR_GATHERER) && rand32() % 5 == 0 && addItem(id, 1)) say("Found two!");
                 const ObjectDef* od = data.object(id);
                 say("+1 " + (od ? od->name : std::string("item")));
                 cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
@@ -664,6 +666,7 @@ void Game::useSelected(int tx, int ty) {
                     if (o->ore) {
                         int drop = oreNodeDrop(o->itemId);
                         int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
+                        if (has(PR_MINER) && drop != 390) n++;
                         cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
                         addItem(drop, n);
                         gainXp(SK_MINING, 5);
@@ -897,6 +900,8 @@ bool Game::goToBed() {
                     if (s.regrowWait == 0) s.regrowWait = -1;
                 } else if (s.phase < c->phaseDays.size()) {
                     s.dayInPhase++;
+                    // agriculturist: crops sometimes put on an extra day of growth
+                    if (has(PR_AGRICULTURIST) && rand32() % 10 == 0) s.dayInPhase++;
                     if (s.dayInPhase >= c->phaseDays[s.phase]) {
                         s.phase++;
                         s.dayInPhase = 0;
@@ -933,13 +938,14 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 9;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 10;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
                                           // 7: quests
                                           // 8: skill levels (applied at night)
                                           // 9: mailbox
+                                          // 10: professions
 
 namespace {
 struct W {
@@ -1045,6 +1051,8 @@ bool Game::save(const std::string& path) const {
     for (auto& k : triggersApplied) w.str(k);
     w.u32((uint32_t)(totalEarned & 0xFFFFFFFF));
     w.i32((int32_t)(totalEarned >> 32));
+    w.u32((uint32_t)professions.size());
+    for (int p : professions) w.i32(p);
     w.u32((uint32_t)quests.size());
     for (auto& q : quests) { w.str(q.id); w.i32(q.progress); w.u8(q.done); }
     w.u32((uint32_t)questsFinished.size());
@@ -1188,6 +1196,11 @@ bool Game::load(const std::string& path, std::string* err) {
         uint32_t lo = r.u32();
         int32_t hi = r.i32();
         totalEarned = ((long long)hi << 32) | lo;
+    }
+    professions.clear();
+    if (version >= 10 && r.ok) {
+        uint32_t n = r.u32();
+        for (uint32_t i = 0; i < n && r.ok && i < 30; i++) professions.insert(r.i32());
     }
     if (version >= 7 && r.ok) {
         uint32_t nq = r.u32();

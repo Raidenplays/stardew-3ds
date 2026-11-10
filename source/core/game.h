@@ -275,6 +275,11 @@ public:
     int skillLevel(int skill) const;      // current level (recipes, bar size...)
     int xpLevel(int skill) const;         // level your XP has reached (applied at night)
     void applyLevelUps();                 // called when the day ends
+    std::set<int> professions;
+    bool has(int profession) const { return professions.count(profession) > 0; }
+    // the two professions offered for a level-up (empty unless level 5 or 10)
+    std::vector<int> professionChoices(int skill, int level) const;
+    void chooseProfession(int id);
     static int xpForLevel(int level);     // total xp needed to reach level (1..10)
     void gainXp(int skill, int xp);
     bool recipeKnown(const Recipe& r) const;
@@ -282,7 +287,8 @@ public:
     bool canCraft(const Recipe& r) const;
     bool craft(const Recipe& r);
     std::string itemName(const Slot& s) const;
-    int itemPrice(const Slot& s) const;   // per item
+    int itemPrice(const Slot& s) const;   // per item, with profession bonuses
+    int itemBasePrice(const Slot& s) const;
     bool addSlot(Slot s);                 // stacks; false = no room (nothing added)
     bool addItem(int objId, int count);
     std::map<std::string, std::vector<Placed>> placed;   // by location name

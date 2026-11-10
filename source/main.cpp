@@ -159,6 +159,8 @@ int main() {
             in = Input();
         }
         if (ui.showSummary) {
+            if (kDown & (KEY_DLEFT | KEY_CPAD_LEFT)) summaryMove(game, ui, -1);
+            if (kDown & (KEY_DRIGHT | KEY_CPAD_RIGHT)) summaryMove(game, ui, 1);
             if (kDown & KEY_A) summaryAdvance(game, ui);
             in = Input();
             dt = 0;
