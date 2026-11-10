@@ -1222,6 +1222,90 @@ def location_maps(content):
     return out
 
 
+# ---------------------------------------------------------------- UI fonts
+# The 3DS screen is small, so the game's font is shrunk here once into a crisp
+# pixel font (no blurry scaling on the console). Both fonts come from your
+# own Content folder and only ever live on your SD card.
+SMALL_FONT_PX = 16
+FONT_SIZES = (("small", 16), ("tiny", 13))
+
+
+def write_fonts(content, out_root):
+    for name, px in FONT_SIZES:
+        _write_small_font(content, out_root, name, px)
+    _write_bold_font(content, out_root)
+
+
+def _write_small_font(content, out_root, name, px):
+    data_dir, tex_dir = os.path.join(out_root, "data"), os.path.join(out_root, "tex")
+    fj, fp = os.path.join(content, "Fonts", "SmallFont.json"), os.path.join(content, "Fonts", "SmallFont.png")
+    if os.path.isfile(fj) and os.path.isfile(fp):
+        with open(fj, encoding="utf-8-sig") as f:
+            font = json.load(f)
+        src = Image.open(fp).convert("RGBA")
+        line = int(font.get("LineSpacing", 33)) or 33
+        k = px / line
+        cells = {}
+        for g in (font.get("Glyphs") or {}).values():
+            ch = g.get("Character") or ""
+            if len(ch) != 1 or ord(ch) > 255:
+                continue
+            b, cr = g["BoundsInTexture"], g["Cropping"]
+            cw = max(1, int(round(float(g.get("WidthIncludingBearings", b["Width"])))))
+            cell = Image.new("RGBA", (cw, line), (0, 0, 0, 0))
+            if b["Width"] and b["Height"]:
+                gl = src.crop((b["X"], b["Y"], b["X"] + b["Width"], b["Y"] + b["Height"]))
+                cell.paste(gl, (int(float(g.get("LeftSideBearing", 0))) + cr["X"], cr["Y"]), gl)
+            sm = cell.resize((max(1, round(cw * k)), px), Image.BOX)
+            cells[ord(ch)] = sm.getchannel("A").point(lambda v: 255 if v > 110 else 0)
+        # trim rows no glyph uses
+        rows = [y for y in range(px) if any(c.crop((0, y, c.size[0], y + 1)).getbbox() for c in cells.values())]
+        top, bot = (rows[0], rows[-1] + 1) if rows else (0, px)
+        h = bot - top
+        cw = max(c.size[0] for c in cells.values())
+        cols = 16
+        atlas = Image.new("RGBA", (cols * cw, ((len(cells) + cols - 1) // cols) * h), (0, 0, 0, 0))
+        white = Image.new("RGBA", (cw, h), (255, 255, 255, 255))
+        lines = [f"#font\t{h}\t{max(h + 2, round(line * k) - 3)}"]
+        for i, code in enumerate(sorted(cells)):
+            a = cells[code].crop((0, top, cells[code].size[0], bot))
+            x, y = (i % cols) * cw, (i // cols) * h
+            atlas.paste(white.crop((0, 0) + a.size), (x, y), a)
+            lines.append(f"{code}\t{x}\t{y}\t{a.size[0]}")
+        tmp = os.path.join(tex_dir, f"_uifont_{name}.png")
+        os.makedirs(tex_dir, exist_ok=True)
+        atlas.save(tmp)
+        convert_texture(tmp, os.path.join(tex_dir, f"UiFont_{name}.s3t"))
+        os.remove(tmp)
+        with open(os.path.join(data_dir, f"font_{name}.dat"), "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"  font_{name}.dat: {len(cells)} glyphs, {h}px")
+
+
+def _write_bold_font(content, out_root):
+    data_dir = os.path.join(out_root, "data")
+    # bold pixel font for titles: 8x16 cells from ' ' onwards, widths measured
+    bp = find_png(content, "LooseSprites/font_bold")
+    if bp:
+        im = Image.open(bp).convert("RGBA")
+        a = im.getchannel("A")
+        cols = im.size[0] // 8
+        lines = ["#font\t16\t18"]
+        for code in range(32, 256):
+            i = code - 32
+            x, y = (i % cols) * 8, (i // cols) * 16
+            if y + 16 > im.size[1]:
+                break
+            bb = a.crop((x, y, x + 8, y + 16)).getbbox()
+            if code == 32:
+                lines.append(f"{code}\t{x}\t{y}\t4")
+            elif bb:
+                lines.append(f"{code}\t{x + bb[0]}\t{y}\t{bb[2] - bb[0]}")
+        with open(os.path.join(data_dir, "font_bold.dat"), "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"  font_bold.dat: {len(lines) - 1} glyphs")
+
+
 # ---------------------------------------------------------------- parallel work
 # Python threads can't use more than one core for this kind of work, so the
 # heavy steps run in separate processes (--jobs=N, default: all cores).
@@ -1389,6 +1473,8 @@ def main():
     write_npcs(content, os.path.join(out_root, "data"), textures)
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
+    print("Fonts...")
+    write_fonts(content, out_root)
     took("data, villagers, events")
 
     for t in sorted(TEXTURES_FROM_DATA):

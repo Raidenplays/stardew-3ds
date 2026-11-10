@@ -8,6 +8,7 @@
 
 #include "core/game.h"
 #include "platform/c2d_canvas.h"
+#include "render/fonts.h"
 #include "render/modscreen.h"
 #include "render/scene.h"
 
@@ -101,6 +102,7 @@ int main() {
     // never load a world into a different mod set without a copy of it first
     backupSaveIfModsChanged(root, savePath, data.vfs.signature());
     bool ok = data.load(root, &err);
+    loadUiFonts(canvas, [&data](const std::string& rel) { return data.vfs.path(rel); });
     if (ok && !game.load(savePath)) ok = game.newGame((uint32_t)osGetTime(), &err);
     if (!ok) {
         fatalScreen(canvas, top,

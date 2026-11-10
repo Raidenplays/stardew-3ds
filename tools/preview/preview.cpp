@@ -10,6 +10,7 @@
 
 #include "core/game.h"
 #include "host_canvas.h"
+#include "render/fonts.h"
 #include "render/modscreen.h"
 #include "render/scene.h"
 
@@ -125,6 +126,7 @@ int main(int argc, char** argv) {
     HostCanvas c(g_root, font);
     c.resolveFn = [](const std::string& rel, void* ctx) { return ((Vfs*)ctx)->path(rel); };
     c.resolveCtx = &data.vfs;
+    if (!getenv("S3DS_SYSTEM_FONT")) loadUiFonts(c, [&data](const std::string& rel) { return data.vfs.path(rel); });
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
