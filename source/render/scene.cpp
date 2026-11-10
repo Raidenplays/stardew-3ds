@@ -646,6 +646,16 @@ static bool hit(int tx, int ty, float x, float y, float w, float h) {
     return tx >= x && ty >= y && tx < x + w && ty < y + h;
 }
 
+// Stack counts: light digits with a dark outline so they read over any icon.
+static void countText(Canvas& c, float rightX, float y, int count) {
+    std::string n = std::to_string(count);
+    const uint32_t edge = RGBA(0x2A, 0x14, 0x08);
+    for (int dy = -1; dy <= 1; dy++)
+        for (int dx = -1; dx <= 1; dx++)
+            if (dx || dy) c.text(rightX + dx, y + dy, 0.35f, edge, n, ALIGN_RIGHT);
+    c.text(rightX, y, 0.35f, RGBA(0xFF, 0xF4, 0xD8), n, ALIGN_RIGHT);
+}
+
 static void slotBox(Canvas& c, const Game& g, int i, float x, float y, bool picked) {
     bool sel = i == g.selected;
     uint32_t edge = picked ? COL_PICK : (sel ? COL_SEL : COL_SLOT_EDGE);
@@ -654,7 +664,7 @@ static void slotBox(Canvas& c, const Game& g, int i, float x, float y, bool pick
     if (s.empty()) return;
     slotIcon(c, g, s, x + 4, y + 4);
     if (s.type != SLOT_TOOL && s.count > 1)
-        c.text(x + SLOT - 1, y + SLOT - 11, 0.35f, COL_TEXT, std::to_string(s.count), ALIGN_RIGHT);
+        countText(c, x + SLOT - 2, y + SLOT - 10, s.count);
 }
 
 static void slotPos(int i, float& x, float& y) {
@@ -904,7 +914,7 @@ static void drawChest(Canvas& c, Game& g) {
         const Slot& s = p->items[i];
         if (s.empty()) continue;
         slotIcon(c, g, s, x + 4, y + 4);
-        if (s.count > 1) c.text(x + SLOT - 1, y + SLOT - 11, 0.35f, COL_TEXT, std::to_string(s.count), ALIGN_RIGHT);
+        if (s.count > 1) countText(c, x + SLOT - 2, y + SLOT - 10, s.count);
     }
     for (int i = 0; i < INV_SIZE; i++) {
         float x, y;
