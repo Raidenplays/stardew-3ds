@@ -269,6 +269,11 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         const WorldObject& o = g.location().objects[i];
         if (o.x >= x0 && o.x <= x1 && o.y >= y0 && o.y <= y1) items.push_back({(float)(o.y * TILE + 14), 7, (int)i, 0});
     }
+    for (size_t i = 0; i < g.location().trees.size(); i++) {
+        const Tree& t = g.location().trees[i];
+        if (t.x >= x0 - 2 && t.x <= x1 + 2 && t.y >= y0 && t.y <= y1 + 6)
+            items.push_back({(float)(t.y * TILE + 14), 9, (int)i, 0});
+    }
     {
         const std::vector<Placed>& pl = g.placedHere();
         for (size_t i = 0; i < pl.size(); i++)
@@ -373,6 +378,25 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 int sx = (fp.id % 32) * 16, sy = (fp.id / 32) * 16;
                 float bottom = (fp.y + fd->second.boxH) * TILE;
                 c.image("TileSheets_furniture", sx, sy, sw, sh, fp.x * TILE - camX, bottom - sh - camY);
+                break;
+            }
+            case 9: {
+                const Tree& t = g.location().trees[it.a];
+                auto td = g.data.trees.find(t.type);
+                if (td == g.data.trees.end()) break;
+                const std::string& tex = td->second.texture[g.season & 3];
+                float bx = t.x * TILE - camX, by = (t.y + 1) * TILE - camY;
+                float wob = t.shake > 0 ? std::sin(t.shake * 60.0f) * 1.5f : 0.0f;
+                if (t.stump) {
+                    c.image(tex, 32, 96, 16, 32, bx, by - 32);
+                } else if (t.stage >= TREE_GROWN) {
+                    c.image(tex, 0, 0, 48, 96, bx - 16 + wob + c.shift(1.0f), by - 96 + 8);
+                } else if (t.stage >= 3) {
+                    c.image(tex, 0, 96, 16, 32, bx + wob, by - 32);
+                } else {
+                    static const int sx[3] = {32, 0, 16};
+                    c.image(tex, sx[t.stage], 128, 16, 16, bx + wob, by - 16);
+                }
                 break;
             }
             case 8: {

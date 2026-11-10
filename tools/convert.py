@@ -591,6 +591,7 @@ def write_data(content, out_dir):
     farmer_bob(content, out_dir)
     write_furniture(content, out_dir)
     write_crafting(content, out_dir, objs)
+    write_trees(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -750,6 +751,34 @@ def write_location_names(content, out_dir):
             f.write(f"{_clean(name)}\t{_clean(dn)}\n")
             n += 1
     print(f"  location_names.dat: {n} names")
+
+
+def write_trees(content, out_dir):
+    """data/trees.dat: type, seed item, texture per season, growth chance."""
+    trees = _load_json(content, "Data/WildTrees.json")
+    n = 0
+    with open(os.path.join(out_dir, "trees.dat"), "w", encoding="utf-8") as f:
+        for tid, t in trees.items():
+            if not str(tid).isdigit() or not t:
+                continue
+            tex = {}
+            for e in t.get("Textures") or []:
+                if e.get("Condition"):
+                    continue
+                path = str(e.get("Texture", "")).replace("\\", "/")
+                if not path:
+                    continue
+                TEXTURES_FROM_DATA.add(path)
+                tex[str(e.get("Season") or "").lower() or "any"] = tex_name(path)
+            if not tex:
+                continue
+            default = tex.get("any") or tex.get("spring") or next(iter(tex.values()))
+            seasons = [tex.get(s, default) for s in ("spring", "summer", "fall", "winter")]
+            seed = ITEM_IDS.get(t.get("SeedItemId") or "")
+            f.write("\t".join(_clean(x) for x in [
+                tid, seed if seed is not None else -1, *seasons, float(t.get("GrowthChance", 0.2) or 0.2)]) + "\n")
+            n += 1
+    print(f"  trees.dat: {n} tree types")
 
 
 # ---------------------------------------------------------------- crafting / machines

@@ -450,6 +450,23 @@ def craftables_sheet():
     return img
 
 
+def tree_sheet():
+    """Original placeholder tree sheet in the 144x160 layout the engine reads."""
+    img = Image.new("RGBA", (144, 160), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle([20, 60, 27, 95], fill=(120, 80, 44), outline=(70, 44, 20))      # trunk
+    d.ellipse([2, 4, 45, 70], fill=(70, 140, 60), outline=(36, 84, 32))          # canopy
+    d.ellipse([10, 14, 26, 30], fill=(96, 170, 80))
+    d.rectangle([35, 114, 44, 127], fill=(120, 80, 44), outline=(70, 44, 20))    # stump
+    d.ellipse([35, 110, 44, 117], fill=(200, 160, 110), outline=(70, 44, 20))
+    d.rectangle([6, 104, 9, 127], fill=(120, 80, 44))                            # sapling
+    d.ellipse([1, 96, 14, 112], fill=(70, 140, 60))
+    d.ellipse([36, 134, 43, 140], fill=(150, 100, 50))                           # seed
+    d.line([7, 142, 7, 134], fill=(70, 140, 60), width=2)                        # sprout
+    d.ellipse([18, 132, 29, 142], fill=(70, 140, 60))                            # small
+    return img
+
+
 def crops_sheet():
     img = Image.new("RGBA", (256, 3 * 32), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -711,6 +728,7 @@ def data_files():
         "378": ("Copper Ore", 5, 378, -15, -300), "334": ("Copper Bar", 60, 334, -15, -300),
         "382": ("Coal", 15, 382, -15, -300), "398": ("Test Berry", 50, 398, -79, 15),
         "344": ("Jelly", 160, 344, -26, 20), "599": ("Sprinkler", 100, 599, -8, -300),
+        "309": ("Test Acorn", 20, 309, -74, -300), "92": ("Sap", 2, 92, -81, -1),
     }
     tools = {
         "Hoe": {"ClassName": "Hoe", "Name": "Hoe", "SpriteIndex": 0, "MenuSpriteIndex": -1, "UpgradeLevel": 0},
@@ -738,6 +756,9 @@ def data_files():
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
     # crafting: placeholder recipes in the 1.6 formats
+    json.dump({"1": {"Textures": [{"Season": None, "Texture": "TerrainFeatures\\tree1_spring"}],
+                     "SeedItemId": "(O)309", "GrowthChance": 1.0}},
+              open(os.path.join(C, "Data/WildTrees.json"), "w"), indent=1)
     json.dump({k: {"Name": n, "Price": p, "SpriteIndex": i} for k, (n, p, i) in {
         "130": ("Chest", 0, 0), "13": ("Furnace", 0, 1), "15": ("Preserves Jar", 0, 2)}.items()},
         open(os.path.join(C, "Data/BigCraftables.json"), "w"), indent=1)
@@ -846,6 +867,7 @@ def main():
     save(objects_sheet(), "Maps/springobjects")
     save(crops_sheet(), "TileSheets/crops")
     save(craftables_sheet(), "TileSheets/Craftables")
+    save(tree_sheet(), "TerrainFeatures/tree1_spring")
     save(tools_sheet(), "TileSheets/tools")
     save(hoe_dirt(), "TerrainFeatures/hoeDirt")
     base, hair = farmer_sheets()

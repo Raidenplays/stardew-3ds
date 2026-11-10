@@ -77,7 +77,7 @@ static bool keyedTable(const std::string& rel) {
     static const char* keyed[] = {"data/crops.dat", "data/objects.dat", "data/npcs.dat", "data/tools.dat",
                                   "data/furniture.dat", "data/location_names.dat", "data/item_ids.dat",
                                   "data/farmer_bob.dat", "data/universal_tastes.dat",
-                                  "data/bigcraftables.dat", "data/crafting.dat"};
+                                  "data/bigcraftables.dat", "data/crafting.dat", "data/trees.dat"};
     for (const char* k : keyed)
         if (rel == k) return true;
     return rel.rfind("data/events/", 0) == 0 || rel.rfind("data/dialogue/", 0) == 0 ||
