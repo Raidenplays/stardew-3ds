@@ -104,6 +104,10 @@ int main() {
         if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
         if (!ui.shop.empty() && (kDown & KEY_B)) { ui.shop.clear(); ui.cart.clear(); }
 
+        if (game.dialogue.active) {
+            if (kDown & KEY_A) dialogueAdvance(game, ui);
+            in = Input();
+        }
         if (ui.showSummary) {
             if (kDown & KEY_A) ui.showSummary = false;
             in = Input();

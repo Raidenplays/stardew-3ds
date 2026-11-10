@@ -50,3 +50,11 @@ int C2DCanvas::texWidth(const std::string& tex) {
     const Texture* t = get(tex);
     return t ? t->width : 0;
 }
+
+float C2DCanvas::textWidth(const std::string& s, float scale) {
+    C2D_Text t;
+    C2D_TextParse(&t, textBuf, s.c_str());
+    float w = 0, h = 0;
+    C2D_TextGetDimensions(&t, scale, scale, &w, &h);
+    return w;
+}

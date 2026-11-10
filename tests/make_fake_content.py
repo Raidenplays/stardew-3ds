@@ -535,6 +535,110 @@ def hoe_dirt():
     return img
 
 
+# ------------------------------------------------------------------ villagers (original)
+VILLAGERS = {
+    # name: (shirt, hair, skin)
+    "Rowan": ((70, 140, 90), (60, 40, 30), (240, 200, 160)),
+    "Juniper": ((170, 80, 150), (230, 180, 60), (200, 150, 110)),
+}
+
+
+def villager_sprites(shirt, hair, skin):
+    img = Image.new("RGBA", (64, 128), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for row in range(4):           # down, right, up, left
+        for col in range(4):
+            x, y = col * 16, row * 32
+            step = (0, 1, 0, -1)[col]
+            d.ellipse([x + 4, y + 5, x + 11, y + 13], fill=skin, outline=shade(skin, 0.7))
+            d.chord([x + 3, y + 3, x + 12, y + 11], 180, 360, fill=hair)
+            d.rectangle([x + 4, y + 14, x + 11, y + 23], fill=shirt, outline=shade(shirt, 0.6))
+            d.rectangle([x + 4, y + 24, x + 7, y + 29 + step], fill=(70, 60, 80))
+            d.rectangle([x + 8, y + 24, x + 11, y + 29 - step], fill=(70, 60, 80))
+            if row == 0:
+                d.point((x + 6, y + 9), fill=(30, 30, 30))
+                d.point((x + 9, y + 9), fill=(30, 30, 30))
+            elif row in (1, 3):
+                d.point((x + (10 if row == 1 else 5), y + 9), fill=(30, 30, 30))
+            else:
+                d.rectangle([x + 4, y + 6, x + 11, y + 11], fill=hair)
+    return img
+
+
+def villager_portraits(shirt, hair, skin):
+    img = Image.new("RGBA", (128, 192), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for i in range(6):             # neutral happy sad unique love angry
+        x, y = (i % 2) * 64, (i // 2) * 64
+        d.rectangle([x + 14, y + 46, x + 50, y + 63], fill=shirt)
+        d.ellipse([x + 16, y + 10, x + 48, y + 48], fill=skin, outline=shade(skin, 0.7))
+        d.chord([x + 13, y + 4, x + 51, y + 36], 180, 360, fill=hair)
+        ey = y + 27
+        if i == 4:
+            for ex in (24, 37):
+                d.polygon([(x + ex, ey), (x + ex + 3, ey - 2), (x + ex + 6, ey)], fill=(220, 60, 90))
+        else:
+            d.rectangle([x + 24, ey - 2, x + 27, ey + 1], fill=(30, 30, 30))
+            d.rectangle([x + 37, ey - 2, x + 40, ey + 1], fill=(30, 30, 30))
+        if i == 5:
+            d.line([x + 22, ey - 6, x + 28, ey - 4], fill=(30, 30, 30), width=2)
+            d.line([x + 42, ey - 6, x + 36, ey - 4], fill=(30, 30, 30), width=2)
+        mouth = {0: (26, 38, 0), 1: (25, 39, 1), 2: (26, 38, -1), 3: (28, 36, 0), 4: (25, 39, 1), 5: (26, 38, -1)}[i]
+        my = y + 38
+        if mouth[2] > 0:
+            d.arc([x + mouth[0], my - 4, x + mouth[1], my + 3], 20, 160, fill=(120, 40, 40), width=2)
+        elif mouth[2] < 0:
+            d.arc([x + mouth[0], my, x + mouth[1], my + 6], 200, 340, fill=(120, 40, 40), width=2)
+        else:
+            d.line([x + mouth[0], my, x + mouth[1], my], fill=(120, 40, 40), width=2)
+        if i == 3:
+            d.ellipse([x + 44, y + 8, x + 52, y + 16], fill=(250, 230, 120))
+    return img
+
+
+def villager_data():
+    chars = {
+        "Rowan": {"DisplayName": "Rowan", "BirthSeason": "Spring", "BirthDay": 1, "CanSocialize": "TRUE",
+                  "Home": [{"Id": "Default", "Location": "SeedShop", "Tile": {"X": 4, "Y": 7}, "Direction": "down"}]},
+        "Juniper": {"DisplayName": "Juniper", "BirthSeason": "Summer", "BirthDay": 9,
+                    "Home": [{"Id": "Default", "Location": "Town", "Tile": {"X": 8, "Y": 23}, "Direction": "down"}]},
+    }
+    schedules = {
+        "Rowan": {"spring": "900 SeedShop 4 7 2/1700 SeedShop 9 13 2/2100 SeedShop 4 7 2"},
+        "Juniper": {"spring": "800 Town 20 30 2/1000 BusStop 15 22 2/1300 Town 40 26 1/1800 Town 8 23 2",
+                    "rain": "900 Town 30 23 2/1700 Town 8 23 2"},
+    }
+    dialogue = {
+        "Rowan": {
+            "Introduction": "Oh! You must be the new farmer.#$b#I'm Rowan. I run the seed counter here.$h",
+            "Mon": "Mondays are slow. Good day to restock the shelves.",
+            "spring_Tue": "$q 101 none#Planted anything yet?#$r 101 20 rowan_yes#Parsnips, of course!#$r 102 0 rowan_no#Not yet.",
+            "rowan_yes": "Good choice. They grow fast.$h",
+            "rowan_no": "No rush. The season's young.",
+        },
+        "Juniper": {
+            "Introduction": "Hey there. I'm Juniper.#$b#I paint the river most mornings. Say hi sometime!$h",
+            "Mon": "The light on the water is perfect today.",
+        },
+    }
+    tastes = {
+        "Rowan": "Ah, I really love these!/24 190/Thanks, that's nice./192/Oh... okay./388/Ugh, no./771/Thanks./",
+        "Juniper": "You remembered! I love it./250/That's sweet of you./24/Hm./390/Not my thing./771/Thank you./",
+        "Universal_Love": "", "Universal_Like": "", "Universal_Dislike": "", "Universal_Hate": "", "Universal_Neutral": "",
+    }
+    os.makedirs(os.path.join(C, "Characters", "schedules"), exist_ok=True)
+    os.makedirs(os.path.join(C, "Characters", "Dialogue"), exist_ok=True)
+    json.dump(chars, open(os.path.join(C, "Data/Characters.json"), "w"), indent=1)
+    json.dump(tastes, open(os.path.join(C, "Data/NPCGiftTastes.json"), "w"), indent=1)
+    for n, sch in schedules.items():
+        json.dump(sch, open(os.path.join(C, "Characters", "schedules", n + ".json"), "w"), indent=1)
+    for n, dia in dialogue.items():
+        json.dump(dia, open(os.path.join(C, "Characters", "Dialogue", n + ".json"), "w"), indent=1)
+    for n, (shirt, hair, skin) in VILLAGERS.items():
+        save(villager_sprites(shirt, hair, skin), f"Characters/{n}")
+        save(villager_portraits(shirt, hair, skin), f"Portraits/{n}")
+
+
 def data_files():
     os.makedirs(os.path.join(C, "Data"), exist_ok=True)
     crops = {
@@ -593,6 +697,7 @@ def main():
     save(house, "Buildings/houses")
     save(bin_, "Buildings/Shipping Bin")
     data_files()
+    villager_data()
     print(f"placeholder content written to {C}")
 
 

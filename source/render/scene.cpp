@@ -196,6 +196,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             items.push_back({(float)((b.tileY + b.footH) * TILE), 2, (int)i, 0});
         }
     items.push_back({g.py, 3, 0, 0});
+    for (size_t i = 0; i < g.npcs.size(); i++)
+        if (g.npcs[i].loc == g.location().name) items.push_back({g.npcs[i].y, 4, (int)i, 0});
     std::stable_sort(items.begin(), items.end(),
                      [](const DrawItem& a, const DrawItem& b) { return a.sortY < b.sortY; });
 
@@ -247,6 +249,14 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     g.targetTile(tx, ty);
                     slotIcon(c, g, g.inv[g.selected], tx * TILE - camX, ty * TILE - camY - 6);
                 }
+                break;
+            }
+            case 4: {
+                const NpcState& n = g.npcs[it.a];
+                int step = n.moving ? ((int)(n.walkTime * 6)) & 3 : 0;
+                int frame = (n.facing & 3) * 4 + step;
+                c.image("Characters_" + n.def->name, (frame % 4) * 16, (frame / 4) * 32, 16, 32,
+                        std::floor(n.x - 8 - camX), std::floor(n.y - 30 - camY));
                 break;
             }
         }
@@ -388,7 +398,7 @@ static void drawHotbarAndTabs(Canvas& c, Game& g, Ui& ui) {
         slotPos(i, x, y);
         slotBox(c, g, i, x, y, ui.picked == i);
     }
-    static const char* names[TAB_COUNT] = {"Items", "Map", "Options"};
+    static const char* names[TAB_COUNT] = {"Items", "Social", "Map", "Options"};
     float tw = (BOT_W - 8 - 2 * (TAB_COUNT - 1)) / (float)TAB_COUNT;
     for (int i = 0; i < TAB_COUNT; i++) {
         float x = 4 + i * (tw + 2);
@@ -482,6 +492,14 @@ static void drawMapTab(Canvas& c, Game& g) {
             else col = RGBA(0xD9, 0xC0, 0x8A);
             c.rect(ox + bx * px, oy + by * px, px, px, col);
         }
+    std::string here;
+    for (auto& n : g.npcs) {
+        if (n.loc != g.location().name) continue;
+        float nx = ox + (n.x / TILE / bs) * px, ny = oy + ((n.y - 4) / TILE / bs) * px;
+        c.rect(nx - 2, ny - 2, 5, 5, RGBA(0xFF, 0xFF, 0xFF));
+        c.rect(nx - 1, ny - 1, 3, 3, RGBA(0x2F, 0x6F, 0xC0));
+        here += (here.empty() ? "" : ", ") + n.def->display;
+    }
     float dx = ox + (g.px / TILE / bs) * px, dy = oy + ((g.py - 4) / TILE / bs) * px;
     c.rect(dx - 3, dy - 3, 6, 6, COL_WHITE);
     c.rect(dx - 2, dy - 2, 4, 4, COL_SEL);
@@ -493,6 +511,7 @@ static void drawMapTab(Canvas& c, Game& g) {
         if (exits.find(placeName(w.target)) == std::string::npos)
             exits += (exits.empty() ? "" : ", ") + placeName(w.target);
     c.text(10, ay + ah + 6, 0.38f, COL_TEXT_SOFT, exits.empty() ? "No exits found" : "Exits: " + exits);
+    if (!here.empty()) c.text(10, ay + ah + 19, 0.38f, COL_PICK, "Here: " + here);
 }
 
 static void drawOptionsTab(Canvas& c, Game& g, Ui& ui) {
@@ -517,6 +536,151 @@ static void touchOptionsTab(Game& g, Ui& ui, int tx, int ty, const std::string& 
                 if (i == 2) ui.quit = true;
             }
         }
+}
+
+
+// --------------------------------------------------------------- text helpers
+static std::vector<std::string> wrapText(Canvas& c, const std::string& s, float scale, float maxW) {
+    std::vector<std::string> lines;
+    std::string line, word;
+    auto flush = [&]() {
+        if (word.empty()) return;
+        std::string test = line.empty() ? word : line + " " + word;
+        if (!line.empty() && c.textWidth(test, scale) > maxW) {
+            lines.push_back(line);
+            line = word;
+        } else {
+            line = test;
+        }
+        word.clear();
+    };
+    for (char ch : s) {
+        if (ch == ' ') flush();
+        else word += ch;
+    }
+    flush();
+    if (!line.empty()) lines.push_back(line);
+    return lines;
+}
+
+static void heart(Canvas& c, float x, float y, uint32_t col) {
+    c.rect(x + 1, y, 2, 1, col);
+    c.rect(x + 4, y, 2, 1, col);
+    c.rect(x, y + 1, 7, 2, col);
+    c.rect(x + 1, y + 3, 5, 1, col);
+    c.rect(x + 2, y + 4, 3, 1, col);
+    c.rect(x + 3, y + 5, 1, 1, col);
+}
+
+// --------------------------------------------------------------- social tab
+static const int SOC_ROWS = 5, SOC_H = 36, SOC_Y = PANEL_Y + 4;
+
+static std::vector<int> socialOrder(const Game& g) {
+    std::vector<int> idx;
+    for (size_t i = 0; i < g.npcs.size(); i++)
+        if (g.npcs[i].def->social) idx.push_back((int)i);
+    std::stable_sort(idx.begin(), idx.end(), [&](int a, int b) {
+        if (g.npcs[a].friendship != g.npcs[b].friendship) return g.npcs[a].friendship > g.npcs[b].friendship;
+        return g.npcs[a].def->display < g.npcs[b].def->display;
+    });
+    return idx;
+}
+
+static void drawSocialTab(Canvas& c, Game& g, Ui& ui) {
+    auto order = socialOrder(g);
+    ui.socialScroll = std::max(0, std::min(ui.socialScroll, (int)order.size() - SOC_ROWS));
+    for (int r = 0; r < SOC_ROWS; r++) {
+        int k = ui.socialScroll + r;
+        if (k >= (int)order.size()) break;
+        const NpcState& n = g.npcs[order[k]];
+        float y = SOC_Y + r * SOC_H;
+        box(c, 8, y, 278, SOC_H - 3, COL_SLOT, COL_SLOT_EDGE, 1);
+        box(c, 11, y + 4, 24, 24, RGBA(0xE7, 0xC3, 0x83), COL_SLOT_EDGE, 1);
+        c.image("Characters_" + n.def->name, 0, 2, 16, 16, 15, y + 8);
+        c.text(40, y + 2, 0.46f, COL_TEXT, n.def->display);
+        for (int h = 0; h < 10; h++)
+            heart(c, 40 + h * 10, y + 20, h < n.hearts() ? RGBA(0xE0, 0x43, 0x2B) : RGBA(0xE3, 0xC6, 0x96));
+        char buf[40];
+        snprintf(buf, sizeof buf, "Gifts %d/2", std::min(n.giftsWeek, 2));
+        c.text(280, y + 3, 0.38f, COL_TEXT, buf, ALIGN_RIGHT);
+        if (g.isBirthday(*n.def)) c.text(280, y + 17, 0.38f, COL_SEL, "Birthday!", ALIGN_RIGHT);
+        else c.text(280, y + 17, 0.38f, n.talkedToday ? COL_GREEN : COL_TEXT_SOFT,
+                    n.talkedToday ? "Talked today" : (n.introduced ? "" : "Not met"), ALIGN_RIGHT);
+    }
+    if (order.empty()) c.text(160, 120, 0.45f, COL_TEXT_SOFT, "No villagers in your files yet.", ALIGN_CENTER);
+    box(c, 290, SOC_Y, 24, 80, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(302, SOC_Y + 30, 0.5f, COL_TEXT, "^", ALIGN_CENTER);
+    box(c, 290, SOC_Y + 96, 24, 80, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(302, SOC_Y + 126, 0.5f, COL_TEXT, "v", ALIGN_CENTER);
+}
+
+static void touchSocialTab(Ui& ui, int tx, int ty) {
+    if (hit(tx, ty, 290, SOC_Y, 24, 80)) ui.socialScroll -= SOC_ROWS - 1;
+    if (hit(tx, ty, 290, SOC_Y + 96, 24, 80)) ui.socialScroll += SOC_ROWS - 1;
+}
+
+// --------------------------------------------------------------- dialogue takeover
+static const int DLG_LINES = 7;
+
+static void drawDialogue(Canvas& c, Game& g, Ui& ui) {
+    c.rect(0, 0, BOT_W, BOT_H, COL_BG);
+    const DialogueBox& d = g.dialogue;
+    if (d.page >= d.pages.size()) return;
+    const DialoguePage& p = d.pages[d.page];
+    const NpcDef* def = g.data.npc(d.npc);
+
+    box(c, 4, 4, 210, 132, COL_PANEL, COL_BORDER, 3);
+    auto lines = wrapText(c, p.text, 0.5f, 192);
+    ui.dlgLines = (int)lines.size();
+    for (int i = 0; i < DLG_LINES && ui.dlgLine + i < (int)lines.size(); i++)
+        c.text(12, 10 + i * 16, 0.5f, COL_TEXT, lines[ui.dlgLine + i]);
+    bool lastPart = ui.dlgLine + DLG_LINES >= (int)lines.size();
+
+    box(c, 218, 4, 98, 98, RGBA(0xE7, 0xC3, 0x83), COL_BORDER, 3);
+    if (def) {
+        int idx = std::max(0, p.portrait);
+        c.image("Portraits_" + def->name, (idx % 2) * 64, (idx / 2) * 64, 64, 64, 235, 21);
+    }
+    box(c, 218, 106, 98, 30, COL_PANEL_DARK, COL_BORDER, 3);
+    c.text(267, 112, 0.5f, COL_TEXT, def ? def->display : "", ALIGN_CENTER);
+
+    if (lastPart && !p.choices.empty()) {
+        for (size_t i = 0; i < p.choices.size() && i < 3; i++) {
+            float y = 142 + i * 31;
+            box(c, 4, y, 312, 28, i == 0 ? COL_SLOT_ON : COL_SLOT, i == 0 ? COL_SEL : COL_SLOT_EDGE, i == 0 ? 2 : 1);
+            c.text(14, y + 6, 0.48f, COL_TEXT, p.choices[i].label);
+        }
+    } else {
+        c.text(206, 118, 0.42f, COL_TEXT_SOFT, lastPart ? "A  next" : "A  more", ALIGN_RIGHT);
+        c.text(BOT_W / 2, 200, 0.42f, COL_CREAM, "Tap anywhere or press A", ALIGN_CENTER);
+    }
+}
+
+void dialogueAdvance(Game& g, Ui& ui) {
+    if (!g.dialogue.active) return;
+    if (ui.dlgLine + DLG_LINES < ui.dlgLines) {
+        ui.dlgLine += DLG_LINES;
+        return;
+    }
+    const DialogueBox& d = g.dialogue;
+    if (d.page < d.pages.size() && !d.pages[d.page].choices.empty()) return;   // must pick
+    ui.dlgLine = 0;
+    ui.dlgLines = 0;
+    g.dialogueNext();
+}
+
+static void touchDialogue(Game& g, Ui& ui, int tx, int ty) {
+    const DialogueBox& d = g.dialogue;
+    if (d.page < d.pages.size() && !d.pages[d.page].choices.empty() && ui.dlgLine + DLG_LINES >= ui.dlgLines) {
+        for (int i = 0; i < 3; i++)
+            if (hit(tx, ty, 4, 142 + i * 31, 312, 28)) {
+                ui.dlgLine = 0;
+                g.dialogueChoose(i);
+                return;
+            }
+        return;
+    }
+    dialogueAdvance(g, ui);
 }
 
 // -------------------------------------------------------------- shop takeover
@@ -667,16 +831,19 @@ static void drawSummary(Canvas& c, Game& g) {
 // --------------------------------------------------------------- entry points
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
     if (ui.showSummary) { drawSummary(c, g); return; }
+    if (g.dialogue.active) { drawDialogue(c, g, ui); return; }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     drawHotbarAndTabs(c, g, ui);
     if (ui.tab == TAB_ITEMS) drawItemsTab(c, g, ui);
+    else if (ui.tab == TAB_SOCIAL) drawSocialTab(c, g, ui);
     else if (ui.tab == TAB_MAP) drawMapTab(c, g);
     else drawOptionsTab(c, g, ui);
 }
 
 void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (ui.showSummary) { ui.showSummary = false; return; }
+    if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
     int s = slotAt(tx, ty, ui.tab == TAB_ITEMS);
     if (s >= 0) {
@@ -698,6 +865,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
         return;
     }
     if (ui.tab == TAB_ITEMS) touchItemsTab(g, ui, tx, ty);
+    else if (ui.tab == TAB_SOCIAL) touchSocialTab(ui, tx, ty);
     else if (ui.tab == TAB_OPTIONS) touchOptionsTab(g, ui, tx, ty, savePath);
 }
 

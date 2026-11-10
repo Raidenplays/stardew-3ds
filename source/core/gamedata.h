@@ -48,6 +48,27 @@ struct BuildingDef {
     int tileX = 0, tileY = 0, footW = 0, footH = 0;
 };
 
+enum Taste : int { TASTE_LOVE = 0, TASTE_LIKE, TASTE_DISLIKE, TASTE_HATE, TASTE_NEUTRAL, TASTE_COUNT };
+
+struct NpcDef {
+    std::string name, display;
+    int birthSeason = -1, birthDay = 0;
+    std::string homeMap;
+    int homeX = 0, homeY = 0, homeDir = 0;
+    bool social = true;
+    std::vector<int> tastes[TASTE_COUNT];        // item ids, or negative category ids
+    std::string tasteText[TASTE_COUNT];
+    std::unordered_map<std::string, std::string> schedules;
+    std::unordered_map<std::string, std::string> dialogue;
+};
+
+// A way from one map to another (map-edge warp or door).
+struct GraphEdge {
+    int x, y;            // tile on the source map
+    std::string target;
+    int tx, ty;          // arrival tile
+};
+
 struct ShopItem {
     int itemId = -1;
     int price = 0;
@@ -64,6 +85,7 @@ struct Layout {
     int bedX = 9, bedY = 4, bedW = 2, bedH = 3;
     std::string wakeMap = "FarmHouse";
     int wakeX = 9, wakeY = 8;
+    std::string farmerName = "Farmer";
 };
 
 class GameData {
@@ -80,6 +102,10 @@ public:
     std::unordered_map<int, ObjectDef> objects;
     std::vector<ToolDef> tools;
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
+    std::vector<NpcDef> npcs;
+    std::vector<int> universalTastes[TASTE_COUNT];
+    std::unordered_map<std::string, std::vector<GraphEdge>> graph;   // by source map
+    const NpcDef* npc(const std::string& name) const;
     Layout layout;
     std::string root;   // SD folder the data came from
 };
