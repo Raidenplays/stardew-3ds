@@ -114,15 +114,15 @@ static void drawSplash(Canvas& c, TitleUi& t) {
         else
             c.text(200, 120, 0.7f, RGBA(0xF0, 0xE6, 0xD2), "ConcernedApe", ALIGN_CENTER);
     } else {
-        c.text(200, 52, 0.55f, RGBA(0xF0, 0xE6, 0xD2), "Ported by", ALIGN_CENTER);
         int lw = c.texWidth(MY_LOGO), lh = c.texHeight(MY_LOGO);
+        c.text(200, lw > 0 ? 14 : 52, 0.55f, RGBA(0xF0, 0xE6, 0xD2), "Ported by", ALIGN_CENTER);
         if (lw > 0 && lh > 0) {
-            // your logo, fitted into a 200x104 box (whole-number steps when it's small, so it stays sharp)
-            float k = std::min(200.0f / lw, 104.0f / lh);
+            // your logo, fitted into a 240x150 box (whole-number steps when it's small, so it stays sharp)
+            float k = std::min(240.0f / lw, 150.0f / lh);
             if (k >= 1.0f) k = std::floor(k);
-            c.imageScaled(MY_LOGO, 0, 0, lw, lh, 200 - lw * k / 2, 132 - lh * k / 2, k);
+            c.imageScaled(MY_LOGO, 0, 0, lw, lh, 200 - lw * k / 2, 114 - lh * k / 2, k);
         }
-        c.text(200, lw > 0 ? 190 : 112, 0.7f, RGBA(0xF0, 0xE6, 0xD2), "ItsRaiden", ALIGN_CENTER);
+        c.text(200, lw > 0 ? 196 : 112, 0.7f, RGBA(0xF0, 0xE6, 0xD2), "ItsRaiden", ALIGN_CENTER);
     }
     // fade: draw black over everything by (1 - a)
     if (a < 1.0f) c.rect(0, 0, 400, 240, RGBA(0, 0, 0, (uint8_t)(255 * (1.0f - a))));
