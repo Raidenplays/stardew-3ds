@@ -212,6 +212,31 @@ bool GameData::load(const std::string& root, std::string* err) {
             }
         }
     lines.clear();
+    if (readLines(root + "data/furniture.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 7) continue;
+            FurnitureDef d;
+            d.id = atoi(f[0].c_str());
+            d.name = f[1];
+            d.type = f[2];
+            d.spriteW = atoi(f[3].c_str());
+            d.spriteH = atoi(f[4].c_str());
+            d.boxW = atoi(f[5].c_str());
+            d.boxH = atoi(f[6].c_str());
+            furniture[d.id] = d;
+        }
+    lines.clear();
+    if (readLines(root + "data/farmer_bob.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 2) continue;
+            int fr = atoi(f[0].c_str());
+            if (fr < 0 || fr > 4096) continue;
+            if ((int)farmerBob.size() <= fr) farmerBob.resize(fr + 1, 0);
+            farmerBob[fr] = atoi(f[1].c_str());
+        }
+    lines.clear();
     if (readLines(root + "data/graph.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);
@@ -251,6 +276,23 @@ bool GameData::load(const std::string& root, std::string* err) {
                 char m[64];
                 if (sscanf(l.c_str(), "wake %63s %d %d", m, &layout.wakeX, &layout.wakeY) == 3)
                     layout.wakeMap = m;
+            } else if (!strcmp(kw, "furniture")) {
+                char m[64];
+                FurniturePlacement fp;
+                if (sscanf(l.c_str(), "furniture %63s %d %d %d", m, &fp.id, &fp.x, &fp.y) == 4) {
+                    fp.map = m;
+                    layout.furniture.push_back(fp);
+                }
+            } else if (!strcmp(kw, "outfit")) {
+                int v[9];
+                if (sscanf(l.c_str(), "outfit %d %d %d %d %d %d %d %d %d", &v[0], &v[1], &v[2], &v[3], &v[4],
+                           &v[5], &v[6], &v[7], &v[8]) == 9) {
+                    Outfit& o = layout.outfit;
+                    o.shirt = v[0]; o.pants = v[1];
+                    o.pantsR = (uint8_t)v[2]; o.pantsG = (uint8_t)v[3]; o.pantsB = (uint8_t)v[4];
+                    o.hair = v[5];
+                    o.hairR = (uint8_t)v[6]; o.hairG = (uint8_t)v[7]; o.hairB = (uint8_t)v[8];
+                }
             } else if (!strcmp(kw, "farmer")) {
                 if (l.size() > 7) layout.farmerName = l.substr(7);
             } else if (!strcmp(kw, "bin")) {

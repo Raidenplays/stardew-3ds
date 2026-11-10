@@ -60,6 +60,7 @@ EXTRA_TEXTURES = [
     ("Characters/Farmer/farmer_base", True),
     ("Characters/Farmer/hairstyles", True),
     ("Characters/Farmer/pants", False),
+    ("TileSheets/furniture", False),
     ("Characters/Farmer/shirts", False),
     ("Buildings/houses", False),
     ("Buildings/Shipping Bin", False),
@@ -121,30 +122,69 @@ def swizzle(rgba):
 
 
 def convert_texture(src_png, dst_s3t):
+    """Split into pages of at most 1024x1024 (the 3DS GPU limit), each padded
+    to power-of-two and swizzled. Writes S3T2 (pages carry x0 and y0)."""
     img = Image.open(src_png).convert("RGBA")
     w, h = img.size
-    if w > MAX_PAGE:
-        print(f"  ! {src_png}: wider than {MAX_PAGE}px, right side cropped")
-        img = img.crop((0, 0, MAX_PAGE, h))
-        w = MAX_PAGE
     arr = np.asarray(img)
     pages = []
-    y = 0
-    while y < h:
-        ph_real = min(MAX_PAGE, h - y)
-        pw, ph = _next_pow2(w), _next_pow2(ph_real)
-        page = np.zeros((ph, pw, 4), dtype=np.uint8)
-        page[:ph_real, :w] = arr[y:y + ph_real]
-        pages.append((y, ph_real, pw, ph, swizzle(page)))
-        y += ph_real
+    for y in range(0, h, MAX_PAGE):
+        for x in range(0, w, MAX_PAGE):
+            pw_real, ph_real = min(MAX_PAGE, w - x), min(MAX_PAGE, h - y)
+            pw, ph = _next_pow2(pw_real), _next_pow2(ph_real)
+            page = np.zeros((ph, pw, 4), dtype=np.uint8)
+            page[:ph_real, :pw_real] = arr[y:y + ph_real, x:x + pw_real]
+            pages.append((x, y, pw_real, ph_real, pw, ph, swizzle(page)))
     os.makedirs(os.path.dirname(dst_s3t), exist_ok=True)
     with open(dst_s3t, "wb") as f:
-        f.write(b"S3T1")
+        f.write(b"S3T2")
         f.write(struct.pack("<HHHH", w, h, len(pages), 0))
-        for (y0, hh, pw, ph, data) in pages:
-            f.write(struct.pack("<HHHH", y0, hh, pw, ph))
+        for (x0, y0, ww, hh, pw, ph, data) in pages:
+            f.write(struct.pack("<HHHHHH", x0, y0, ww, hh, pw, ph))
             f.write(data)
     return w, h
+
+
+def farmer_bob(content, out_dir):
+    """Per-frame vertical bob of the farmer body (topmost opaque row vs the
+    row's standing frame), so shirt and hair move with the body."""
+    p = find_png(content, "Characters/Farmer/farmer_base")
+    if not p:
+        return
+    a = np.asarray(Image.open(p).convert("RGBA"))[:, :, 3]
+    rows = a.shape[0] // 32
+    with open(os.path.join(out_dir, "farmer_bob.dat"), "w") as f:
+        for r in range(rows):
+            tops = []
+            for c in range(6):
+                cell = a[r * 32:(r + 1) * 32, c * 16:(c + 1) * 16]
+                ys = np.nonzero(cell.max(axis=1))[0]
+                tops.append(int(ys[0]) if len(ys) else 0)
+            for c in range(6):
+                f.write(f"{r * 6 + c}\t{tops[c] - tops[0]}\n")
+
+
+def write_furniture(content, out_dir):
+    furn = _load_json(content, "Data/Furniture.json")
+    n = 0
+    with open(os.path.join(out_dir, "furniture.dat"), "w", encoding="utf-8") as f:
+        for fid, line in furn.items():
+            if not str(fid).isdigit():
+                continue
+            parts = str(line).split("/")
+            if len(parts) < 4:
+                continue
+            def wh(t, dflt):
+                try:
+                    a, b = t.split()
+                    return int(a), int(b)
+                except ValueError:
+                    return dflt
+            sw, sh = wh(parts[2], (1, 2))
+            bw, bh = wh(parts[3], (1, 1))
+            f.write(f"{fid}\t{_clean(parts[0])}\t{_clean(parts[1])}\t{sw}\t{sh}\t{bw}\t{bh}\n")
+            n += 1
+    print(f"  furniture.dat: {n} pieces")
 
 
 def find_png(content, content_path):
@@ -477,6 +517,8 @@ def write_data(content, out_dir):
     print(f"  objects.dat: {n} objects")
 
     write_shops(content, out_dir, season_bits)
+    farmer_bob(content, out_dir)
+    write_furniture(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -682,12 +724,20 @@ bin 71 14
 bin 72 14
 #
 # bed <map> <tileX> <tileY> <w> <h>   A on these tiles = sleep
-bed FarmHouse 9 4 2 3
+bed FarmHouse 9 5 2 3
+#
+# furniture <map> <id> <tileX> <tileY>   id from Data/Furniture.json; tile = top-left of
+#                                        its footprint. 2048 is the starter bed.
+furniture FarmHouse 2048 9 5
 # wake <map> <tileX> <tileY>          where you wake up (nearest open tile is used)
 wake FarmHouse 9 8
 #
 # farmer <name>                       what villagers call you
 farmer Farmer
+#
+# outfit <shirt> <pants> <pantsR> <pantsG> <pantsB> <hair> <hairR> <hairG> <hairB>
+#   shirt / pants = SpriteIndex from Data/Shirts.json / Data/Pants.json
+outfit 0 0 46 85 183 0 138 78 38
 """
 
 

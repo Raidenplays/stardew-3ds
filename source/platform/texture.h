@@ -11,7 +11,7 @@
 
 struct TexPage {
     C3D_Tex tex;
-    int y0 = 0, h = 0, pw = 0, ph = 0;
+    int x0 = 0, y0 = 0, w = 0, h = 0, pw = 0, ph = 0;
 };
 
 class Texture {

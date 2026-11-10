@@ -33,13 +33,16 @@ All 190 maps convert. The farm, farmhouse, Bus Stop, Pelican Town and
 Pierre's all render and connect. Pierre's counter (`Buy General`) opens the
 real spring stock, and villagers stand where their schedules put them,
 with real portraits and lines.
-Still to do from that run:
-- The farmer is drawn as the base body only. Shirt, pants and arms
-  layering is next.
-- 1.6 farmhouse furniture (bed, TV, table) is placed by the game itself,
-  not the map, so the house starts empty.
-- Textures wider than 1024px (`pants.png`, a couple of map sheets) get
-  cropped. They need splitting into horizontal pages too.
+Fixed after that run:
+- **The farmer is fully dressed:** body, pants (tinted), shirt, arms and
+  hair, each following the body's per-frame bob. The bob is measured from
+  your `farmer_base.png` at convert time. Pick the outfit with `outfit` in
+  `layout.txt` (shirt and pants SpriteIndex, plus colours).
+- **Furniture:** pieces from `Data/Furniture.json`, placed with
+  `furniture <map> <id> <x> <y>` lines. The starter bed (2048) goes in the
+  farmhouse by default. Furniture blocks its footprint and is depth-sorted.
+- **Wide textures** are split into a grid of 1024x1024 pages (`.s3t` v2),
+  so nothing gets cropped any more.
 
 ## Milestone 2: the world
 
