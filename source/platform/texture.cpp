@@ -69,6 +69,24 @@ void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flip
     }
 }
 
+void Texture::drawRotated(int sx, int sy, int sw, int sh, float cx, float cy, float radians,
+                          const C2D_ImageTint* tint) const {
+    for (const TexPage& p : pages) {
+        if (sy < p.y0 || sy + sh > p.y0 + p.h || sx < p.x0 || sx + sw > p.x0 + p.w) continue;
+        float ly = (float)(sy - p.y0), lx = (float)(sx - p.x0);
+        Tex3DS_SubTexture sub;
+        sub.width = (u16)sw;
+        sub.height = (u16)sh;
+        sub.left = lx / p.pw;
+        sub.right = (lx + sw) / p.pw;
+        sub.top = 1.0f - ly / p.ph;
+        sub.bottom = 1.0f - (ly + sh) / p.ph;
+        C2D_Image img = {const_cast<C3D_Tex*>(&p.tex), &sub};
+        C2D_DrawImageAtRotated(img, cx, cy, 0.5f, radians, tint, 1.0f, 1.0f);
+        return;
+    }
+}
+
 const Texture* TexCache::get(const std::string& name) {
     auto it = cache.find(name);
     if (it != cache.end()) return it->second.get();

@@ -31,6 +31,23 @@ void C2DCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, fl
     }
 }
 
+void C2DCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
+                             float dx, float dy, float radians, uint32_t tint) {
+    const Texture* t = get(tex);
+    if (!t) return;
+    // citro2d turns around the image centre: move the centre so the pivot stays put
+    float ox = sw * 0.5f - px, oy = sh * 0.5f - py;
+    float c = cosf(radians), s = sinf(radians);
+    float cx = dx + ox * c - oy * s, cy = dy + ox * s + oy * c;
+    if (tint) {
+        C2D_ImageTint it;
+        C2D_PlainImageTint(&it, toC2D(tint), 1.0f);
+        t->drawRotated(sx, sy, sw, sh, cx, cy, radians, &it);
+    } else {
+        t->drawRotated(sx, sy, sw, sh, cx, cy, radians, nullptr);
+    }
+}
+
 void C2DCanvas::rect(float x, float y, float w, float h, uint32_t color) {
     C2D_DrawRectSolid(x, y, 0.5f, w, h, toC2D(color));
 }

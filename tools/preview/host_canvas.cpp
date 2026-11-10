@@ -129,6 +129,30 @@ void HostCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, f
     }
 }
 
+void HostCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
+                              float dx, float dy, float radians, uint32_t tint) {
+    const HostTexture* t = get(tex);
+    if (!t) return;
+    float c = std::cos(radians), s = std::sin(radians);
+    float r = std::sqrt((float)(sw * sw + sh * sh)) + 1;
+    // walk every screen pixel near the pivot and sample the source backwards
+    for (int y = (int)std::floor(dy - r); y <= (int)std::ceil(dy + r); y++)
+        for (int x = (int)std::floor(dx - r); x <= (int)std::ceil(dx + r); x++) {
+            float vx = x + 0.5f - dx, vy = y + 0.5f - dy;
+            float ux = vx * c + vy * s + px, uy = -vx * s + vy * c + py;
+            int tx = (int)std::floor(ux), ty = (int)std::floor(uy);
+            if (tx < 0 || ty < 0 || tx >= sw || ty >= sh) continue;
+            tx += sx; ty += sy;
+            if (tx < 0 || ty < 0 || tx >= t->w || ty >= t->h) continue;
+            uint32_t col = t->px[(size_t)ty * t->w + tx];
+            if (tint) {
+                auto m = [&](int sh2) { return ((((col >> sh2) & 0xFF) * ((tint >> sh2) & 0xFF)) / 255) << sh2; };
+                col = m(24) | m(16) | m(8) | (col & 0xFF);
+            }
+            blend(x, y, col);
+        }
+}
+
 void HostCanvas::rect(float x, float y, float w, float h, uint32_t color) {
     int x0 = (int)std::floor(x), y0 = (int)std::floor(y);
     int x1 = (int)std::floor(x + w), y1 = (int)std::floor(y + h);

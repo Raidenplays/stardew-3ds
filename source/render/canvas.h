@@ -140,6 +140,10 @@ public:
     // tint != 0 multiplies the texture colour by it.
     virtual void image(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
                        bool flipX = false, uint32_t tint = 0) = 0;
+    // Rotated draw: the source pixel (px, py) inside the (sx,sy,sw,sh) rect lands on
+    // (dx, dy), and the image is turned by `radians` around it (clockwise).
+    virtual void imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
+                              float dx, float dy, float radians, uint32_t tint = 0) = 0;
     virtual void rect(float x, float y, float w, float h, uint32_t color) = 0;
     virtual void line(float x1, float y1, float x2, float y2, uint32_t color, float width) = 0;
     // scale 0.5 is roughly a 15px-tall line, like the 3DS system font
