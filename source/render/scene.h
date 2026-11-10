@@ -22,6 +22,7 @@ struct Ui {
     // shop takeover
     std::string shop;         // empty = closed
     bool shopSell = false;
+    bool shopUpgrade = false; // blacksmith: tool upgrades
     int shopScroll = 0;
     std::map<int, int> cart;  // itemId -> qty
 

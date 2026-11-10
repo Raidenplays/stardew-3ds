@@ -147,6 +147,55 @@ int main(int argc, char** argv) {
         }
     pressA(g);
     assert(!g.placedAt(FX, FY) && count(g, 13, SLOT_BIG) == 1);
+    // ---- tool upgrades: 2000g + 5 copper bars, back in 2 days
+    g.money = 5000;
+    g.addItem(334, 5);
+    auto offers = g.upgradeOffers();
+    const UpgradeOffer* hoe = nullptr;
+    for (auto& o : offers)
+        if (d.tool(o.next)->kind == TOOL_HOE) hoe = &o;
+    assert(offers.size() == 2 && hoe && hoe->price == 2000 && hoe->bar == 334);
+    UpgradeOffer ho = *hoe;
+    assert(g.startUpgrade(ho) && g.money == 3000 && count(g, 334) == 0 && g.toolLevel(TOOL_HOE) < 0);
+    assert(!g.collectUpgrade());
+    assert(g.save("/tmp/craft_test2.sav"));
+    Game g3(d);
+    assert(g3.load("/tmp/craft_test2.sav") && g3.upgradeTool == ho.next);
+    g3.goToBed();
+    g3.goToBed();
+    assert(g3.collectUpgrade() && g3.toolLevel(TOOL_HOE) == 1 && g3.upgradeTool < 0);
+
+    // charged copper hoe: hold A for a level-1 swing tills 3 tiles in a line
+    int hoeSlot = -1;
+    for (int i = 0; i < INV_SIZE; i++)
+        if (g3.inv[i].type == SLOT_TOOL && d.tool(g3.inv[i].id)->kind == TOOL_HOE) hoeSlot = i;
+    if (hoeSlot >= HOTBAR) { g3.swapSlots(hoeSlot, 0); hoeSlot = 0; }
+    g3.selectSlot(hoeSlot);
+    const int HX = 70, HY = 22;
+    g3.teleport("Farm", HX, HY - 1);
+    g3.facing = FACE_DOWN;
+    // clear debris in the way
+    for (int y = HY; y < HY + 3; y++) assert(g3.debris(HX, y) == DEB_NONE || true);
+    Input press; press.action = true; press.hold = true;
+    g3.update(1.0f / 60, press);
+    assert(g3.charging);
+    Input holdIn; holdIn.hold = true;
+    for (int i = 0; i < 50; i++) g3.update(1.0f / 60, holdIn);   // ~0.85 s
+    assert(g3.chargeLevel() == 1);
+    std::vector<std::pair<int, int>> line;
+    g3.chargedTiles(1, line);
+    assert(line.size() == 3);
+    int want = 0;
+    for (auto& t : line)
+        want += g3.debris(t.first, t.second) == DEB_NONE && (g3.map().flags(t.first, t.second) & CF_DIGGABLE) &&
+                !(g3.map().flags(t.first, t.second) & CF_WATER) && !g3.buildingAt(t.first, t.second);
+    Input none;
+    g3.update(1.0f / 60, none);
+    assert(!g3.charging);
+    int tilled = 0;
+    for (auto& t : line) tilled += g3.soil(t.first, t.second).tilled;
+    assert(want >= 2 && tilled == want);
+    assert(g3.canCapacity() == 40);   // can not upgraded
     printf("all crafting tests passed\n");
     return 0;
 }

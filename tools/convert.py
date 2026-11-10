@@ -603,6 +603,8 @@ def write_data(content, out_dir):
             f.write("\t".join(_clean(x) for x in [
                 key, t.get("ClassName", key), t.get("Name", key),
                 int(t.get("UpgradeLevel", 0)), idx, tex_name(texp.replace("\\", "/")),
+                int(t.get("SalePrice", -1) if t.get("SalePrice") is not None else -1),
+                str(t.get("ConventionalUpgradeFrom") or "").replace("(T)", ""),
             ]) + "\n")
             n += 1
     print(f"  tools.dat: {n} tools")

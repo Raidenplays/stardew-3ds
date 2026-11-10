@@ -171,6 +171,14 @@ struct Input {
     bool action = false;    // A: interact or use the selected item
     bool walk = false;      // hold B to walk instead of run
     bool prev = false, next = false;   // L / R
+    bool hold = false;      // A is held down (charging upgraded tools)
+};
+
+struct UpgradeOffer {
+    int slot = -1;          // inventory slot of the tool
+    int next = -1;          // tool index it becomes
+    int price = 0;
+    int bar = -1, bars = 5; // bar object id and count
 };
 
 int oreNodeDrop(int node);   // ore node object id -> item it drops
@@ -251,6 +259,19 @@ public:
     Placed* openChest();
     void chestTransfer(bool toChest, int index);   // whole stack
     void closeChest() { chestOpen = false; }
+
+    // ---- tool upgrades (game_tools.cpp) ----
+    std::vector<UpgradeOffer> upgradeOffers() const;
+    bool startUpgrade(const UpgradeOffer& o);
+    int upgradeTool = -1;           // tool index waiting at the blacksmith
+    int upgradeReadyDay = 0;        // absolute day it's ready
+    bool collectUpgrade();          // at the blacksmith
+    int canCapacity() const;
+    int toolLevel(ToolKind k) const;   // best owned level of that tool kind
+    bool charging = false;          // holding A with an upgraded hoe / can
+    float chargeTime = 0;
+    int chargeLevel() const;
+    void chargedTiles(int level, std::vector<std::pair<int, int>>& out) const;
 
     bool save(const std::string& path) const;
     bool load(const std::string& path, std::string* err = nullptr);

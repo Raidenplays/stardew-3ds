@@ -186,6 +186,7 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         std::string id;
         ss >> id;
         openShop = id.empty() ? "SeedShop" : id;
+        if (openShop == "Blacksmith") collectUpgrade();
         return true;
     }
     if (verb == "Buy") {        // older maps: "Buy General"
@@ -615,7 +616,7 @@ void Game::useSelected(int tx, int ty) {
                 break;
             case TOOL_CAN:
                 if (f & CF_WATER) {
-                    water = CAN_CAPACITY;
+                    water = canCapacity();
                     say("Watering can filled");
                 } else if (s.tilled) {
                     if (water > 0) {
@@ -726,6 +727,45 @@ void Game::update(float dt, const Input& in) {
         return;
     }
 
+    // Upgraded hoe / watering can: hold A to charge, let go to swing.
+    {
+        const Slot& sel = inv[selected];
+        const ToolDef* st = sel.type == SLOT_TOOL ? data.tool(sel.id) : nullptr;
+        bool chargeable = st && (st->kind == TOOL_HOE || st->kind == TOOL_CAN) && st->upgrade > 0;
+        if (charging) {
+            moving = false;
+            if (!chargeable) {
+                charging = false;
+            } else if (in.hold) {
+                chargeTime += dt;
+                return;
+            } else {
+                int level = chargeLevel();
+                charging = false;
+                int tx, ty;
+                targetTile(tx, ty);
+                if (level == 0) {
+                    useSelected(tx, ty);
+                } else {
+                    int before = energy;
+                    std::vector<std::pair<int, int>> tiles;
+                    chargedTiles(level, tiles);
+                    for (auto& t : tiles) useSelected(t.first, t.second);
+                    energy = std::max(0, before - ENERGY_PER_SWING * (level + 1));
+                }
+                return;
+            }
+        } else if (in.action && chargeable) {
+            int tx, ty;
+            targetTile(tx, ty);
+            if (!tryInteract(tx, ty)) {
+                charging = true;
+                chargeTime = 0;
+            }
+            return;
+        }
+    }
+
     float mx = in.mx, my = in.my;
     float len = std::sqrt(mx * mx + my * my);
     moving = len > 0.2f;
@@ -830,7 +870,7 @@ bool Game::goToBed() {
     uint32_t r = rand32();
     spawnDebris(6, r);
 
-    water = CAN_CAPACITY;
+    water = canCapacity();
     dayEnded = true;
     startDay();
     wakeUp();
@@ -841,8 +881,9 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 4;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 5;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
+                                          // 5: tool at the blacksmith
 
 namespace {
 struct W {
@@ -937,6 +978,8 @@ bool Game::save(const std::string& path) const {
             for (auto& it : p.items) w.slot(it);
         }
     }
+    w.i32(upgradeTool);
+    w.i32(upgradeReadyDay);
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1042,6 +1085,13 @@ bool Game::load(const std::string& path, std::string* err) {
                 v.push_back(p);
             }
         }
+    }
+    upgradeTool = -1;
+    charging = false;
+    if (version >= 5 && r.ok) {
+        upgradeTool = r.i32();
+        upgradeReadyDay = r.i32();
+        if (upgradeTool >= data.toolCount()) upgradeTool = -1;
     }
     fclose(f);
     if (!r.ok) return false;
