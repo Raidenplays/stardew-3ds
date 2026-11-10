@@ -20,6 +20,9 @@ public:
     bool load(const std::string& path);
 
     // Draw (sx,sy,sw,sh) from the source image at screen (dx,dy).
+    // draw centred on (cx, cy), turned by radians around the centre
+    void drawRotated(int sx, int sy, int sw, int sh, float cx, float cy, float radians,
+                     const C2D_ImageTint* tint) const;
     void draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX = false,
               const C2D_ImageTint* tint = nullptr, float scale = 1.0f) const;
 

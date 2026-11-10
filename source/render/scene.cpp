@@ -576,6 +576,13 @@ static void drawHud(Canvas& c, Game& g) {
         snprintf(buf, sizeof buf, "%s. %d", days[g.weekday()], g.day);
         c.text(x + 47, y + 2, 0.4f, COL_TEXT, buf, ALIGN_CENTER);
         c.text(x + 48, y + 27, 0.34f, COL_TEXT, g.timeString(), ALIGN_CENTER);
+        // the dial's hand (from your Cursors sheet) turns through the day:
+        // on the sun (down) at 6am, round through the left, on the moon (up) at 2am
+        {
+            float k = std::max(0.0f, std::min(1.0f, (g.timeOfDay - DAY_START) / (float)(DAY_END - DAY_START)));
+            float ang = 3.14159265f * (1.0f + k);   // clockwise from straight down
+            c.imageRotated(UI_TEX, 324, 477, 7, 19, 3.5f, 17.0f, x + 21, y + 21, ang);
+        }
         // weather and season icons in the dial's middle row
         int wx = 341;                                   // sunny
         if (g.raining) wx = 365;                        // rain
