@@ -11,6 +11,8 @@
 #include "render/fonts.h"
 #include "render/modscreen.h"
 #include "render/scene.h"
+#include "render/setupscreen.h"
+#include "setup/setup.h"
 #include "render/title.h"
 
 using namespace sv;
@@ -46,6 +48,49 @@ static void fatalScreen(C2DCanvas& c, C3D_RenderTarget* top, const std::string& 
     }
 }
 
+// First launch: ask for the player's own Content folder and convert it here.
+// Returns false if the player chose to exit.
+static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot, const std::string& root) {
+    setup::Setup su(root);
+    if (su.installed()) return true;
+    SetupView view = su.haveContent() ? SetupView::Confirm : SetupView::NeedFiles;
+    auto now = [] { return (unsigned)osGetTime(); };
+    while (aptMainLoop()) {
+        hidScanInput();
+        u32 down = hidKeysDown();
+        if (view != SetupView::Running) {
+            if (down & KEY_START) return false;
+            if (down & KEY_A) {
+                if (view == SetupView::NeedFiles) {
+                    setup::Setup again(root);
+                    if (again.haveContent()) view = SetupView::Confirm;
+                } else if (view == SetupView::Confirm) {
+                    su.begin();
+                    aptSetSleepAllowed(false);
+                    view = SetupView::Running;
+                } else if (view == SetupView::Result) {
+                    if (su.state() == setup::State::Done) return true;
+                    return false;
+                }
+            }
+        } else if (!su.step(50, now)) {
+            aptSetSleepAllowed(true);
+            c.dropTextures();
+            view = SetupView::Result;
+        }
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        c.beginFrame();
+        C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
+        C2D_SceneBegin(top);
+        drawSetupTop(c, su, view);
+        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 0xFF));
+        C2D_SceneBegin(bot);
+        drawSetupBottom(c, su, view);
+        C3D_FrameEnd(0);
+    }
+    return false;
+}
+
 int main() {
     gfxInitDefault();
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
@@ -66,6 +111,14 @@ int main() {
         if (rel == "tex/UiLogo_user.s3t" || rel == "tex/UiBadge_3ds.s3t") return "romfs:/" + rel;
         return data.vfs.path(rel);
     });
+
+    // ---- first launch: convert the player's own game files on the console
+    if (!runSetup(canvas, top, bot, root)) {
+        C2D_Fini();
+        C3D_Fini();
+        gfxExit();
+        return 0;
+    }
 
     // ---- mod loader: new/missing mods (or SELECT held at boot) open the mod screen
     ModScreen mods;
