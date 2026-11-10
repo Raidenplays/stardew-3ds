@@ -38,8 +38,21 @@ done here.
   comments, trailing or doubled commas, `.5`-style numbers and unquoted
   keys is accepted, and file names match case-insensitively (mods are
   written on Windows).
-- **Not yet:** `.xnb` files inside mods (skipped), Farm Type Manager spawns,
-  Custom Companions, and features that need the mods' C# code.
+- **Mod items:** 1.6 items with text ids (e.g. `Rafseazz.RSVCP_Ridge_Cherry`)
+  get stable numbers from 100000 up (`data/item_ids.dat`) and keep their
+  own sprite sheets. Crops, shops, gift tastes and spawns all resolve them,
+  by id or by name.
+- **`.xnb` data:** uncompressed dictionary XNBs (SVE ships 55, all
+  events) load like JSON.
+- **Seasons:** packs are re-applied for summer, fall and winter. Maps that
+  differ from spring are saved as `maps/<Location>@<season>.smap`, and the
+  game swaps them in when the season changes.
+- **Forage and ore:** vanilla `Data/Locations` forage (on Spawnable tiles)
+  plus Farm Type Manager forage and ore areas (terrain types,
+  include/exclude rectangles, seasons, weights). Spawned on the first visit
+  each day. Pick up forage with A, break ore nodes with the pickaxe.
+- **Not yet:** FTM monster spawns (need combat), Custom Companions, and
+  features that need the mods' C# code.
 - **Tested with your files:** SVE + Ridgeside Village together produced 445
   maps, 138 villagers, 545 events and 409 shop items, and every map loads
   in the engine. `tests/` has an original test pack (`[CP] Test Meadow`)

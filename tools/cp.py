@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import sys
+from struct import error as struct_error
 
 from PIL import Image
 
@@ -123,6 +124,13 @@ class Content:
             self.index[a] = self._dest(asset, ".tmx")
         elif ext == ".json":
             self.data[a] = sjson.load(src)
+            self.index[a] = self._dest(asset, ".json")
+        elif ext == ".xnb":
+            import xnb
+            try:
+                self.data[a] = xnb.read_dict(src)
+            except (ValueError, IndexError, struct_error):
+                return False
             self.index[a] = self._dest(asset, ".json")
         elif ext == ".png":
             d = self._dest(asset, ".png")
@@ -648,7 +656,10 @@ def custom_locations(pack, c):
     return n
 
 
-def apply_all(base, mods_dir, out, log=print):
+def apply_all(base, mods_dir, out, log=print, season="spring", maps_only=False):
+    """season: which season's patches to apply. maps_only: skip data/image
+    edits (used for the per-season map variants)."""
+    BASELINE["season"] = season
     c = Content(base, out)
     log("  linking base content...")
     c.build()
@@ -685,10 +696,14 @@ def apply_all(base, mods_dir, out, log=print):
     for p, changes in plans:                      # all loads first, like CP
         for ch in changes:
             if str(ch.get("Action", "")).lower() == "load":
+                if maps_only and not str(ch.get("FromFile", "")).lower().strip().endswith((".tmx", ".tbin")):
+                    continue
                 apply_load(p, c, ch, stats)
     for p, changes in plans:                      # then edits, in pack order
         for ch in changes:
             a = str(ch.get("Action", "")).lower()
+            if maps_only and a != "editmap" and not (a == "editdata" and "locations" in str(ch.get("Target", "")).lower()):
+                continue
             try:
                 if a == "editdata":
                     apply_editdata(p, c, ch, stats)
@@ -699,6 +714,8 @@ def apply_all(base, mods_dir, out, log=print):
             except Exception as e:
                 p.warnings.append(f"{a} {ch.get('Target')}: {e}")
     log("  writing merged files...")
+    if maps_only:
+        c.images.clear()
     c.flush()
     log("  " + ", ".join(f"{k} {v}" for k, v in stats.items() if v))
     for p in packs:

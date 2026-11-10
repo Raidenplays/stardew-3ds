@@ -21,6 +21,7 @@ struct CropDef {
     int spriteIndex = 0;             // row pair in TileSheets/crops
     bool raised = false;
     int harvestMin = 1;
+    std::string texture = "TileSheets_crops";
     int totalDays() const;
 };
 
@@ -31,6 +32,8 @@ struct ObjectDef {
     int spriteIndex = 0;             // in Maps/springobjects (24 per row)
     int category = 0;
     int edibility = -300;
+    std::string texture = "Maps_springobjects";
+    std::string stringId;            // the game's own id ("24", "Rafseazz.RSVCP_Ridge_Cherry")
 };
 
 enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER };
@@ -89,6 +92,19 @@ struct Outfit {
     uint8_t hairR = 138, hairG = 78, hairB = 38;
 };
 
+// Daily spawns: vanilla forage (Data/Locations) and Farm Type Manager areas.
+struct ForageEntry { uint8_t seasonMask; int itemId; float chance; };
+struct LocationForage { int minDaily = 1, maxDaily = 4, maxAtOnce = 6; std::vector<ForageEntry> items; };
+struct SpawnRect { int x1, y1, x2, y2; };
+struct SpawnArea {
+    std::string id, location, kind;            // kind: "forage" or "ore"
+    int minDaily = 0, maxDaily = 0;
+    uint8_t seasonMask = 15;
+    std::string terrain;                       // "all", "grass", "dirt", "diggable"...
+    std::vector<SpawnRect> include, exclude;
+    std::vector<std::pair<int, int>> items[4]; // per season: (item id, weight)
+};
+
 struct ShopItem {
     int itemId = -1;
     int price = 0;
@@ -127,6 +143,8 @@ public:
     std::vector<NpcDef> npcs;
     std::unordered_map<int, FurnitureDef> furniture;
     std::unordered_map<std::string, std::string> locationNames;   // from Data/Locations
+    std::unordered_map<std::string, LocationForage> forage;
+    std::vector<SpawnArea> spawnAreas;
     std::vector<int> farmerBob;    // per body frame: pixels the body drops
     int bob(int frame) const { return frame >= 0 && frame < (int)farmerBob.size() ? farmerBob[frame] : 0; }
     std::vector<int> universalTastes[TASTE_COUNT];

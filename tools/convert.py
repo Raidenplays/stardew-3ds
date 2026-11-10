@@ -39,6 +39,7 @@ import sys
 import base64
 import zlib
 import gzip
+import shutil
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -83,6 +84,9 @@ F_WATER = 2
 F_BLOCKED = 4
 F_NOSPAWN = 8
 F_PASSABLE_OVERRIDE = 16
+F_GRASS = 32
+F_DIRT = 64
+F_SPAWNABLE = 128
 
 
 def tex_name(content_path):
@@ -366,6 +370,13 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
                     flags[i] |= F_BLOCKED
                 if "NoSpawn" in props:
                     flags[i] |= F_NOSPAWN
+                ttype = props.get("Type", "").lower()
+                if ttype == "grass":
+                    flags[i] |= F_GRASS
+                elif ttype == "dirt":
+                    flags[i] |= F_DIRT
+                if props.get("Spawnable", "").upper().startswith("T"):
+                    flags[i] |= F_SPAWNABLE
             if props.get("Action") and L in ("Buildings", "Front", "Back"):
                 actions.setdefault(i, props["Action"])
             if L == "Buildings":
@@ -476,51 +487,106 @@ def _clean(s):
     return str(s).replace("\t", " ").replace("\n", " ")
 
 
+class _ItemIds:
+    """Item ids are strings in 1.6 (mods use text ids). The engine uses ints:
+    numeric ids stay as they are, the rest get stable numbers from 100000."""
+
+    def __init__(self):
+        self.map = {}
+
+    def build(self, objs):
+        self.map = {}
+        texty = []
+        for k in objs:
+            k = str(k)
+            if k.isdigit():
+                self.map[k] = int(k)
+            else:
+                texty.append(k)
+        for i, k in enumerate(sorted(texty)):
+            self.map[k] = 100000 + i
+        # names too, so "Ridge Cherry" style references resolve
+        self.names = {}
+        for k, o in objs.items():
+            nm = str((o or {}).get("Name", "")).lower()
+            if nm and nm not in self.names:
+                self.names[nm] = self.map[str(k)]
+
+    def get(self, ref):
+        r = str(ref).strip()
+        if r.startswith("(O)"):
+            r = r[3:]
+        if r in self.map:
+            return self.map[r]
+        if r.lstrip("-").isdigit():
+            return int(r) if int(r) < 0 else None   # negative = category
+        return getattr(self, "names", {}).get(r.lower())
+
+
+ITEM_IDS = _ItemIds()
+MODS_DIR = [None]
+BASE_CONTENT = [None]
+TEXTURES_FROM_DATA = set()
+
+
 def write_data(content, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     season_bits = {"spring": 1, "summer": 2, "fall": 4, "winter": 8}
+
+    objs = _load_json(content, "Data/Objects.json")
+    ITEM_IDS.build(objs)
+    with open(os.path.join(out_dir, "item_ids.dat"), "w", encoding="utf-8") as f:
+        for sid, iid in sorted(ITEM_IDS.map.items(), key=lambda kv: kv[1]):
+            if not sid.isdigit():
+                f.write(f"{_clean(sid)}\t{iid}\n")
 
     crops = _load_json(content, "Data/Crops.json")
     n = 0
     with open(os.path.join(out_dir, "crops.dat"), "w", encoding="utf-8") as f:
         for seed, c in crops.items():
-            if not str(seed).isdigit():
-                continue
-            if c.get("Texture") not in (None, "TileSheets\\crops", "TileSheets/crops"):
+            sid = ITEM_IDS.get(seed)
+            hid = ITEM_IDS.get(c.get("HarvestItemId", ""))
+            if sid is None or hid is None:
                 continue
             mask = 0
-            for s in c.get("Seasons", []):
-                mask |= season_bits.get(str(s).lower(), 0)
+            for ss in c.get("Seasons", []) or []:
+                mask |= season_bits.get(str(ss).lower(), 0)
             phases = ",".join(str(int(d)) for d in c.get("DaysInPhase", []) if int(d) < 99999)
-            harvest = str(c.get("HarvestItemId", "-1")).replace("(O)", "")
-            if not harvest.lstrip("-").isdigit():
-                continue
+            tex = c.get("Texture") or "TileSheets/crops"
+            tex_n = tex_name(str(tex).replace("\\", "/"))
+            TEXTURES_FROM_DATA.add(str(tex).replace("\\", "/"))
             f.write("\t".join(_clean(x) for x in [
-                seed, mask, phases or "1", int(c.get("RegrowDays", -1)), harvest,
+                sid, mask, phases or "1", int(c.get("RegrowDays", -1)), hid,
                 int(c.get("SpriteIndex", 0)), 1 if c.get("IsRaised") else 0,
-                int(c.get("HarvestMinStack", 1)),
+                int(c.get("HarvestMinStack", 1)), tex_n,
             ]) + "\n")
             n += 1
     print(f"  crops.dat: {n} crops")
 
-    objs = _load_json(content, "Data/Objects.json")
     n = 0
     with open(os.path.join(out_dir, "objects.dat"), "w", encoding="utf-8") as f:
         for oid, o in objs.items():
-            if not str(oid).isdigit():
+            iid = ITEM_IDS.get(oid)
+            if iid is None:
                 continue
-            if o.get("Texture") not in (None, "", "Maps\\springobjects", "Maps/springobjects"):
-                continue
+            tex = o.get("Texture") or "Maps/springobjects"
+            tex = str(tex).replace("\\", "/")
+            TEXTURES_FROM_DATA.add(tex)
+            try:
+                price = int(float(o.get("Price", 0) or 0))
+            except (TypeError, ValueError):
+                price = 0
             f.write("\t".join(_clean(x) for x in [
-                oid, o.get("Name", oid), int(o.get("Price", 0)),
-                int(o.get("SpriteIndex", 0)), int(o.get("Category", 0)),
-                int(o.get("Edibility", -300)),
+                iid, o.get("Name", oid), price,
+                int(o.get("SpriteIndex", 0) or 0), int(o.get("Category", 0) or 0),
+                int(o.get("Edibility", -300) if o.get("Edibility") is not None else -300), tex_name(tex), oid,
             ]) + "\n")
             n += 1
     print(f"  objects.dat: {n} objects")
 
     write_shops(content, out_dir, season_bits)
     write_location_names(content, out_dir)
+    write_spawns(content, out_dir, MODS_DIR[0])
     farmer_bob(content, out_dir)
     write_furniture(content, out_dir)
 
@@ -570,6 +636,98 @@ def _parse_condition(cond, season_bits):
     return True, mask, min_year
 
 
+ORE_NODES = {   # Farm Type Manager ore names -> node object ids (weights come from the area)
+    "stone": 343, "geode": 75, "frozengeode": 76, "magmageode": 77, "copper": 751, "iron": 290,
+    "gold": 764, "iridium": 765, "mystic": 46, "radioactive": 95,
+}
+
+
+def _rects(lst):
+    out = []
+    for r in lst or []:
+        nums = [int(float(x)) for x in re.split(r"[,;/]", str(r)) if x.strip().lstrip("-").replace(".", "").isdigit()]
+        if len(nums) == 4:
+            x1, y1, x2, y2 = nums
+            out.append(f"{min(x1, x2)} {min(y1, y2)} {max(x1, x2)} {max(y1, y2)}")
+    return ",".join(out)
+
+
+def write_spawns(content, out_dir, mods_dir=None):
+    """Daily forage/ore spawns: vanilla Data/Locations Forage + Farm Type Manager packs."""
+    season_bits = {"spring": 1, "summer": 2, "fall": 4, "winter": 8}
+    lines = []
+    locs = _load_json(content, "Data/Locations.json") if os.path.isfile(
+        os.path.join(content, "Data", "Locations.json")) else {}
+    for name, d in (locs or {}).items():
+        if not d or name == "Farm":
+            continue
+        forage = d.get("Forage") or []
+        if not forage:
+            continue
+        lines.append(f"L\t{name}\t{int(d.get('MinDailyForageSpawn', 1) or 1)}\t"
+                     f"{int(d.get('MaxDailyForageSpawn', 4) or 4)}\t{int(d.get('MaxSpawnedForageAtOnce', 6) or 6)}")
+        for fo in forage:
+            iid = ITEM_IDS.get(fo.get("ItemId") or fo.get("Id") or "")
+            if iid is None or iid < 0:
+                continue
+            mask = season_bits.get(str(fo.get("Season") or "").lower(), 15)
+            lines.append(f"F\t{name}\t{mask}\t{iid}\t{float(fo.get('Chance', 1) or 1)}")
+    n_areas = 0
+    if mods_dir:
+        import sjson
+        for dirpath, dirs, files in os.walk(mods_dir):
+            if "manifest.json" not in files or "content.json" not in files:
+                continue
+            try:
+                man = sjson.load(os.path.join(dirpath, "manifest.json"))
+                if "farmtypemanager" not in str(man.get("ContentPackFor", {}).get("UniqueID", "")).lower():
+                    continue
+                ftm = sjson.load(os.path.join(dirpath, "content.json"))
+            except ValueError:
+                continue
+            for kind, key in (("forage", "Forage_Spawn_Settings"), ("ore", "Ore_Spawn_Settings")):
+                if ftm.get(kind.capitalize() + "SpawnEnabled") is False:
+                    continue
+                sett = ftm.get(key) or {}
+                for a in sett.get("Areas") or []:
+                    seasons = [str(x).lower() for x in ((a.get("ExtraConditions") or {}).get("Seasons") or [])]
+                    mask = 0
+                    for ss in seasons:
+                        mask |= season_bits.get(ss, 0)
+                    mask = mask or 15
+                    if kind == "forage":
+                        per = []
+                        for sk in ("SpringItemIndex", "SummerItemIndex", "FallItemIndex", "WinterItemIndex"):
+                            items = a.get(sk)
+                            if items is None:
+                                items = sett.get(sk) or []
+                            ids = []
+                            for it in items or []:
+                                if isinstance(it, (int, str)):
+                                    v = ITEM_IDS.get(it)
+                                    if v is not None and v >= 0:
+                                        ids.append(f"{v}:1")
+                            per.append(",".join(ids))
+                        items_s = "|".join(per)
+                    else:
+                        ch = a.get("StartingSpawnChance") or sett.get("StartingSpawnChance") or {"Stone": 70, "Copper": 30}
+                        ids = [f"{ORE_NODES[k.lower()]}:{int(v)}" for k, v in ch.items()
+                               if k.lower() in ORE_NODES and v]
+                        items_s = "|".join([",".join(ids)] * 4)
+                    if not items_s.replace("|", ""):
+                        continue
+                    terrain = ",".join(str(t).lower() for t in a.get("IncludeTerrainTypes") or []) or "all"
+                    lines.append("\t".join(["A", _clean(a.get("UniqueAreaID", "")), _clean(a.get("MapName", "")), kind,
+                                             str(int(a.get("MinimumSpawnsPerDay", 0) or 0)),
+                                             str(int(a.get("MaximumSpawnsPerDay", 0) or 0)), str(mask), terrain,
+                                             _rects(a.get("IncludeCoordinates")), _rects(a.get("ExcludeCoordinates")),
+                                             items_s]))
+                    n_areas += 1
+    with open(os.path.join(out_dir, "spawns.dat"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"  spawns.dat: {sum(1 for l in lines if l[0] == 'L')} vanilla forage locations, {n_areas} mod spawn areas")
+
+
 def write_location_names(content, out_dir):
     """Data/Locations DisplayName -> data/location_names.dat (mod places get real names)."""
     p = os.path.join(content, "Data", "Locations.json")
@@ -598,10 +756,11 @@ def write_shops(content, out_dir, season_bits):
             for it in sh.get("Items", []) or []:
                 if it.get("IsRecipe"):
                     continue
-                iid = str(it.get("ItemId") or it.get("Id") or "")
-                if iid.startswith("(O)"):
-                    iid = iid[3:]
-                if not iid.isdigit():
+                raw = str(it.get("ItemId") or it.get("Id") or "")
+                if raw.startswith("(") and not raw.startswith("(O)"):
+                    continue      # furniture, tools, hats...: not sold here yet
+                iid = ITEM_IDS.get(raw)
+                if iid is None or iid < 0:
                     continue
                 ok, mask, min_year = _parse_condition(it.get("Condition"), season_bits)
                 if not ok:
@@ -706,8 +865,12 @@ def write_npcs(content, out_dir, textures):
     os.makedirs(os.path.join(out_dir, "dialogue"), exist_ok=True)
 
     def ids(txt):
-        return " ".join(t.replace("(O)", "") for t in str(txt).split()
-                        if t.replace("(O)", "").lstrip("-").isdigit())
+        out = []
+        for t in str(txt).split():
+            v = ITEM_IDS.get(t)
+            if v is not None:
+                out.append(str(v))
+        return " ".join(out)
 
     with open(os.path.join(out_dir, "universal_tastes.dat"), "w", encoding="utf-8") as f:
         for i, key in enumerate(("Universal_Love", "Universal_Like", "Universal_Dislike",
@@ -823,9 +986,11 @@ def main():
     if opts.get("--mods") and opts["--mods"] is not True:
         import cp
         merged = os.path.join(args[1], "_merged_content")
+        BASE_CONTENT[0] = content
         print("Mods...")
         cp.apply_all(content, opts["--mods"], merged)
         content = merged
+        MODS_DIR[0] = opts["--mods"]
     if not os.path.isdir(os.path.join(content, "Maps")):
         sys.exit(f"'{content}' doesn't look like an unpacked Content folder "
                  "(no Maps/ inside). Run StardewXnbHack first.")
@@ -848,6 +1013,29 @@ def main():
         except Exception as e:   # one odd map shouldn't stop the rest
             print(f"  ! {m}: {e}")
     print(f"  {ok}/{len(names)} maps converted")
+    # Seasonal variants of modded maps: re-apply the packs per season and keep
+    # only maps that differ from spring. Saved as maps/<Location>@<season>.smap.
+    if MODS_DIR[0]:
+        import cp
+        import filecmp
+        for season in ("summer", "fall", "winter"):
+            print(f"Seasonal maps: {season}...")
+            alt = os.path.join(os.path.dirname(content), f"_merged_{season}")
+            cp.apply_all(BASE_CONTENT[0], MODS_DIR[0], alt, log=lambda *_: None, season=season, maps_only=True)
+            alt_locs = location_maps(alt)
+            n = 0
+            for name, path in sorted(alt_locs.items()):
+                spring = locs.get(name)
+                if spring and os.path.isfile(spring) and filecmp.cmp(spring, path, shallow=False):
+                    continue
+                try:
+                    if convert_map(alt, f"{name}@{season}", os.path.join(out_root, "maps"), textures, path):
+                        n += 1
+                except Exception as e:
+                    print(f"  ! {name}@{season}: {e}")
+            print(f"  {n} maps differ in {season}")
+            shutil.rmtree(alt, ignore_errors=True)
+
     os.makedirs(os.path.join(out_root, "data"), exist_ok=True)
     with open(os.path.join(out_root, "data", "graph.dat"), "w", encoding="utf-8") as f:
         for m, info in sorted(graph.items()):
@@ -862,6 +1050,9 @@ def main():
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
 
+    for t in sorted(TEXTURES_FROM_DATA):
+        if find_png(content, t):
+            textures.add(t)
     for cp, required in EXTRA_TEXTURES:
         if find_png(content, cp):
             textures.add(cp)

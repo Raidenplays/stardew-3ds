@@ -52,13 +52,40 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
     if (it != locations.end()) return it->second.get();
     std::unique_ptr<Location> loc(new Location());
     loc->name = name;
-    if (!loc->map.load(data.root + "maps/" + name + ".smap", err)) return nullptr;
+    loc->file = mapFileFor(name);
+    if (!loc->map.load(loc->file, err)) return nullptr;
     loc->map.name = name;
     loc->isFarm = (name == "Farm");
     loc->initState();
     Location* out = loc.get();
     locations[name] = std::move(loc);
     return out;
+}
+
+std::string Game::mapFileFor(const std::string& name) const {
+    std::string variant = data.root + "maps/" + name + "@" + seasonName(season) + ".smap";
+    FILE* f = fopen(variant.c_str(), "rb");
+    if (f) {
+        fclose(f);
+        return variant;
+    }
+    return data.root + "maps/" + name + ".smap";
+}
+
+void Game::refreshSeasonMaps() {
+    for (auto& kv : locations) {
+        Location& l = *kv.second;
+        std::string want = mapFileFor(l.name);
+        if (want == l.file) continue;
+        TileMap m;
+        if (!m.load(want, nullptr)) continue;
+        bool sameSize = m.width() == l.map.width() && m.height() == l.map.height();
+        m.name = l.name;
+        l.map = std::move(m);
+        l.file = want;
+        if (!sameSize) l.initState();   // crops can't survive a resized map
+        l.spawnDay = -1;
+    }
 }
 
 bool Game::hasMap(const std::string& name) const {
@@ -111,6 +138,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
     fade = 1.0f;
     warpCooldown = 0.35f;
     toolTimer = 0;
+    spawnObjects(*cur);
     npcsEnterLocation();
     checkEvents();
     return true;
@@ -331,6 +359,8 @@ bool Game::tileSolid(int tx, int ty) const {
     if (buildingAt(tx, ty)) return true;
     size_t i = (size_t)ty * m.width() + tx;
     if (cur->debris[i] != DEB_NONE) return true;
+    for (auto& o : cur->objects)
+        if (o.x == tx && o.y == ty) return true;
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
@@ -508,6 +538,17 @@ bool Game::tryInteract(int tx, int ty) {
         else talkTo(*n);
         return true;
     }
+    if (WorldObject* o = objectAt(tx, ty)) {
+        if (!o->ore) {
+            int id = o->itemId;
+            if (addItem(id, 1)) {
+                const ObjectDef* od = data.object(id);
+                say("+1 " + (od ? od->name : std::string("item")));
+                cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
+            }
+            return true;
+        }
+    }
     if (cur->isFarm) {
         if (cropReady(tx, ty)) {
             Soil& s = cur->soils[(size_t)ty * cur->map.width() + tx];
@@ -606,7 +647,16 @@ void Game::useSelected(int tx, int ty) {
                 }
                 break;
             case TOOL_PICKAXE:
-                if (deb == DEB_STONE) {
+                if (WorldObject* o = objectAt(tx, ty)) {
+                    if (o->ore) {
+                        int drop = oreNodeDrop(o->itemId);
+                        int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
+                        cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
+                        addItem(drop, n);
+                        const ObjectDef* od = data.object(drop);
+                        if (od) say("+" + std::to_string(n) + " " + od->name);
+                    }
+                } else if (deb == DEB_STONE) {
                     deb = DEB_NONE;
                     addItem(OBJ_STONE, 1);
                 } else if ((s.tilled && s.seed < 0) || s.dead) {
@@ -756,6 +806,7 @@ bool Game::goToBed() {
         if (season == SPRING) year++;
     }
     bool newSeason = season != oldSeason;
+    if (newSeason) refreshSeasonMaps();
 
     for (auto& s : farm->soils) {
         if (s.seed >= 0 && !s.dead) {

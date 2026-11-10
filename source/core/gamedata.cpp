@@ -95,6 +95,7 @@ bool GameData::load(const std::string& root, std::string* err) {
         c.spriteIndex = atoi(f[5].c_str());
         c.raised = atoi(f[6].c_str()) != 0;
         if (f.size() > 7) c.harvestMin = std::max(1, atoi(f[7].c_str()));
+        if (f.size() > 8 && !f[8].empty()) c.texture = f[8];
         crops[c.seedId] = c;
     }
 
@@ -113,6 +114,8 @@ bool GameData::load(const std::string& root, std::string* err) {
         o.spriteIndex = atoi(f[3].c_str());
         o.category = atoi(f[4].c_str());
         o.edibility = atoi(f[5].c_str());
+        if (f.size() > 6 && !f[6].empty()) o.texture = f[6];
+        o.stringId = f.size() > 7 ? f[7] : f[0];
         objects[o.id] = o;
     }
 
@@ -216,6 +219,48 @@ bool GameData::load(const std::string& root, std::string* err) {
         for (auto& l : lines) {
             auto f = splitTabs(l);
             if (f.size() >= 2) locationNames[f[0]] = f[1];
+        }
+    lines.clear();
+    if (readLines(root + "data/spawns.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.empty()) continue;
+            if (f[0] == "L" && f.size() >= 5) {
+                LocationForage& lf = forage[f[1]];
+                lf.minDaily = atoi(f[2].c_str());
+                lf.maxDaily = atoi(f[3].c_str());
+                lf.maxAtOnce = atoi(f[4].c_str());
+            } else if (f[0] == "F" && f.size() >= 5) {
+                forage[f[1]].items.push_back({(uint8_t)atoi(f[2].c_str()), atoi(f[3].c_str()), (float)atof(f[4].c_str())});
+            } else if (f[0] == "A" && f.size() >= 11) {
+                SpawnArea a;
+                a.id = f[1]; a.location = f[2]; a.kind = f[3];
+                a.minDaily = atoi(f[4].c_str()); a.maxDaily = atoi(f[5].c_str());
+                a.seasonMask = (uint8_t)atoi(f[6].c_str());
+                a.terrain = f[7];
+                for (int k = 0; k < 2; k++) {
+                    const std::string& src = k == 0 ? f[8] : f[9];
+                    const char* p = src.c_str();
+                    while (*p) {
+                        SpawnRect r;
+                        if (sscanf(p, "%d %d %d %d", &r.x1, &r.y1, &r.x2, &r.y2) == 4)
+                            (k == 0 ? a.include : a.exclude).push_back(r);
+                        const char* c = strchr(p, ',');
+                        if (!c) break;
+                        p = c + 1;
+                    }
+                }
+                int season = 0;
+                const char* p = f[10].c_str();
+                while (*p && season < 4) {
+                    if (*p == '|') { season++; p++; continue; }
+                    int id = 0, w = 1;
+                    if (sscanf(p, "%d:%d", &id, &w) >= 1) a.items[season].push_back({id, std::max(1, w)});
+                    while (*p && *p != ',' && *p != '|') p++;
+                    if (*p == ',') p++;
+                }
+                spawnAreas.push_back(a);
+            }
         }
     lines.clear();
     if (readLines(root + "data/furniture.dat", lines))
