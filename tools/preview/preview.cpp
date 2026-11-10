@@ -79,7 +79,8 @@ int main(int argc, char** argv) {
     bool craftDemo = false;
     bool fishDemo = false;
     bool mailDemo = false;
-    bool titleDemo = false;   // title screen + character creation    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    bool titleDemo = false;   // title screen + character creation
+    bool introFrames = false; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
@@ -90,6 +91,7 @@ int main(int argc, char** argv) {
         else if (a == "--fish") fishDemo = true;
         else if (a == "--mail") mailDemo = true;
         else if (a == "--title") titleDemo = true;
+        else if (a == "--intro-frames") introFrames = true;
         else font = a;
     }
 
@@ -135,6 +137,25 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (introFrames) {
+        TitleUi t;
+        titleInit(t, data, false);
+        t.creditsText = true;
+        int n = 0;
+        for (float time = 0; time < SPLASH_SECONDS + 2.0f; time += 0.1f) {
+            titleTick(t, 0.1f);
+            c.resize(400, 240);
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 240);
+            drawTitleTop(c, g, t);
+            char path[512];
+            snprintf(path, sizeof path, "%s/f%03d.png", g_out.c_str(), n++);
+            c.writePng(path, 1);
+        }
+        printf("  %d frames\n", n);
+        return 0;
+    }
 
     if (titleDemo) {
         TitleUi t;

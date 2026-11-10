@@ -109,7 +109,7 @@ static void drawSplash(Canvas& c, TitleUi& t) {
     float a = fadeFor(local, half);
     if (!second) {
         c.text(200, 52, 0.55f, RGBA(0xF0, 0xE6, 0xD2), "Original game by", ALIGN_CENTER);
-        if (c.texWidth(DEV_LOGO_TEX) >= 400)
+        if (c.texWidth(DEV_LOGO_TEX) >= 400 && !t.creditsText)
             c.imageScaled(DEV_LOGO_TEX, DEV_LOGO_X, DEV_LOGO_Y, DEV_LOGO_W, DEV_LOGO_H, 200 - DEV_LOGO_W, 82, 2.0f);
         else
             c.text(200, 120, 0.7f, RGBA(0xF0, 0xE6, 0xD2), "ConcernedApe", ALIGN_CENTER);
