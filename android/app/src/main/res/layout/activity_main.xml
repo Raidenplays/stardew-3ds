@@ -39,6 +39,12 @@
         <Button android:id="@+id/send" style="@style/Btn" android:text="Send" />
     </LinearLayout>
 
+    <ProgressBar android:id="@+id/bar" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="14dp" android:layout_marginTop="10dp"
+        android:max="100" android:progress="0" android:progressTint="#7CB342" android:progressBackgroundTint="#5C3A22" />
+    <TextView android:id="@+id/barText" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textColor="#E0C8A0" android:textSize="12sp" android:text="Ready" />
+
     <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" android:layout_marginTop="8dp" android:background="#1A100A" android:padding="6dp">
         <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"

@@ -21,7 +21,17 @@ class _Lines:
             self.buf = ""
 
 
-def run(content, mods, out, logo, cb):
+_CONVERTER_MODULES = ("convert", "cp", "sjson", "tbin", "tmxmap", "xnb", "layer")
+
+
+def run(content, mods, out, logo, cb, tools_dir=""):
+    # use the converter downloaded from the repo when there is one
+    if tools_dir and os.path.isfile(os.path.join(tools_dir, "convert.py")):
+        if tools_dir in sys.path:
+            sys.path.remove(tools_dir)
+        sys.path.insert(0, tools_dir)
+        for m in _CONVERTER_MODULES:
+            sys.modules.pop(m, None)
     import convert
     args = ["convert.py", content, out, "--jobs=1"]   # no extra processes on a phone
     if mods:
