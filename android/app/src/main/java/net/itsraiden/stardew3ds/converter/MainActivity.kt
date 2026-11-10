@@ -9,6 +9,7 @@ import android.os.Looper
 import android.provider.DocumentsContract
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,7 +22,10 @@ import org.apache.commons.net.ftp.FTPClient
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.zip.ZipInputStream
+import org.json.JSONArray
 import kotlin.concurrent.thread
 
 /**
@@ -50,6 +54,10 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var busy = false
 
     private val inDir by lazy { File(filesDir, "in") }
+    private val toolsDir by lazy { File(filesDir, "tools") }     // converter from the repo
+    private val gameDir by lazy { File(filesDir, "game") }       // newest stardew3ds.3dsx
+    private lateinit var bar: ProgressBar
+    private lateinit var barText: TextView
     private val outDir by lazy { File(filesDir, "out") }
 
     private val pickContent = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -89,6 +97,8 @@ class MainActivity : AppCompatActivity() {
         log = findViewById(R.id.log)
         scroll = findViewById(R.id.scroll)
         status = findViewById(R.id.status)
+        bar = findViewById(R.id.bar)
+        barText = findViewById(R.id.barText)
         prefs.getString("content", null)?.let { contentUri = Uri.parse(it) }
         prefs.getString("mods", null)?.let { modsUri = Uri.parse(it) }
         prefs.getString("logo", null)?.let { logoUri = Uri.parse(it) }
@@ -142,6 +152,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun say(s: String) { ui.post { appendLog(s) } }
 
+    /** Progress bar: overall 0..100 plus what's happening right now. */
+    private fun progress(pct: Int, what: String) {
+        ui.post {
+            bar.isIndeterminate = pct < 0
+            if (pct >= 0) bar.progress = pct.coerceIn(0, 100)
+            barText.text = what
+        }
+    }
+
+    // converter log lines -> where we are in the conversion (40..95 of the bar)
+    private val stages = listOf(
+        "Mods..." to 42, "linking base content" to 44, "Maps..." to 62, "maps converted" to 70,
+        "Seasonal maps" to 72, "Data..." to 76, "Villagers..." to 82, "Events..." to 86,
+        "Fonts..." to 88, "Textures" to 90, "Done in" to 96)
+
+    private fun convertProgress(line: String) {
+        for ((key, pct) in stages)
+            if (line.contains(key)) { progress(pct, line.trim().take(60)); return }
+    }
+
     private fun appendLog(s: String) {
         log.append(s + "\n")
         if (log.lineCount > 4000) log.text = log.text.toString().takeLast(60000)
@@ -166,9 +196,12 @@ class MainActivity : AppCompatActivity() {
             try {
                 val contentDir = File(inDir, "content")
                 val modsDir = File(inDir, "mods")
+                updateFromRepo()
+                progress(20, "Copying your game files...")
                 say("Copying your game files into the app...")
                 if (contentZip != null) {
                     contentDir.deleteRecursively()
+                    progress(-1, "Unzipping your game files...")
                     unzipIn(contentZip!!, contentDir, "content")
                 } else {
                     copyTreeIn(contentUri!!, contentDir, "content")
@@ -180,6 +213,7 @@ class MainActivity : AppCompatActivity() {
                     copyTreeIn(modsUri!!, modsDir, "mods")
                 } else if (modZips.isNotEmpty()) {
                     say("Unzipping your mods...")
+                    progress(32, "Unzipping your mods...")
                     modZips.forEachIndexed { i, z -> unzipIn(z, File(modsDir, "mod$i"), nameOf(z)) }
                 }
                 val logoPath = ""   // the logo is built into the game now
@@ -191,11 +225,16 @@ class MainActivity : AppCompatActivity() {
                     return@thread
                 }
                 say("Converting (this takes a while with SVE and Ridgeside)...")
-                val cb = object : LineSink { override fun onLine(line: String) = say(line) }
+                progress(40, "Converting...")
+                val cb = object : LineSink { override fun onLine(line: String) { say(line); convertProgress(line) } }
                 val code = Python.getInstance().getModule("bridge").callAttr(
                     "run", root.absolutePath, if (hasMods) modsDir.absolutePath else "",
-                    outDir.absolutePath, logoPath, cb).toInt()
+                    outDir.absolutePath, logoPath, cb, toolsDir.absolutePath).toInt()
+                // the newest game goes along with the converted files
+                val game = File(gameDir, "stardew3ds.3dsx")
+                if (code == 0 && game.isFile) game.copyTo(File(outDir, "3ds/stardew3ds.3dsx"), overwrite = true)
                 say(if (code == 0) "Done!" else "Converter stopped (code $code)")
+                progress(if (code == 0) 100 else 0, if (code == 0) "Done - save or send it" else "Stopped (see log)")
             } catch (e: Throwable) {
                 say("! ${e.javaClass.simpleName}: ${e.message}")
             } finally {
@@ -205,6 +244,79 @@ class MainActivity : AppCompatActivity() {
     }
 
     interface LineSink { fun onLine(line: String) }
+
+    // ---------------------------------------------------------------- updates from the repo
+    private val repo = "Raidenplays/stardew-3ds"
+    private val converterFiles = listOf("convert.py", "cp.py", "sjson.py", "tbin.py", "tmxmap.py", "xnb.py", "layer.py")
+
+    private fun fetch(url: String, to: File? = null, onBytes: ((Long, Long) -> Unit)? = null): String? {
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.connectTimeout = 10000
+        c.readTimeout = 30000
+        c.setRequestProperty("User-Agent", "stardew3ds-converter")
+        c.instanceFollowRedirects = true
+        try {
+            if (c.responseCode !in 200..299) throw IllegalStateException("HTTP ${c.responseCode} for $url")
+            val total = c.contentLengthLong
+            c.inputStream.use { ins ->
+                if (to == null) return ins.bufferedReader().readText()
+                val tmp = File(to.path + ".part")
+                FileOutputStream(tmp).use { o ->
+                    val buf = ByteArray(1 shl 16)
+                    var got = 0L
+                    while (true) {
+                        val n = ins.read(buf)
+                        if (n < 0) break
+                        o.write(buf, 0, n)
+                        got += n
+                        onBytes?.invoke(got, total)
+                    }
+                }
+                tmp.renameTo(to)
+                return null
+            }
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    /** Gets the newest build's converter code and stardew3ds.3dsx (skips what it already has). */
+    private fun updateFromRepo() {
+        progress(2, "Checking GitHub for the newest build...")
+        try {
+            val rel = JSONArray(fetch("https://api.github.com/repos/$repo/releases?per_page=1")!!).getJSONObject(0)
+            val tag = rel.getString("tag_name")
+            val have = prefs.getString("build", "")
+            if (tag == have && File(toolsDir, "convert.py").isFile && File(gameDir, "stardew3ds.3dsx").isFile) {
+                say("Up to date ($tag)")
+                progress(18, "Up to date ($tag)")
+                return
+            }
+            say("Getting $tag from GitHub...")
+            toolsDir.mkdirs()
+            gameDir.mkdirs()
+            converterFiles.forEachIndexed { i, f ->
+                progress(4 + i * 8 / converterFiles.size, "Converter: $f")
+                fetch("https://raw.githubusercontent.com/$repo/$tag/tools/$f", File(toolsDir, f))
+            }
+            val assets = rel.getJSONArray("assets")
+            for (i in 0 until assets.length()) {
+                val a = assets.getJSONObject(i)
+                if (a.getString("name") != "stardew3ds.3dsx") continue
+                fetch(a.getString("browser_download_url"), File(gameDir, "stardew3ds.3dsx")) { got, total ->
+                    val pct = if (total > 0) 12 + (got * 6 / total).toInt() else 14
+                    progress(pct, "Game: ${got / 1024} KB" + if (total > 0) " of ${total / 1024} KB" else "")
+                }
+            }
+            prefs.edit().putString("build", tag).apply()
+            say("Updated to $tag")
+            progress(18, "Updated to $tag")
+        } catch (e: Exception) {
+            // offline or GitHub hiccup: use what we have (or the converter built into the app)
+            say("Couldn't check GitHub (${e.message}); using the converter you already have")
+            progress(18, "Using the converter you already have")
+        }
+    }
 
     /** Unpacks a picked .zip into app storage (paths that try to escape the folder are skipped). */
     private fun unzipIn(zip: Uri, dest: File, label: String) {
@@ -274,6 +386,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 val root = DocumentFile.fromTreeUri(this, tree) ?: throw IllegalStateException("can't open that folder")
                 say("Saving to ${root.name}/3ds/stardew3ds ...")
+                val total = File(outDir, "3ds").walkTopDown().count { it.isFile }.coerceAtLeast(1)
                 var n = 0
                 fun put(src: File, into: DocumentFile) {
                     for (f in src.listFiles() ?: emptyArray()) {
@@ -284,14 +397,23 @@ class MainActivity : AppCompatActivity() {
                             into.findFile(f.name)?.delete()
                             val doc = into.createFile("application/octet-stream", f.name) ?: continue
                             contentResolver.openOutputStream(doc.uri)?.use { o -> FileInputStream(f).use { it.copyTo(o, 1 shl 16) } }
-                            if (++n % 100 == 0) say("  $n files...")
+                            ++n
+                            if (n % 20 == 0) progress(n * 100 / total, "Saving: $n of $total files")
                         }
                     }
                 }
                 val threeDs = root.findFile("3ds") ?: root.createDirectory("3ds")!!
                 val dest = threeDs.findFile("stardew3ds") ?: threeDs.createDirectory("stardew3ds")!!
                 put(File(outDir, "3ds/stardew3ds"), dest)
-                say("Saved $n files. Your save and backups on the card were left alone.")
+                File(outDir, "3ds/stardew3ds.3dsx").takeIf { it.isFile }?.let { g ->
+                    threeDs.findFile(g.name)?.delete()
+                    threeDs.createFile("application/octet-stream", g.name)?.let { doc ->
+                        contentResolver.openOutputStream(doc.uri)?.use { o -> FileInputStream(g).use { it.copyTo(o) } }
+                        n++
+                    }
+                }
+                progress(100, "Saved $n files")
+                say("Saved $n files (game included). Your save and backups on the card were left alone.")
             } catch (e: Throwable) {
                 say("! ${e.javaClass.simpleName}: ${e.message}")
             } finally {
@@ -318,6 +440,7 @@ class MainActivity : AppCompatActivity() {
                 ftp.login("anonymous", "")
                 ftp.enterLocalPassiveMode()
                 ftp.setFileType(FTP.BINARY_FILE_TYPE)
+                val total = File(outDir, "3ds").walkTopDown().count { it.isFile }.coerceAtLeast(1)
                 var n = 0
                 fun mk(path: String) {
                     var cur = ""
@@ -332,12 +455,18 @@ class MainActivity : AppCompatActivity() {
                         if (f.isDirectory) put(f, "$remote/${f.name}")
                         else {
                             FileInputStream(f).use { ftp.storeFile("$remote/${f.name}", it) }
-                            if (++n % 50 == 0) say("  $n files...")
+                            ++n
+                            if (n % 10 == 0) progress(n * 100 / total, "Sending: $n of $total files")
                         }
                     }
                 }
                 put(File(outDir, "3ds/stardew3ds"), "/3ds/stardew3ds")
-                say("Sent $n files to your 3DS.")
+                File(outDir, "3ds/stardew3ds.3dsx").takeIf { it.isFile }?.let { g ->
+                    FileInputStream(g).use { ftp.storeFile("/3ds/${g.name}", it) }
+                    n++
+                }
+                progress(100, "Sent $n files")
+                say("Sent $n files to your 3DS (game included).")
             } catch (e: Throwable) {
                 say("! Couldn't send: ${e.message}. Is ftpd running and on the same Wi-Fi?")
             } finally {
