@@ -1020,7 +1020,7 @@ bool Game::load(const std::string& path, std::string* err) {
     placed.clear();
     chestOpen = false;
     if (version >= 4 && r.ok) {
-        for (auto& x : skillXp) x = std::max(0, r.i32());
+        for (auto& x : skillXp) x = std::max<int>(0, r.i32());
         for (auto& s : inv) s.flavor = r.i32();
         for (auto& s : shipped) s.flavor = r.i32();
         uint32_t nl = r.u32();
