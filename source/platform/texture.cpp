@@ -73,7 +73,7 @@ const Texture* TexCache::get(const std::string& name) {
     auto it = cache.find(name);
     if (it != cache.end()) return it->second.get();
     std::unique_ptr<Texture> t(new Texture());
-    if (!t->load(root + "tex/" + name + ".s3t")) t.reset();
+    if (!t->load(resolve("tex/" + name + ".s3t"))) t.reset();
     const Texture* out = t.get();
     cache[name] = std::move(t);   // also caches misses as nullptr
     return out;

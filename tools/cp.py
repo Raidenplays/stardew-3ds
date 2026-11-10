@@ -696,8 +696,8 @@ def apply_all(base, mods_dir, out, log=print, season="spring", maps_only=False):
     for p, changes in plans:                      # all loads first, like CP
         for ch in changes:
             if str(ch.get("Action", "")).lower() == "load":
-                if maps_only and not str(ch.get("FromFile", "")).lower().strip().endswith((".tmx", ".tbin")):
-                    continue
+                if maps_only and str(ch.get("FromFile", "")).lower().strip().endswith((".json", ".xnb")):
+                    continue      # maps and their tilesheets still load
                 apply_load(p, c, ch, stats)
     for p, changes in plans:                      # then edits, in pack order
         for ch in changes:
@@ -714,8 +714,6 @@ def apply_all(base, mods_dir, out, log=print, season="spring", maps_only=False):
             except Exception as e:
                 p.warnings.append(f"{a} {ch.get('Target')}: {e}")
     log("  writing merged files...")
-    if maps_only:
-        c.images.clear()
     c.flush()
     log("  " + ", ".join(f"{k} {v}" for k, v in stats.items() if v))
     for p in packs:

@@ -63,13 +63,9 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
 }
 
 std::string Game::mapFileFor(const std::string& name) const {
-    std::string variant = data.root + "maps/" + name + "@" + seasonName(season) + ".smap";
-    FILE* f = fopen(variant.c_str(), "rb");
-    if (f) {
-        fclose(f);
-        return variant;
-    }
-    return data.root + "maps/" + name + ".smap";
+    std::string variant = "maps/" + name + "@" + seasonName(season) + ".smap";
+    if (data.vfs.exists(variant)) return data.vfs.path(variant);
+    return data.vfs.path("maps/" + name + ".smap");
 }
 
 void Game::refreshSeasonMaps() {
@@ -89,10 +85,7 @@ void Game::refreshSeasonMaps() {
 }
 
 bool Game::hasMap(const std::string& name) const {
-    if (locations.count(name)) return true;
-    FILE* f = fopen((data.root + "maps/" + name + ".smap").c_str(), "rb");
-    if (f) fclose(f);
-    return f != nullptr;
+    return locations.count(name) || data.vfs.exists("maps/" + name + ".smap");
 }
 
 bool Game::warpTo(const std::string& name, int tx, int ty) {

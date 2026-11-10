@@ -191,6 +191,7 @@ public:
 
     WorldObject* objectAt(int x, int y);
     std::string mapFileFor(const std::string& name) const;   // seasonal variant if there is one
+    bool hasMap(const std::string& name) const;
 
     // Debug / preview tool: jump straight to a map tile.
     bool teleport(const std::string& name, int tx, int ty) { return warpTo(name, tx, ty); }
@@ -278,7 +279,6 @@ private:
     void giveGift(NpcState& n, int slot);
     void showDialogue(const NpcState& n, const std::vector<DialoguePage>& pages);
     Location* loadLocation(const std::string& name, std::string* err = nullptr);
-    bool hasMap(const std::string& name) const;
     void refreshSeasonMaps();
     void spawnObjects(Location& loc);
     bool canSpawnAt(const Location& loc, int x, int y, const std::string& terrain, bool vanilla) const;

@@ -61,6 +61,33 @@ done here.
 `tools/preview/preview <root> <out> --tour=Town,Custom_Ridgeside_RidgesideVillage`
 screenshots any list of locations.
 
+## Mod loader
+
+Any mod the desktop tool can convert (Content Patcher and Farm Type Manager
+packs) loads on the 3DS as its own **layer** you can turn on and off.
+
+Desktop (`tools/modmanager.py`, run with no arguments for a small window):
+
+    python3 tools/modmanager.py set content "<your Content (unpacked)>"
+    python3 tools/modmanager.py add SomeMod.zip AnotherMod.zip
+    python3 tools/modmanager.py list        # kind of each part, missing deps, problems
+    python3 tools/modmanager.py build       # base game once, then one layer per mod (cached)
+    python3 tools/modmanager.py deploy E:/  # copies to E:/3ds/stardew3ds/ (saves untouched)
+
+A mod that builds on another library mod is converted on top of it, and its
+layer only holds its own changes. Code-only mods are listed but skipped.
+
+On the 3DS, `sdmc:/3ds/stardew3ds/mods/<id>/` is one layer. Maps/textures in a
+layer replace the base ones; data tables are deltas. `mods.txt` holds the
+load order (later wins) and `#off <id>` for mods you turned off.
+
+- New (or missing) mods open the **mod screen** at boot; new ones start ON.
+  Hold **SELECT** while launching to open it any time.
+  A on/off, L/R move in load order, X all on, Y all off, START play.
+- **Save backups:** whenever the enabled mod set differs from the one your
+  save was last played with, `save.sav` is copied to
+  `backups/<date>-<time>-save.sav` before anything loads.
+
 ## Cutscenes
 
 - **Events from your files:** the converter exports `Data/Events/<map>.json`

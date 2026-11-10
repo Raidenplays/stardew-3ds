@@ -8,7 +8,7 @@
 
 class C2DCanvas : public Canvas {
 public:
-    explicit C2DCanvas(const std::string& root);
+    explicit C2DCanvas(std::function<std::string(const std::string&)> resolve);
     ~C2DCanvas();
     void beginFrame();   // clears the text buffer; call once per frame
 

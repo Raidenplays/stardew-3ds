@@ -8,6 +8,7 @@
 
 #include "core/game.h"
 #include "platform/c2d_canvas.h"
+#include "render/modscreen.h"
 #include "render/scene.h"
 
 using namespace sv;
@@ -56,11 +57,49 @@ int main() {
     gfxSet3D(true);
 
     std::string root = ROOT;
-    C2DCanvas canvas(root);
     GameData data;
+    data.vfs.setRoot(root);
+    C2DCanvas canvas([&data](const std::string& rel) { return data.vfs.path(rel); });
+
+    // ---- mod loader: new/missing mods (or SELECT held at boot) open the mod screen
+    ModScreen mods;
+    hidScanInput();
+    bool showMods = modScreenInit(mods, data.vfs) || (hidKeysHeld() & KEY_SELECT);
+    while (showMods && aptMainLoop() && !mods.done) {
+        hidScanInput();
+        u32 k = hidKeysDown();
+        if (k & KEY_DUP) modScreenKey(mods, MK_UP);
+        if (k & KEY_DDOWN) modScreenKey(mods, MK_DOWN);
+        if (k & KEY_A) modScreenKey(mods, MK_TOGGLE);
+        if (k & KEY_L) modScreenKey(mods, MK_MOVE_UP);
+        if (k & KEY_R) modScreenKey(mods, MK_MOVE_DOWN);
+        if (k & KEY_X) modScreenKey(mods, MK_ALL_ON);
+        if (k & KEY_Y) modScreenKey(mods, MK_ALL_OFF);
+        if (k & KEY_START) modScreenKey(mods, MK_PLAY);
+        if (k & KEY_TOUCH) {
+            touchPosition tp;
+            hidTouchRead(&tp);
+            modScreenTouch(mods, tp.px, tp.py);
+        }
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        canvas.beginFrame();
+        C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
+        C2D_SceneBegin(top);
+        drawModTop(canvas, mods);
+        C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 0xFF));
+        C2D_SceneBegin(bot);
+        drawModBottom(canvas, mods);
+        C3D_FrameEnd(0);
+    }
+    if (showMods) modScreenSave(mods, root);
+    data.vfs.setMods(modScreenEnabled(mods));
+    canvas.dropTextures();
+
     std::string err;
     Game game(data);
     std::string savePath = root + "save.sav";
+    // never load a world into a different mod set without a copy of it first
+    backupSaveIfModsChanged(root, savePath, data.vfs.signature());
     bool ok = data.load(root, &err);
     if (ok && !game.load(savePath)) ok = game.newGame((uint32_t)osGetTime(), &err);
     if (!ok) {

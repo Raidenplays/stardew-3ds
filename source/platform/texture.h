@@ -29,14 +29,17 @@ private:
     std::vector<TexPage> pages;
 };
 
+#include <functional>
+
 class TexCache {
 public:
-    explicit TexCache(const std::string& root) : root(root) {}
+    // resolve("tex/Name.s3t") -> full path (lets mod layers override textures)
+    explicit TexCache(std::function<std::string(const std::string&)> resolve) : resolve(resolve) {}
     const Texture* get(const std::string& name);   // nullptr if missing
     void clear();
     size_t count() const { return cache.size(); }
 
 private:
-    std::string root;
+    std::function<std::string(const std::string&)> resolve;
     std::unordered_map<std::string, std::unique_ptr<Texture>> cache;
 };

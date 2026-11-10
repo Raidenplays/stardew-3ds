@@ -1024,16 +1024,25 @@ def main():
             cp.apply_all(BASE_CONTENT[0], MODS_DIR[0], alt, log=lambda *_: None, season=season, maps_only=True)
             alt_locs = location_maps(alt)
             n = 0
+            alt_tex = set()
             for name, path in sorted(alt_locs.items()):
                 spring = locs.get(name)
                 if spring and os.path.isfile(spring) and filecmp.cmp(spring, path, shallow=False):
                     continue
                 try:
-                    if convert_map(alt, f"{name}@{season}", os.path.join(out_root, "maps"), textures, path):
+                    if convert_map(alt, f"{name}@{season}", os.path.join(out_root, "maps"), alt_tex, path):
                         n += 1
                 except Exception as e:
                     print(f"  ! {name}@{season}: {e}")
-            print(f"  {n} maps differ in {season}")
+            # tilesheets that only exist in this season's merge: convert them now
+            extra = 0
+            for t in alt_tex:
+                if find_png(content, t):
+                    textures.add(t)
+                elif find_png(alt, t):
+                    convert_texture(find_png(alt, t), os.path.join(out_root, "tex", tex_name(t) + ".s3t"))
+                    extra += 1
+            print(f"  {n} maps differ in {season} ({extra} season-only tilesheets)")
             shutil.rmtree(alt, ignore_errors=True)
 
     os.makedirs(os.path.join(out_root, "data"), exist_ok=True)
