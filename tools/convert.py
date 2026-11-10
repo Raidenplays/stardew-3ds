@@ -1720,9 +1720,11 @@ def main():
             bb = img.getchannel("A").getbbox()
             if bb:
                 img = img.crop(bb)
-            if img.size[0] > 320 or img.size[1] > 200:   # keep it screen-sized
-                k = min(320 / img.size[0], 200 / img.size[1])
-                img = img.resize((max(1, int(img.size[0] * k)), max(1, int(img.size[1] * k))), Image.NEAREST)
+            # keep it screen-sized: 150px tall at most. Big paintings shrink smoothly;
+            # small pixel art is left alone (the 3DS scales it up in whole steps)
+            if img.size[0] > 240 or img.size[1] > 150:
+                k = min(240 / img.size[0], 150 / img.size[1])
+                img = img.resize((max(1, round(img.size[0] * k)), max(1, round(img.size[1] * k))), Image.LANCZOS)
             tmp = os.path.join(out_root, "tex", "_logo.png")
             img.save(tmp)
             convert_texture(tmp, os.path.join(out_root, "tex", "UiLogo_user.s3t"))
