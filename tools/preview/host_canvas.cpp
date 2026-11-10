@@ -156,6 +156,7 @@ float HostCanvas::textWidthPx(const std::string& s, float px) {
 }
 
 void HostCanvas::text(float x, float y, float scale, uint32_t color, const std::string& s, int align) {
+    if (scale < 0.41f && pixelTiny()) { pixelText(x, y, scale, color, s, align); return; }
     if (const BitmapFont* f = fontFor(scale)) { bitmapText(*f, x, y, scale, color, s, align); return; }
     if (!g_fontOk) return;
     float px = 30.0f * scale;   // 3DS system font is ~30px tall at scale 1

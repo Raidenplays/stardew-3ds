@@ -1227,7 +1227,7 @@ def location_maps(content):
 # pixel font (no blurry scaling on the console). Both fonts come from your
 # own Content folder and only ever live on your SD card.
 SMALL_FONT_PX = 16
-FONT_SIZES = (("small", 16), ("tiny", 13))
+FONT_SIZES = (("small", 16),)
 
 
 def write_fonts(content, out_root):
