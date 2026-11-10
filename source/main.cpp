@@ -48,6 +48,7 @@ static void fatalScreen(C2DCanvas& c, C3D_RenderTarget* top, const std::string& 
 
 int main() {
     gfxInitDefault();
+    romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(12288);   // both eyes + bottom screen per frame
     C2D_Prepare();
@@ -61,7 +62,10 @@ int main() {
     std::string root = ROOT;
     GameData data;
     data.vfs.setRoot(root);
-    C2DCanvas canvas([&data](const std::string& rel) { return data.vfs.path(rel); });
+    C2DCanvas canvas([&data](const std::string& rel) {
+        if (rel == "tex/UiLogo_user.s3t" || rel == "tex/UiBadge_3ds.s3t") return "romfs:/" + rel;
+        return data.vfs.path(rel);
+    });
 
     // ---- mod loader: new/missing mods (or SELECT held at boot) open the mod screen
     ModScreen mods;
@@ -262,6 +266,7 @@ int main() {
     canvas.dropTextures();
     C2D_Fini();
     C3D_Fini();
+    romfsExit();
     gfxExit();
     return 0;
 }

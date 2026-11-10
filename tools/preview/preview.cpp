@@ -131,7 +131,10 @@ int main(int argc, char** argv) {
     Game g(data);
     if (!g.newGame(42, &err)) { fprintf(stderr, "newGame: %s\n", err.c_str()); return 1; }
     HostCanvas c(g_root, font);
-    c.resolveFn = [](const std::string& rel, void* ctx) { return ((Vfs*)ctx)->path(rel); };
+    c.resolveFn = [](const std::string& rel, void* ctx) {
+        if (rel == "tex/UiLogo_user.s3t" || rel == "tex/UiBadge_3ds.s3t") return std::string(REPO_ROMFS "/") + rel;
+        return ((Vfs*)ctx)->path(rel);
+    };
     c.resolveCtx = &data.vfs;
     if (!getenv("S3DS_SYSTEM_FONT")) loadUiFonts(c, [&data](const std::string& rel) { return data.vfs.path(rel); });
     Ui ui;

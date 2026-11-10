@@ -101,9 +101,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.pickMods).setOnClickListener { pickMods.launch(null) }
         findViewById<Button>(R.id.pickContentZip).setOnClickListener { pickContentZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
         findViewById<Button>(R.id.pickModZips).setOnClickListener { pickModZips.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
-        findViewById<Button>(R.id.pickLogo).setOnClickListener { pickLogo.launch(arrayOf("image/*")) }
         findViewById<Button>(R.id.clearMods).setOnClickListener { modsUri = null; modZips = emptyList(); prefs.edit().remove("mods").remove("modZips").apply(); refresh() }
-        findViewById<Button>(R.id.clearLogo).setOnClickListener { logoUri = null; prefs.edit().remove("logo").apply(); refresh() }
         findViewById<Button>(R.id.convert).setOnClickListener { convert() }
         findViewById<Button>(R.id.saveTo).setOnClickListener {
             if (!File(outDir, "3ds/stardew3ds").isDirectory) say("Convert first") else pickSaveTo.launch(null)
@@ -134,7 +132,6 @@ class MainActivity : AppCompatActivity() {
             modsUri == null -> "none (no SVE / Ridgeside)"
             else -> nameOf(modsUri)
         }
-        findViewById<TextView>(R.id.logoName).text = if (logoUri == null) "none (text only)" else nameOf(logoUri)
         val ready = File(outDir, "3ds/stardew3ds").isDirectory
         status.text = when {
             busy -> "Working..."
@@ -153,7 +150,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setBusy(b: Boolean) { ui.post {
         busy = b
-        listOf(R.id.convert, R.id.saveTo, R.id.send, R.id.pickContent, R.id.pickMods, R.id.pickLogo)
+        listOf(R.id.convert, R.id.saveTo, R.id.send, R.id.pickContent, R.id.pickMods)
             .forEach { findViewById<Button>(it).isEnabled = !b }
         refresh()
     } }
@@ -185,12 +182,7 @@ class MainActivity : AppCompatActivity() {
                     say("Unzipping your mods...")
                     modZips.forEachIndexed { i, z -> unzipIn(z, File(modsDir, "mod$i"), nameOf(z)) }
                 }
-                var logoPath = ""
-                logoUri?.let { u ->
-                    val f = File(inDir, "logo.png")
-                    contentResolver.openInputStream(u)?.use { i -> FileOutputStream(f).use { o -> i.copyTo(o) } }
-                    logoPath = f.absolutePath
-                }
+                val logoPath = ""   // the logo is built into the game now
                 outDir.deleteRecursively()
                 outDir.mkdirs()
                 // the folder you pick may be the one *containing* Content (unpacked)
