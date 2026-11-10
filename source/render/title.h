@@ -23,6 +23,7 @@ struct TitleUi {
     int hairColor = 0, pantsColor = 0;
     float t = 0;                 // for the little walk animation
     float splashT = 0;           // seconds into the opening credits
+    bool creditsText = false;    // show the developer credit as text only (previews)
     std::string note;            // e.g. "Give your farmer a name"
     // text entry: the 3DS app plugs in the system keyboard; returns the new text
     std::function<std::string(const std::string& hint, const std::string& current, int maxLen)> keyboard;
