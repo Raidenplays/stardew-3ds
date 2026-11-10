@@ -212,6 +212,36 @@ bool GameData::load(const std::string& root, std::string* err) {
                          [](const FishSpot& a, const FishSpot& b) { return a.precedence < b.precedence; });
 
     lines.clear();
+    readLines(root + "data/quests.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 8) continue;
+        QuestDef q;
+        q.id = f[0];
+        q.type = f[1];
+        q.title = f[2];
+        q.description = f[3];
+        q.objective = f[4];
+        auto words = [](const std::string& s) {
+            std::vector<std::string> out;
+            size_t p = 0;
+            while (p < s.size()) {
+                size_t e = s.find(' ', p);
+                std::string w = s.substr(p, e == std::string::npos ? std::string::npos : e - p);
+                if (!w.empty()) out.push_back(w);
+                if (e == std::string::npos) break;
+                p = e + 1;
+            }
+            return out;
+        };
+        q.target = words(f[5]);
+        for (auto& n : words(f[6]))
+            if (n != "-1") q.next.push_back(n);
+        q.reward = atoi(f[7].c_str());
+        quests[q.id] = q;
+    }
+
+    lines.clear();
     readLines(root + "data/machines.dat", lines);
     for (auto& l : lines) {
         auto f = splitTabs(l);
@@ -485,6 +515,11 @@ const NpcDef* GameData::npc(const std::string& name) const {
 const CropDef* GameData::cropForSeed(int seedId) const {
     auto it = crops.find(seedId);
     return it == crops.end() ? nullptr : &it->second;
+}
+
+const QuestDef* GameData::quest(const std::string& id) const {
+    auto it = quests.find(id);
+    return it == quests.end() ? nullptr : &it->second;
 }
 
 const BigDef* GameData::big(int id) const {

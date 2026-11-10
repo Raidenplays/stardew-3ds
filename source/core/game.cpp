@@ -134,6 +134,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
     toolTimer = 0;
     spawnObjects(*cur);
     npcsEnterLocation();
+    questEntered(name);
     checkEvents();
     return true;
 }
@@ -218,6 +219,9 @@ uint8_t Game::debrisVariant(int x, int y) const {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    quests.clear();
+    questsFinished.clear();
+    levelUps.clear();
     eventsSeen.clear();
     mailReceived.clear();
     cutscene = Cutscene();
@@ -261,6 +265,10 @@ bool Game::newGame(uint32_t seed, std::string* err) {
             if ((m.flags(x, y) & (CF_DIGGABLE | CF_NOSPAWN)) == CF_DIGGABLE) diggable++;
     spawnDebris(diggable / 6, r);
     rngState = r;
+    // the first two quests of a new farm
+    addQuest("9");
+    addQuest("6");
+    hasUnseenQuest = true;
     startDay();
     wakeUp();
     return true;
@@ -531,6 +539,7 @@ bool Game::tryInteract(int tx, int ty) {
             int id = o->itemId;
             if (addItem(id, 1)) {
                 gainXp(SK_FORAGING, 7);
+                questItem(id, 1);
                 const ObjectDef* od = data.object(id);
                 say("+1 " + (od ? od->name : std::string("item")));
                 cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
@@ -546,6 +555,7 @@ bool Game::tryInteract(int tx, int ty) {
             if (!addItem(c->harvestId, n)) return true;
             const ObjectDef* o = data.object(c->harvestId);
             if (o) gainXp(SK_FARMING, (int)std::lround(16.0 * std::log(0.018 * std::max(0, o->price) + 1.0)));
+            questItem(c->harvestId, n);
             if (o) say("+" + std::to_string(n) + " " + o->name);
             if (c->regrowDays > 0) {
                 s.regrowWait = (int8_t)c->regrowDays;
@@ -646,6 +656,7 @@ void Game::useSelected(int tx, int ty) {
                         cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
                         addItem(drop, n);
                         gainXp(SK_MINING, 5);
+                        questItem(drop, n);
                         const ObjectDef* od = data.object(drop);
                         if (od) say("+" + std::to_string(n) + " " + od->name);
                     }
@@ -907,10 +918,11 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 6;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 7;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
+                                          // 7: quests
 
 namespace {
 struct W {
@@ -1007,6 +1019,10 @@ bool Game::save(const std::string& path) const {
     }
     w.i32(upgradeTool);
     w.i32(upgradeReadyDay);
+    w.u32((uint32_t)quests.size());
+    for (auto& q : quests) { w.str(q.id); w.i32(q.progress); w.u8(q.done); }
+    w.u32((uint32_t)questsFinished.size());
+    for (auto& id : questsFinished) w.str(id);
     w.u32((uint32_t)farm->trees.size());
     for (auto& t : farm->trees) {
         w.i32(t.x); w.i32(t.y); w.i32(t.type);
@@ -1124,6 +1140,21 @@ bool Game::load(const std::string& path, std::string* err) {
         upgradeTool = r.i32();
         upgradeReadyDay = r.i32();
         if (upgradeTool >= data.toolCount()) upgradeTool = -1;
+    }
+    quests.clear();
+    questsFinished.clear();
+    levelUps.clear();
+    if (version >= 7 && r.ok) {
+        uint32_t nq = r.u32();
+        for (uint32_t i = 0; i < nq && r.ok && i < 1000; i++) {
+            QuestState q;
+            q.id = r.str();
+            q.progress = r.i32();
+            q.done = r.u8() != 0;
+            if (data.quest(q.id)) quests.push_back(q);
+        }
+        uint32_t nf = r.u32();
+        for (uint32_t i = 0; i < nf && r.ok && i < 100000; i++) questsFinished.insert(r.str());
     }
     if (version >= 6 && r.ok) {
         uint32_t nt = r.u32();

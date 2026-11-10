@@ -766,6 +766,13 @@ def data_files():
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
     # crafting: placeholder recipes in the 1.6 formats
+    # placeholder quests (own wording) in the 1.6 Data/Quests format
+    json.dump({
+        "6": "ItemHarvest/First Crop/Grow something./Harvest a parsnip./(O)24/h7/100/-1/true",
+        "7": "Location/Into Town/Take a walk./Visit the town./Town/-1/50/-1/true",
+        "9": "Social/Say Hello/Meet the neighbours./Talk to everyone./null/-1/0/-1/true",
+        "8": "Crafting/Box It Up/Make storage./Craft a chest./(BC)130/-1/25/-1/true",
+    }, open(os.path.join(C, "Data/Quests.json"), "w"), indent=1)
     json.dump({"145": "Test Perch/30/mixed/4/12/600 2600/spring summer fall winter/both/690 .4/2/.3/.5/0/false"},
               open(os.path.join(C, "Data/Fish.json"), "w"), indent=1)
     json.dump({"1": {"Textures": [{"Season": None, "Texture": "TerrainFeatures\\tree1_spring"}],

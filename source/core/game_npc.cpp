@@ -236,14 +236,21 @@ void Game::talkTo(NpcState& n) {
     }
     if (!n.talkedToday) n.friendship = std::min(2500, n.friendship + 20);
     n.talkedToday = true;
+    bool first = !n.introduced;
     n.introduced = true;
     showDialogue(n, pages);
+    if (first) questMet();
 }
 
 void Game::giveGift(NpcState& n, int slot) {
     Slot& sl = inv[slot];
     const ObjectDef* o = data.object(sl.id);
     if (!o) return;
+    if (questDelivered(n.def->name, sl.id)) {   // quest deliveries always go through
+        n.friendship = std::min(2500, n.friendship + 150);
+        if (--sl.count <= 0) sl = Slot();
+        return;
+    }
     bool bday = isBirthday(*n.def);
     if (n.giftsToday >= 1) {
         say("You already gave " + n.def->display + " a gift today");

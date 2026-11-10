@@ -111,6 +111,13 @@ struct FishSpot {
     bool ignoreFishRules = false;
 };
 
+struct QuestDef {
+    std::string id, type, title, description, objective;
+    std::vector<std::string> target;   // split on spaces; item ids already converted
+    std::vector<std::string> next;     // quests that start when this one is done
+    int reward = 0;
+};
+
 struct BuildingDef {
     std::string name, texture;
     int srcX = 0, srcY = 0, srcW = 0, srcH = 0;
@@ -214,6 +221,8 @@ public:
     std::vector<MachineRule> machineRules;
     std::unordered_map<int, TreeDef> trees;   // by type
     std::unordered_map<int, FishDef> fish;
+    std::unordered_map<std::string, QuestDef> quests;
+    const QuestDef* quest(const std::string& id) const;
     std::unordered_map<std::string, std::vector<FishSpot>> fishSpots;   // by location ("Default" = everywhere)
     const TreeDef* treeForSeed(int objId) const;
     const BigDef* big(int id) const;

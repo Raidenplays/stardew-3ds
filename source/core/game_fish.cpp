@@ -115,6 +115,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                     f.state = FS_DONE;
                     f.t = 0;
                     addItem(f.fish, 1);
+                    questItem(f.fish, 1);
                     const ObjectDef* o = data.object(f.fish);
                     say("Caught " + (o ? o->name : std::string("something")));
                     gainXp(SK_FISHING, 3);
@@ -168,6 +169,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                 f.caught = true;
                 f.size = d.minSize + (int)(frand(rand32()) * (d.maxSize - d.minSize + 1));
                 addItem(f.fish, 1);
+                questItem(f.fish, 1);
                 const ObjectDef* o = data.object(f.fish);
                 say("Caught " + (o ? o->name : std::string("a fish")) + "! " + std::to_string(f.size) + " in" +
                     (f.perfect ? "  Perfect!" : ""));

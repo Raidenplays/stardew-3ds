@@ -710,7 +710,7 @@ static void drawHotbarAndTabs(Canvas& c, Game& g, Ui& ui) {
         slotPos(i, x, y);
         slotBox(c, g, i, x, y, ui.picked == i);
     }
-    static const char* names[TAB_COUNT] = {"Items", "Craft", "Social", "Map", "Options"};
+    static const char* names[TAB_COUNT] = {"Items", "Craft", "Quests", "Social", "Map", "Options"};
     float tw = (BOT_W - 8 - 2 * (TAB_COUNT - 1)) / (float)TAB_COUNT;
     for (int i = 0; i < TAB_COUNT; i++) {
         float x = 4 + i * (tw + 2);
@@ -1447,6 +1447,141 @@ void fishingTouch(const sv::Game& g, bool down, bool held, int x, int y, sv::Inp
     }
 }
 
+// ---------------------------------------------------------------- journal
+static const int QJ_ROWS = 4, QJ_ROW_H = 18, QJ_Y = PANEL_Y + 18;
+
+static void wrapText(Canvas& c, float x, float y, float w, float scale, uint32_t col, const std::string& text,
+                     int maxLines) {
+    std::string ln, word, rest = text + " ";
+    int lines = 0;
+    const int LH = scale < 0.41f ? 10 : 14;
+    for (char ch : rest) {
+        if (ch == ' ' || ch == '^') {
+            if (c.textWidth(ln + word, scale) > w && !ln.empty()) {
+                if (lines < maxLines) c.text(x, y + lines * LH, scale, col, ln);
+                lines++;
+                ln.clear();
+            }
+            ln += word + " ";
+            word.clear();
+            if (ch == '^') {
+                if (lines < maxLines) c.text(x, y + lines * LH, scale, col, ln);
+                lines++;
+                ln.clear();
+            }
+        } else {
+            word += ch;
+        }
+    }
+    if (lines < maxLines) c.text(x, y + lines * LH, scale, col, ln);
+}
+
+static void drawQuestsTab(Canvas& c, Game& g, Ui& ui) {
+    g.hasUnseenQuest = false;
+    c.text(HOT_X, PANEL_Y + 3, 0.45f, COL_TEXT, "Journal");
+    int n = (int)g.quests.size();
+    char buf[96];
+    snprintf(buf, sizeof buf, "%d quest%s", n, n == 1 ? "" : "s");
+    c.text(BOT_W - HOT_X, PANEL_Y + 4, 0.38f, COL_TEXT_SOFT, buf, ALIGN_RIGHT);
+    if (!n) {
+        c.text(BOT_W / 2, PANEL_Y + 80, 0.45f, COL_TEXT_SOFT, "No quests right now.", ALIGN_CENTER);
+        return;
+    }
+    ui.questSel = std::max(0, std::min(ui.questSel, n - 1));
+    ui.questScroll = std::max(0, std::min(ui.questScroll, std::max(0, n - QJ_ROWS)));
+    for (int r = 0; r < QJ_ROWS && ui.questScroll + r < n; r++) {
+        int i = ui.questScroll + r;
+        const QuestState& qs = g.quests[i];
+        const QuestDef* q = g.data.quest(qs.id);
+        float y = QJ_Y + r * QJ_ROW_H;
+        box(c, 10, y, 284, QJ_ROW_H - 2, i == ui.questSel ? COL_SLOT_ON : COL_SLOT,
+            i == ui.questSel ? COL_SEL : COL_SLOT_EDGE, i == ui.questSel ? 2 : 1);
+        c.text(18, y + 1, 0.42f, COL_TEXT, q ? q->title : qs.id);
+        if (qs.done) c.text(286, y + 1, 0.42f, COL_GREEN, "Done!", ALIGN_RIGHT);
+    }
+    if (n > QJ_ROWS) {
+        box(c, 298, QJ_Y, 14, 38, COL_PANEL_DARK, COL_BORDER, 1);
+        box(c, 298, QJ_Y + 40, 14, 38, COL_PANEL_DARK, COL_BORDER, 1);
+        c.text(305, QJ_Y + 12, 0.4f, COL_TEXT, "^", ALIGN_CENTER);
+        c.text(305, QJ_Y + 52, 0.4f, COL_TEXT, "v", ALIGN_CENTER);
+    }
+    const QuestState& qs = g.quests[ui.questSel];
+    const QuestDef* q = g.data.quest(qs.id);
+    if (!q) return;
+    float dy = QJ_Y + QJ_ROWS * QJ_ROW_H + 2;
+    box(c, 10, dy, 300, 232 - dy, COL_SLOT, COL_SLOT_EDGE, 1);
+    wrapText(c, 16, dy + 4, 288, 0.38f, COL_TEXT_SOFT, q->description, 5);
+    std::string obj = q->objective;
+    int goal = g.questGoal(*q);
+    if (goal > 0 && !qs.done) obj += "  (" + std::to_string(std::min(qs.progress, goal)) + "/" + std::to_string(goal) + ")";
+    wrapText(c, 16, dy + 56, qs.done ? 196 : 288, 0.42f, COL_TEXT, obj, 2);
+    if (qs.done) {
+        bool money = q->reward > 0;
+        box(c, 214, dy + 56, 90, 24, COL_GREEN, COL_GREEN_DARK, 2);
+        snprintf(buf, sizeof buf, money ? "Collect %dg" : "Done", q->reward);
+        c.text(259, dy + 59, 0.42f, COL_CREAM, buf, ALIGN_CENTER);
+    } else if (q->reward > 0) {
+        snprintf(buf, sizeof buf, "Reward: %dg", q->reward);
+        c.text(304, 216, 0.38f, COL_TEXT_SOFT, buf, ALIGN_RIGHT);
+    }
+}
+
+static void touchQuestsTab(Game& g, Ui& ui, int tx, int ty) {
+    int n = (int)g.quests.size();
+    if (!n) return;
+    if (n > QJ_ROWS && hit(tx, ty, 296, QJ_Y, 18, 39)) { ui.questScroll--; return; }
+    if (n > QJ_ROWS && hit(tx, ty, 296, QJ_Y + 39, 18, 40)) { ui.questScroll++; return; }
+    for (int r = 0; r < QJ_ROWS && ui.questScroll + r < n; r++)
+        if (hit(tx, ty, 10, QJ_Y + r * QJ_ROW_H, 284, QJ_ROW_H - 2)) { ui.questSel = ui.questScroll + r; return; }
+    float dy = QJ_Y + QJ_ROWS * QJ_ROW_H + 2;
+    if (hit(tx, ty, 214, dy + 56, 90, 24) && ui.questSel < n && g.quests[ui.questSel].done)
+        g.collectQuest((size_t)ui.questSel);
+}
+
+// ---------------------------------------------------------------- level up
+static const char* SKILL_TITLE[SK_COUNT] = {"Farming", "Fishing", "Foraging", "Mining", "Combat"};
+
+static void drawLevelUp(Canvas& c, Game& g) {
+    auto lu = g.levelUps.front();
+    c.rect(0, 0, BOT_W, BOT_H, COL_BG);
+    box(c, 12, 10, 296, 220, COL_PANEL, COL_BORDER, 3);
+    char buf[64];
+    snprintf(buf, sizeof buf, "%s Level %d", SKILL_TITLE[lu.first], lu.second);
+    c.text(160, 18, 0.7f, COL_TEXT, buf, ALIGN_CENTER);
+    // recipes that this level unlocked
+    snprintf(buf, sizeof buf, "s %s %d", SKILL_TITLE[lu.first], lu.second);
+    std::vector<const Recipe*> fresh;
+    for (auto& r : g.data.recipes)
+        if (r.unlock == buf) fresh.push_back(&r);
+    float y = 50;
+    if (fresh.empty()) {
+        c.text(160, y + 10, 0.45f, COL_TEXT_SOFT, "Your skill grows.", ALIGN_CENTER);
+    } else {
+        c.text(24, y, 0.45f, COL_TEXT, fresh.size() == 1 ? "New recipe:" : "New recipes:");
+        y += 18;
+        for (size_t i = 0; i < fresh.size() && i < 6; i++) {
+            box(c, 24, y, 24, 24, COL_SLOT, COL_SLOT_EDGE, 1);
+            Slot s;
+            s.type = fresh[i]->outBig ? SLOT_BIG : SLOT_OBJECT;
+            s.id = fresh[i]->outId;
+            s.count = 1;
+            slotIcon(c, g, s, 28, y + 4);
+            c.text(56, y + 4, 0.45f, COL_TEXT, fresh[i]->name);
+            y += 26;
+        }
+    }
+    if (g.levelUps.size() > 1) {
+        snprintf(buf, sizeof buf, "+%d more", (int)g.levelUps.size() - 1);
+        c.text(296, 210, 0.38f, COL_TEXT_SOFT, buf, ALIGN_RIGHT);
+    }
+    c.text(160, 210, 0.42f, COL_BORDER, "Tap or press A", ALIGN_CENTER);
+}
+
+void summaryAdvance(Game& g, Ui& ui) {
+    if (!g.levelUps.empty()) { g.levelUps.erase(g.levelUps.begin()); return; }
+    ui.showSummary = false;
+}
+
 static void drawSummary(Canvas& c, Game& g) {
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     box(c, 20, 40, 280, 150, COL_PANEL, COL_BORDER, 3);
@@ -1464,7 +1599,11 @@ static void drawSummary(Canvas& c, Game& g) {
 
 // --------------------------------------------------------------- entry points
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
-    if (ui.showSummary) { drawSummary(c, g); return; }
+    if (ui.showSummary) {
+        if (!g.levelUps.empty()) drawLevelUp(c, g);
+        else drawSummary(c, g);
+        return;
+    }
     if (g.dialogue.active) { drawDialogue(c, g, ui); return; }
     if (g.cutscene.active) {
         c.rect(0, 0, BOT_W, BOT_H, COL_BG);
@@ -1480,13 +1619,14 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
     drawHotbarAndTabs(c, g, ui);
     if (ui.tab == TAB_ITEMS) drawItemsTab(c, g, ui);
     else if (ui.tab == TAB_CRAFT) drawCraftTab(c, g, ui);
+    else if (ui.tab == TAB_QUESTS) drawQuestsTab(c, g, ui);
     else if (ui.tab == TAB_SOCIAL) drawSocialTab(c, g, ui);
     else if (ui.tab == TAB_MAP) drawMapTab(c, g);
     else drawOptionsTab(c, g, ui);
 }
 
 void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
-    if (ui.showSummary) { ui.showSummary = false; return; }
+    if (ui.showSummary) { summaryAdvance(g, ui); return; }
     if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
@@ -1513,6 +1653,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     }
     if (ui.tab == TAB_ITEMS) touchItemsTab(g, ui, tx, ty);
     else if (ui.tab == TAB_CRAFT) touchCraftTab(g, ui, tx, ty);
+    else if (ui.tab == TAB_QUESTS) touchQuestsTab(g, ui, tx, ty);
     else if (ui.tab == TAB_SOCIAL) touchSocialTab(ui, tx, ty);
     else if (ui.tab == TAB_OPTIONS) touchOptionsTab(g, ui, tx, ty, savePath);
 }

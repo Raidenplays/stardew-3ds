@@ -202,6 +202,16 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < g.data.recipes.size(); i++)
             if (g.recipeKnown(g.data.recipes[i]) && g.data.recipes[i].outBig) { ui.craftSel = (int)i; break; }
         shot(c, g, ui, "machines_and_crafting");
+        // journal and a morning level-up screen
+        ui.tab = TAB_QUESTS;
+        if (!g.quests.empty() && g.quests.size() > 1) g.quests[1].progress = 3;
+        shot(c, g, ui, "journal");
+        g.levelUps.push_back({SK_FARMING, 2});
+        ui.showSummary = true;
+        shot(c, g, ui, "level_up");
+        ui.showSummary = false;
+        g.levelUps.clear();
+        ui.tab = TAB_CRAFT;
         // chest
         if (g.data.big(130)) {
             for (int k = 0; k < INV_SIZE; k++) if (g.inv[k].type == SLOT_BIG && g.inv[k].id == 130) { g.swapSlots(k, 11); }

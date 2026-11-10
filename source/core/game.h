@@ -205,6 +205,12 @@ struct Fishing {
     int size = 0;
 };
 
+struct QuestState {
+    std::string id;
+    int progress = 0;
+    bool done = false;        // finished, reward not collected yet
+};
+
 struct UpgradeOffer {
     int slot = -1;          // inventory slot of the tool
     int next = -1;          // tool index it becomes
@@ -290,6 +296,21 @@ public:
     Placed* openChest();
     void chestTransfer(bool toChest, int index);   // whole stack
     void closeChest() { chestOpen = false; }
+
+    // ---- quests (game_quests.cpp) ----
+    std::vector<QuestState> quests;          // the journal
+    std::set<std::string> questsFinished;    // collected, never offered again
+    bool addQuest(const std::string& id);
+    int questGoal(const QuestDef& q) const;  // e.g. villagers to meet; 0 = no counter
+    void questItem(int itemId, int count);   // harvested / caught / mined / made
+    void questCrafted(bool big, int id);
+    void questEntered(const std::string& location);
+    void questMet();                         // introduced to someone new
+    bool questDelivered(const std::string& npc, int itemId);   // true = quest took it
+    bool collectQuest(size_t i);
+    bool hasUnseenQuest = false;             // journal badge
+    // level-ups waiting for the end-of-day screen: (skill, new level)
+    std::vector<std::pair<int, int>> levelUps;
 
     // ---- fishing (game_fish.cpp) ----
     Fishing fishing;
@@ -402,6 +423,7 @@ private:
     void sprinklersWater();
     void treesFromMap(Location& loc);
     void fishingUpdate(float dt, const Input& in);
+    void completeQuest(QuestState& q);
     void startFishing();
     void treesGrow();
     bool chopTree(int tx, int ty, int axeLevel);
