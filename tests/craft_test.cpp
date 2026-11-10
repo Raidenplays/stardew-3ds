@@ -64,7 +64,9 @@ int main(int argc, char** argv) {
     assert(g.canCraft(*chest) && g.craft(*chest));
     assert(count(g, 130, SLOT_BIG) == 1 && count(g, 388) == 20);
     g.gainXp(SK_FARMING, 100);
-    assert(g.skillLevel(SK_FARMING) == 1 && g.recipeKnown(*jar));
+    assert(g.skillLevel(SK_FARMING) == 0 && !g.recipeKnown(*jar));   // not until you sleep
+    g.applyLevelUps();
+    assert(g.skillLevel(SK_FARMING) == 1 && g.recipeKnown(*jar) && g.levelUps.size() == 1);
     assert(g.craft(*jar) && g.craft(*recipe(d, "Furnace")));
 
     // place a furnace and smelt: 5 ore + 1 coal -> bar in 30 minutes
@@ -319,7 +321,10 @@ int main(int argc, char** argv) {
         assert(find("9")->done);
         // level-ups queue for the morning screen
         gq.gainXp(SK_MINING, 400);
-        assert(gq.levelUps.size() == 2 && gq.levelUps[1].second == 2);
+        assert(gq.levelUps.empty() && gq.skillLevel(SK_MINING) == 0);
+        gq.passedOut = true;
+        gq.goToBed();                              // levels go up overnight
+        assert(gq.levelUps.size() == 2 && gq.levelUps[1].second == 2 && gq.skillLevel(SK_MINING) == 2);
         assert(gq.save("/tmp/quest_test.sav"));
         Game gq2(d);
         assert(gq2.load("/tmp/quest_test.sav"));

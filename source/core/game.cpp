@@ -222,6 +222,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     quests.clear();
     questsFinished.clear();
     levelUps.clear();
+    for (int i = 0; i < SK_COUNT; i++) { skillXp[i] = 0; skillLevels[i] = 0; }
     eventsSeen.clear();
     mailReceived.clear();
     cutscene = Cutscene();
@@ -900,6 +901,7 @@ bool Game::goToBed() {
         for (auto& s : farm->soils)
             if (s.tilled) s.watered = true;
 
+    applyLevelUps();
     sprinklersWater();
     machinesDayStart();
     treesGrow();
@@ -918,11 +920,12 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 7;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 8;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
                                           // 7: quests
+                                          // 8: skill levels (applied at night)
 
 namespace {
 struct W {
@@ -1019,6 +1022,7 @@ bool Game::save(const std::string& path) const {
     }
     w.i32(upgradeTool);
     w.i32(upgradeReadyDay);
+    for (int i = 0; i < SK_COUNT; i++) w.i32(skillLevels[i]);
     w.u32((uint32_t)quests.size());
     for (auto& q : quests) { w.str(q.id); w.i32(q.progress); w.u8(q.done); }
     w.u32((uint32_t)questsFinished.size());
@@ -1144,6 +1148,9 @@ bool Game::load(const std::string& path, std::string* err) {
     quests.clear();
     questsFinished.clear();
     levelUps.clear();
+    for (int i = 0; i < SK_COUNT; i++) skillLevels[i] = xpLevel(i);   // older saves
+    if (version >= 8 && r.ok)
+        for (int i = 0; i < SK_COUNT; i++) skillLevels[i] = std::max(0, std::min<int>(10, r.i32()));
     if (version >= 7 && r.ok) {
         uint32_t nq = r.u32();
         for (uint32_t i = 0; i < nq && r.ok && i < 1000; i++) {
