@@ -409,6 +409,11 @@ def objects_sheet():
     for i, col in ((378, (200, 120, 70)), (334, (220, 140, 80)), (382, (40, 40, 44)), (398, (120, 60, 160))):
         x, y = at(i)
         d.ellipse([x + 3, y + 4, x + 12, y + 13], fill=col, outline=(30, 30, 30))
+    x, y = at(145)   # perch
+    d.ellipse([x + 2, y + 5, x + 12, y + 11], fill=(110, 150, 90), outline=(40, 70, 40))
+    d.polygon([(x + 12, y + 8), (x + 15, y + 5), (x + 15, y + 11)], fill=(110, 150, 90))
+    x, y = at(168)   # trash
+    d.rectangle([x + 4, y + 4, x + 11, y + 13], fill=(130, 130, 120), outline=(60, 60, 50))
     x, y = at(344)   # jelly
     d.rectangle([x + 4, y + 4, x + 11, y + 14], fill=(150, 60, 120), outline=(60, 30, 50))
     x, y = at(599)   # sprinkler
@@ -508,6 +513,9 @@ def tools_sheet():
     x = 64
     d.line([x + 6, 15, x + 9, 3], fill=(139, 90, 43), width=2)
     d.polygon([(x + 9, 3), (x + 15, 5), (x + 14, 8), (x + 9, 5)], fill=(185, 194, 202), outline=(74, 79, 85))
+    x = 112  # rod
+    d.line([x + 2, 15, x + 14, 1], fill=(139, 90, 43), width=2)
+    d.line([x + 14, 1, x + 14, 10], fill=(220, 220, 220))
     x = 80   # copper hoe
     d.line([x + 3, 14, x + 12, 4], fill=(139, 90, 43), width=2)
     d.polygon([(x + 10, 1), (x + 15, 1), (x + 15, 5), (x + 12, 5)], fill=(214, 134, 74), outline=(120, 66, 30))
@@ -729,6 +737,7 @@ def data_files():
         "382": ("Coal", 15, 382, -15, -300), "398": ("Test Berry", 50, 398, -79, 15),
         "344": ("Jelly", 160, 344, -26, 20), "599": ("Sprinkler", 100, 599, -8, -300),
         "309": ("Test Acorn", 20, 309, -74, -300), "92": ("Sap", 2, 92, -81, -1),
+        "145": ("Test Perch", 30, 145, -4, 5), "168": ("Trash", 0, 168, -20, -300),
     }
     tools = {
         "Hoe": {"ClassName": "Hoe", "Name": "Hoe", "SpriteIndex": 0, "MenuSpriteIndex": -1, "UpgradeLevel": 0},
@@ -736,6 +745,7 @@ def data_files():
         "Axe": {"ClassName": "Axe", "Name": "Axe", "SpriteIndex": 2, "UpgradeLevel": 0},
         "Pickaxe": {"ClassName": "Pickaxe", "Name": "Pickaxe", "SpriteIndex": 3, "UpgradeLevel": 0},
         "Scythe": {"ClassName": "MeleeWeapon", "Name": "Scythe", "SpriteIndex": 4, "UpgradeLevel": 0},
+        "TrainingRod": {"ClassName": "FishingRod", "Name": "Training Rod", "SpriteIndex": 7, "UpgradeLevel": 0},
         "CopperHoe": {"ClassName": "Hoe", "Name": "Copper Hoe", "SpriteIndex": 5, "UpgradeLevel": 1,
                       "SalePrice": 2000, "ConventionalUpgradeFrom": "(T)Hoe"},
         "CopperWateringCan": {"ClassName": "WateringCan", "Name": "Copper Watering Can", "SpriteIndex": 6,
@@ -756,6 +766,8 @@ def data_files():
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
     # crafting: placeholder recipes in the 1.6 formats
+    json.dump({"145": "Test Perch/30/mixed/4/12/600 2600/spring summer fall winter/both/690 .4/2/.3/.5/0/false"},
+              open(os.path.join(C, "Data/Fish.json"), "w"), indent=1)
     json.dump({"1": {"Textures": [{"Season": None, "Texture": "TerrainFeatures\\tree1_spring"}],
                      "SeedItemId": "(O)309", "GrowthChance": 1.0}},
               open(os.path.join(C, "Data/WildTrees.json"), "w"), indent=1)
@@ -781,7 +793,10 @@ def data_files():
     json.dump(shops, open(os.path.join(C, "Data/Shops.json"), "w"), indent=1)
     json.dump({"Town": {"DisplayName": "Pelican Town (placeholder)", "MinDailyForageSpawn": 4, "MaxDailyForageSpawn": 4,
                         "MaxSpawnedForageAtOnce": 6,
-                        "Forage": [{"ItemId": "(O)24", "Season": "Spring", "Chance": 1.0}]}},
+                        "Forage": [{"ItemId": "(O)24", "Season": "Spring", "Chance": 1.0}],
+                        "Fish": [{"ItemId": "(O)145", "Chance": 1.0}]},
+               "Farm": {"Fish": [{"ItemId": "(O)145", "Chance": 1.0}]},
+               "Default": {"Fish": [{"RandomItemId": ["(O)168"], "Chance": 1.0, "Precedence": 2000}]}},
               open(os.path.join(C, "Data/Locations.json"), "w"))
 
 
