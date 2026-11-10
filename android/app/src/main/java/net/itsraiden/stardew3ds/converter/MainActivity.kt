@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun say(s: String) = ui.post { appendLog(s) }
+    private fun say(s: String) { ui.post { appendLog(s) } }
 
     private fun appendLog(s: String) {
         log.append(s + "\n")
@@ -151,12 +151,12 @@ class MainActivity : AppCompatActivity() {
         scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 
-    private fun setBusy(b: Boolean) = ui.post {
+    private fun setBusy(b: Boolean) { ui.post {
         busy = b
         listOf(R.id.convert, R.id.saveTo, R.id.send, R.id.pickContent, R.id.pickMods, R.id.pickLogo)
             .forEach { findViewById<Button>(it).isEnabled = !b }
         refresh()
-    }
+    } }
 
     // ---------------------------------------------------------------- convert
 
