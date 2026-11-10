@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- original icon: a sprout growing out of a little 3DS-ish screen -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#3B1F0E" android:pathData="M32,52h44v30h-44z" />
+    <path android:fillColor="#8CC8F2" android:pathData="M36,56h36v22h-36z" />
+    <path android:fillColor="#5C9C3C" android:pathData="M36,70h36v8h-36z" />
+    <path android:fillColor="#7CB342" android:pathData="M53,40h3v24h-3z" />
+    <path android:fillColor="#7CB342" android:pathData="M55,46c6,-10 16,-10 18,-8c-2,8 -10,12 -18,8z" />
+    <path android:fillColor="#9CD15A" android:pathData="M54,50c-6,-10 -16,-10 -18,-8c2,8 10,12 18,8z" />
+</vector>
