@@ -30,8 +30,6 @@ static bool loadFont(BitmapFont& f, const std::string& path, const std::string& 
 
 bool loadUiFonts(Canvas& c, const std::function<std::string(const std::string&)>& resolve) {
     bool a = loadFont(c.fontSmall, resolve("data/font_small.dat"), "UiFont_small");
-    bool t = loadFont(c.fontTiny, resolve("data/font_tiny.dat"), "UiFont_tiny");
-    if (t && c.texWidth("UiFont_tiny") == 0) c.fontTiny = BitmapFont();
     bool b = loadFont(c.fontBold, resolve("data/font_bold.dat"), "LooseSprites_font_bold");
     if (a && c.texWidth("UiFont_small") == 0) c.fontSmall = BitmapFont();
     if (b && c.texWidth("LooseSprites_font_bold") == 0) c.fontBold = BitmapFont();

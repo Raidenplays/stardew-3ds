@@ -41,6 +41,7 @@ void C2DCanvas::line(float x1, float y1, float x2, float y2, uint32_t color, flo
 }
 
 void C2DCanvas::text(float x, float y, float scale, uint32_t color, const std::string& s, int align) {
+    if (scale < 0.41f && pixelTiny()) { pixelText(x, y, scale, color, s, align); return; }
     if (const BitmapFont* f = fontFor(scale)) { bitmapText(*f, x, y, scale, color, s, align); return; }
     C2D_Text t;
     C2D_TextParse(&t, textBuf, s.c_str());
@@ -55,6 +56,7 @@ int C2DCanvas::texWidth(const std::string& tex) {
 }
 
 float C2DCanvas::textWidth(const std::string& s, float scale) {
+    if (scale < 0.41f && pixelTiny()) return pixelWidth(s);
     if (const BitmapFont* f = fontFor(scale)) return bitmapWidth(*f, s);
     C2D_Text t;
     C2D_TextParse(&t, textBuf, s.c_str());

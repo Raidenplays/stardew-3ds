@@ -29,6 +29,7 @@ public:
     void line(float x1, float y1, float x2, float y2, uint32_t color, float width) override;
     void text(float x, float y, float scale, uint32_t color, const std::string& s, int align) override;
     float textWidth(const std::string& s, float scale) override {
+        if (scale < 0.41f && pixelTiny()) return pixelWidth(s);
         if (const BitmapFont* f = fontFor(scale)) return bitmapWidth(*f, s);
         return textWidthPx(s, 30.0f * scale);
     }
