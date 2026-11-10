@@ -9,7 +9,7 @@
 
 static const int TOP_W = 400, TOP_H = 240, BOT_W = 320, BOT_H = 240;
 
-enum Tab { TAB_ITEMS = 0, TAB_SOCIAL, TAB_MAP, TAB_OPTIONS, TAB_COUNT };
+enum Tab { TAB_ITEMS = 0, TAB_CRAFT, TAB_SOCIAL, TAB_MAP, TAB_OPTIONS, TAB_COUNT };
 
 struct Ui {
     int tab = TAB_ITEMS;
@@ -26,6 +26,8 @@ struct Ui {
     std::map<int, int> cart;  // itemId -> qty
 
     int socialScroll = 0;
+    int craftSel = 0;         // index into GameData::recipes
+    int craftScroll = 0;      // first row shown
     int dlgLine = 0;          // first wrapped line shown of a long dialogue page
     int dlgLines = 0;         // wrapped line count of the current page (set while drawing)
 

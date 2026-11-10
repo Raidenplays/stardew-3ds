@@ -354,6 +354,7 @@ bool Game::tileSolid(int tx, int ty) const {
     if (cur->debris[i] != DEB_NONE) return true;
     for (auto& o : cur->objects)
         if (o.x == tx && o.y == ty) return true;
+    if (placedAt(tx, ty)) return true;
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
@@ -403,22 +404,11 @@ int Game::cropFrame(int x, int y) const {
 // ------------------------------------------------------------ inventory
 
 bool Game::addItem(int objId, int count) {
-    for (auto& s : inv)
-        if (s.type == SLOT_OBJECT && s.id == objId && s.count < 999) {
-            int n = std::min(999 - s.count, count);
-            s.count += n;
-            count -= n;
-            if (!count) return true;
-        }
-    for (auto& s : inv)
-        if (s.empty()) {
-            s.type = SLOT_OBJECT;
-            s.id = objId;
-            s.count = count;
-            return true;
-        }
-    say("Inventory full");
-    return false;
+    Slot sl;
+    sl.type = SLOT_OBJECT;
+    sl.id = objId;
+    sl.count = count;
+    return addSlot(sl);
 }
 
 void Game::selectSlot(int i) {
@@ -429,7 +419,7 @@ void Game::swapSlots(int a, int b) {
     if (a < 0 || b < 0 || a >= INV_SIZE || b >= INV_SIZE || a == b) return;
     Slot& A = inv[a];
     Slot& B = inv[b];
-    if (A.type == SLOT_OBJECT && B.type == SLOT_OBJECT && A.id == B.id) {
+    if (A.stacksWith(B)) {
         int n = std::min(999 - B.count, A.count);
         B.count += n;
         A.count -= n;
@@ -440,7 +430,7 @@ void Game::swapSlots(int a, int b) {
 }
 
 bool Game::trashSlot(int i) {
-    if (i < 0 || i >= INV_SIZE || inv[i].type != SLOT_OBJECT) return false;
+    if (i < 0 || i >= INV_SIZE || inv[i].empty() || inv[i].type == SLOT_TOOL) return false;
     inv[i] = Slot();
     return true;
 }
@@ -506,9 +496,8 @@ bool Game::buy(const std::string& shop, int itemId, int qty) {
 }
 
 int Game::sellPrice(const Slot& s) const {
-    if (s.type != SLOT_OBJECT) return 0;
-    const ObjectDef* o = data.object(s.id);
-    return o ? std::max(0, o->price) : 0;
+    if (s.type == SLOT_TOOL || s.empty()) return 0;
+    return itemPrice(s);
 }
 
 bool Game::sellSlot(int i) {
@@ -531,10 +520,13 @@ bool Game::tryInteract(int tx, int ty) {
         else talkTo(*n);
         return true;
     }
+    if (Placed* p = placedAt(tx, ty))
+        if (interactPlaced(*p)) return true;
     if (WorldObject* o = objectAt(tx, ty)) {
         if (!o->ore) {
             int id = o->itemId;
             if (addItem(id, 1)) {
+                gainXp(SK_FORAGING, 7);
                 const ObjectDef* od = data.object(id);
                 say("+1 " + (od ? od->name : std::string("item")));
                 cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
@@ -549,6 +541,7 @@ bool Game::tryInteract(int tx, int ty) {
             int n = c->harvestMin;
             if (!addItem(c->harvestId, n)) return true;
             const ObjectDef* o = data.object(c->harvestId);
+            if (o) gainXp(SK_FARMING, (int)std::lround(16.0 * std::log(0.018 * std::max(0, o->price) + 1.0)));
             if (o) say("+" + std::to_string(n) + " " + o->name);
             if (c->regrowDays > 0) {
                 s.regrowWait = (int8_t)c->regrowDays;
@@ -563,11 +556,10 @@ bool Game::tryInteract(int tx, int ty) {
         for (auto& b : data.layout.bins)
             if (b.first == tx && b.second == ty) {
                 Slot& sl = inv[selected];
-                if (sl.type == SLOT_OBJECT) {
-                    const ObjectDef* o = data.object(sl.id);
-                    if (o && o->price > 0) {
+                if (sl.type == SLOT_OBJECT || sl.type == SLOT_BIG) {
+                    if (itemPrice(sl) > 0) {
                         shipped.push_back(sl);
-                        say("Shipped " + std::to_string(sl.count) + " " + o->name);
+                        say("Shipped " + std::to_string(sl.count) + " " + itemName(sl));
                         sl = Slot();
                         return true;
                     }
@@ -608,6 +600,7 @@ void Game::useSelected(int tx, int ty) {
         toolKindAnim = t->kind;
         if (t->kind != TOOL_SCYTHE) energy = std::max(0, energy - ENERGY_PER_SWING);
         if (!inMap) return;
+        if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE) && pickUpPlaced(tx, ty)) return;
         Soil& s = cur->soils[idx];
         uint8_t& deb = cur->debris[idx];
         uint8_t f = m.flags(tx, ty);
@@ -637,6 +630,7 @@ void Game::useSelected(int tx, int ty) {
                 if (deb == DEB_TWIG) {
                     deb = DEB_NONE;
                     addItem(OBJ_WOOD, 1);
+                    gainXp(SK_FORAGING, 1);
                 }
                 break;
             case TOOL_PICKAXE:
@@ -646,12 +640,14 @@ void Game::useSelected(int tx, int ty) {
                         int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
                         cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
                         addItem(drop, n);
+                        gainXp(SK_MINING, 5);
                         const ObjectDef* od = data.object(drop);
                         if (od) say("+" + std::to_string(n) + " " + od->name);
                     }
                 } else if (deb == DEB_STONE) {
                     deb = DEB_NONE;
                     addItem(OBJ_STONE, 1);
+                    gainXp(SK_MINING, 1);
                 } else if ((s.tilled && s.seed < 0) || s.dead) {
                     s = Soil();
                 }
@@ -671,7 +667,8 @@ void Game::useSelected(int tx, int ty) {
         return;
     }
 
-    const CropDef* crop = data.cropForSeed(sl.id);
+    if (placeSelected(tx, ty)) return;
+    const CropDef* crop = sl.type == SLOT_OBJECT ? data.cropForSeed(sl.id) : nullptr;
     if (crop) {
         if (!inMap || !cur->isFarm) return;
         Soil& s = cur->soils[idx];
@@ -783,10 +780,7 @@ bool Game::goToBed() {
         return false;
     }
     int earned = 0;
-    for (auto& s : shipped) {
-        const ObjectDef* o = data.object(s.id);
-        if (o) earned += o->price * s.count;
-    }
+    for (auto& s : shipped) earned += itemPrice(s) * s.count;
     shipped.clear();
     money += earned;
     lastEarnings = earned;
@@ -830,6 +824,9 @@ bool Game::goToBed() {
         for (auto& s : farm->soils)
             if (s.tilled) s.watered = true;
 
+    sprinklersWater();
+    machinesDayStart();
+
     uint32_t r = rand32();
     spawnDebris(6, r);
 
@@ -844,7 +841,8 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 3;   // 2: villager friendships, 3: events seen + mail
+static const uint32_t SAVE_VERSION = 4;   // 2: villager friendships, 3: events seen + mail,
+                                          // 4: skills, flavors, placed machines/chests
 
 namespace {
 struct W {
@@ -852,6 +850,12 @@ struct W {
     void u32(uint32_t v) { fwrite(&v, 4, 1, f); }
     void i32(int32_t v) { fwrite(&v, 4, 1, f); }
     void u8(uint8_t v) { fwrite(&v, 1, 1, f); }
+    void str(const std::string& s) {
+        uint16_t len = (uint16_t)std::min<size_t>(s.size(), 65535);
+        fwrite(&len, 2, 1, f);
+        fwrite(s.data(), 1, len, f);
+    }
+    void slot(const Slot& s) { u8(s.type); i32(s.id); i32(s.count); i32(s.flavor); }
 };
 struct R {
     FILE* f;
@@ -859,6 +863,14 @@ struct R {
     uint32_t u32() { uint32_t v = 0; ok &= fread(&v, 4, 1, f) == 1; return v; }
     int32_t i32() { int32_t v = 0; ok &= fread(&v, 4, 1, f) == 1; return v; }
     uint8_t u8() { uint8_t v = 0; ok &= fread(&v, 1, 1, f) == 1; return v; }
+    std::string str() {
+        uint16_t len = 0;
+        ok &= fread(&len, 2, 1, f) == 1;
+        std::string s(ok ? len : 0, ' ');
+        if (ok && len) ok &= fread(&s[0], 1, len, f) == len;
+        return s;
+    }
+    Slot slot() { Slot s; s.type = (SlotType)u8(); s.id = i32(); s.count = i32(); s.flavor = i32(); return s; }
 };
 } // namespace
 
@@ -906,6 +918,23 @@ bool Game::save(const std::string& path) const {
             uint16_t len = (uint16_t)std::min<size_t>(id.size(), 65535);
             fwrite(&len, 2, 1, f);
             fwrite(id.data(), 1, len, f);
+        }
+    }
+    // v4
+    for (int i = 0; i < SK_COUNT; i++) w.i32(skillXp[i]);
+    for (auto& s : inv) w.i32(s.flavor);
+    for (auto& s : shipped) w.i32(s.flavor);
+    w.u32((uint32_t)placed.size());
+    for (auto& kv : placed) {
+        w.str(kv.first);
+        w.u32((uint32_t)kv.second.size());
+        for (auto& p : kv.second) {
+            w.i32(p.x); w.i32(p.y); w.u8(p.big); w.i32(p.id);
+            w.i32(p.rule); w.i32(p.input);
+            w.u32((uint32_t)(p.readyAt & 0xFFFFFFFF)); w.i32((int32_t)(p.readyAt >> 32));
+            w.slot(p.held);
+            w.u32((uint32_t)p.items.size());
+            for (auto& it : p.items) w.slot(it);
         }
     }
     bool ok = ferror(f) == 0;
@@ -984,6 +1013,33 @@ bool Game::load(const std::string& path, std::string* err) {
                 std::string id(len, ' ');
                 if (len && fread(&id[0], 1, len, f) != len) { r.ok = false; break; }
                 set->insert(id);
+            }
+        }
+    }
+    for (auto& x : skillXp) x = 0;
+    placed.clear();
+    chestOpen = false;
+    if (version >= 4 && r.ok) {
+        for (auto& x : skillXp) x = std::max(0, r.i32());
+        for (auto& s : inv) s.flavor = r.i32();
+        for (auto& s : shipped) s.flavor = r.i32();
+        uint32_t nl = r.u32();
+        for (uint32_t i = 0; i < nl && r.ok && i < 10000; i++) {
+            std::string name = r.str();
+            uint32_t np = r.u32();
+            auto& v = placed[name];
+            for (uint32_t j = 0; j < np && r.ok && j < 100000; j++) {
+                Placed p;
+                p.x = r.i32(); p.y = r.i32(); p.big = r.u8() != 0; p.id = r.i32();
+                p.rule = r.i32(); p.input = r.i32();
+                uint32_t lo = r.u32();
+                int32_t hi = r.i32();
+                p.readyAt = ((int64_t)hi << 32) | lo;
+                p.held = r.slot();
+                uint32_t ni = r.u32();
+                for (uint32_t k = 0; k < ni && r.ok && k < 1000; k++) p.items.push_back(r.slot());
+                if (p.rule >= (int)data.machineRules.size()) p.rule = -1;
+                v.push_back(p);
             }
         }
     }

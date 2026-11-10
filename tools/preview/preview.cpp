@@ -1,3 +1,4 @@
+#include <algorithm>
 // PC screenshot tool. Runs the real game code through a scripted walk and
 // writes 3DS-shaped PNGs (top screen over bottom screen) using the same
 // drawing code as the console.
@@ -72,13 +73,15 @@ int main(int argc, char** argv) {
     std::string eventArg;   // "Location:eventId" -> record that cutscene instead of the walk
     std::string tourArg;
     std::string modsArg;    // "a,b" or "auto" (mods.txt + new mods)
-    bool modScreenShot = false;    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    bool modScreenShot = false;
+    bool craftDemo = false;   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
         else if (a.rfind("--tour=", 0) == 0) tourArg = a.substr(7);
         else if (a.rfind("--mods=", 0) == 0) modsArg = a.substr(7);
         else if (a == "--modscreen") modScreenShot = true;
+        else if (a == "--craft") craftDemo = true;
         else font = a;
     }
 
@@ -123,6 +126,65 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (craftDemo) {
+        g.timeOfDay = 10 * 60;
+        g.teleport("Farm", g.data.layout.doorX, g.data.layout.doorY + 2);
+        g.skillXp[SK_FARMING] = 800;
+        g.skillXp[SK_MINING] = 400;
+        g.skillXp[SK_FORAGING] = 150;
+        // up to 4 machines that take an item, each with its first input
+        int placedN = 0;
+        int bx = g.data.layout.doorX - 3, by = g.data.layout.doorY + 4;
+        std::vector<int> done;
+        for (size_t i = 0; i < g.data.machineRules.size() && placedN < 4; i++) {
+            const MachineRule& r = g.data.machineRules[i];
+            if (r.autoRun || r.inputs.empty() || std::count(done.begin(), done.end(), r.machine)) continue;
+            done.push_back(r.machine);
+            Slot m; m.type = SLOT_BIG; m.id = r.machine; m.count = 1;
+            g.addSlot(m);
+            for (int k = 0; k < INV_SIZE; k++) if (g.inv[k].type == SLOT_BIG && g.inv[k].id == r.machine) { g.swapSlots(k, 11); }
+            g.selectSlot(11);
+            g.teleport("Farm", bx + placedN * 2, by - 1);
+            g.facing = FACE_DOWN;
+            Input a; a.action = true;
+            g.update(1.0f / 60, a);
+            step(g, ui, none, 20);
+            g.addItem(r.inputs[r.inputs.size() / 2], r.inputCount);
+            if (r.fuel >= 0) g.addItem(r.fuel, r.fuelCount);
+            for (int k = 0; k < INV_SIZE; k++) if (g.inv[k].type == SLOT_OBJECT && g.inv[k].id == r.inputs[r.inputs.size() / 2]) g.swapSlots(k, 11);
+            g.selectSlot(11);
+            g.update(1.0f / 60, a);
+            step(g, ui, none, 20);
+            placedN++;
+        }
+        // finish the first one so its bubble shows
+        if (Placed* p = g.placedAt(bx, by)) if (p->rule >= 0) p->readyAt = g.nowMinutes();
+        Slot ch; ch.type = SLOT_BIG; ch.id = 130; ch.count = 2;
+        if (g.data.big(130)) g.addSlot(ch);
+        g.addItem(388, 120); g.addItem(390, 80); g.addItem(334, 3); g.addItem(335, 2);
+        g.teleport("Farm", bx + 2, by + 2);
+        g.facing = FACE_UP;
+        g.selectSlot(0);
+        step(g, ui, none, 10);
+        ui.tab = TAB_CRAFT;
+        for (size_t i = 0; i < g.data.recipes.size(); i++)
+            if (g.recipeKnown(g.data.recipes[i]) && g.data.recipes[i].outBig) { ui.craftSel = (int)i; break; }
+        shot(c, g, ui, "machines_and_crafting");
+        // chest
+        if (g.data.big(130)) {
+            for (int k = 0; k < INV_SIZE; k++) if (g.inv[k].type == SLOT_BIG && g.inv[k].id == 130) { g.swapSlots(k, 11); }
+            g.selectSlot(11);
+            g.teleport("Farm", bx + 8, by - 1);
+            g.facing = FACE_DOWN;
+            Input a; a.action = true;
+            g.update(1.0f / 60, a); step(g, ui, none, 20);
+            g.update(1.0f / 60, a); step(g, ui, none, 20);
+            for (int k = 6; k < 10; k++) g.chestTransfer(true, k);
+            shot(c, g, ui, "chest");
+        }
+        return 0;
+    }
 
     if (!tourArg.empty()) {
         size_t pos = 0;

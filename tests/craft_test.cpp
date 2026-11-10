@@ -1,0 +1,152 @@
+// Crafting, machines, chests, sprinklers, skills - against the placeholder world.
+//   g++ -std=c++17 -Isource -Isource/core tests/craft_test.cpp source/core/*.cpp -o craft_test
+//   ./craft_test out/3ds/stardew3ds/
+#include <cassert>
+#include <cstdio>
+
+#include "game.h"
+using namespace sv;
+
+static const Recipe* recipe(const GameData& d, const std::string& name) {
+    for (auto& r : d.recipes)
+        if (r.name == name) return &r;
+    return nullptr;
+}
+
+static int count(const Game& g, int id, int type = SLOT_OBJECT, int flavor = -1) {
+    int n = 0;
+    for (auto& s : g.inv)
+        if (s.type == type && s.id == id && s.flavor == flavor) n += s.count;
+    return n;
+}
+
+static void face(Game& g, int tx, int ty) {   // stand above (tx, ty) facing down
+    g.teleport("Farm", tx, ty - 1);
+    g.facing = FACE_DOWN;
+}
+
+static void pressA(Game& g) {
+    Input in;
+    in.action = true;
+    g.update(1.0f / 60, in);
+    Input none;
+    for (int i = 0; i < 30; i++) g.update(1.0f / 60, none);
+}
+
+static void selectItem(Game& g, int id, int type = SLOT_OBJECT) {
+    for (int i = 0; i < INV_SIZE; i++)
+        if (g.inv[i].type == type && g.inv[i].id == id) {
+            if (i >= HOTBAR) g.swapSlots(i, HOTBAR - 1), i = HOTBAR - 1;
+            g.selectSlot(i);
+            return;
+        }
+    assert(!"item not in inventory");
+}
+
+int main(int argc, char** argv) {
+    std::string root = argc > 1 ? argv[1] : "out/3ds/stardew3ds/";
+    GameData d;
+    std::string err;
+    assert(d.load(root, &err));
+    assert(d.recipes.size() == 4 && d.bigs.size() == 3 && d.machineRules.size() == 2);
+    Game g(d);
+    assert(g.newGame(7, &err));
+
+    // recipes: default ones known, skill ones locked until Farming 1
+    const Recipe* chest = recipe(d, "Chest");
+    const Recipe* jar = recipe(d, "Preserves Jar");
+    assert(chest && jar && g.recipeKnown(*chest) && !g.recipeKnown(*jar));
+    assert(!g.canCraft(*chest));
+    g.addItem(388, 30);
+    g.addItem(390, 20);
+    g.addItem(382, 5);
+    g.addItem(378, 10);
+    assert(g.canCraft(*chest) && g.craft(*chest));
+    assert(count(g, 130, SLOT_BIG) == 1 && count(g, 388) == 20);
+    g.gainXp(SK_FARMING, 100);
+    assert(g.skillLevel(SK_FARMING) == 1 && g.recipeKnown(*jar));
+    assert(g.craft(*jar) && g.craft(*recipe(d, "Furnace")));
+
+    // place a furnace and smelt: 5 ore + 1 coal -> bar in 30 minutes
+    const int FX = 60, FY = 24;
+    face(g, FX, FY);
+    selectItem(g, 13, SLOT_BIG);
+    pressA(g);
+    Placed* f = g.placedAt(FX, FY);
+    assert(f && f->id == 13 && count(g, 13, SLOT_BIG) == 0);
+    assert(g.map().inBounds(FX, FY));
+    selectItem(g, 378);
+    pressA(g);
+    f = g.placedAt(FX, FY);
+    assert(f->rule >= 0 && !g.machineReady(*f));
+    assert(count(g, 378) == 0 && count(g, 382) == 3);   // ore: 5 for the recipe, 5 smelted; coal: jar + fuel
+    g.timeOfDay += 30;
+    assert(g.machineReady(*f));
+    pressA(g);
+    assert(count(g, 334) == 1 && g.placedAt(FX, FY)->rule < 0);
+
+    // jar takes any fruit and makes flavored jelly worth 2x + 50
+    face(g, FX + 2, FY);
+    selectItem(g, 15, SLOT_BIG);
+    pressA(g);
+    g.addItem(398, 1);
+    selectItem(g, 398);
+    pressA(g);
+    Placed* j = g.placedAt(FX + 2, FY);
+    assert(j && j->rule >= 0 && j->held.flavor == 398);
+    assert(g.itemName(j->held) == "Test Berry Jelly" && g.itemPrice(j->held) == 150);
+
+    // jar keeps working overnight; save/load keeps it
+    assert(g.save("/tmp/craft_test.sav"));
+    Game g2(d);
+    assert(g2.load("/tmp/craft_test.sav"));
+    assert(g2.skillLevel(SK_FARMING) == 1);
+    assert(g2.placed["Farm"].size() == 2);
+    g2.goToBed();
+    g2.teleport("Farm", FX + 2, FY - 1);
+    g2.facing = FACE_DOWN;
+    const Placed* j2 = nullptr;
+    for (auto& p : g2.placed["Farm"])
+        if (p.x == FX + 2) j2 = &p;
+    assert(j2 && g2.machineReady(*j2));
+    pressA(g2);
+    assert(count(g2, 344, SLOT_OBJECT, 398) == 1);
+
+    // chest: store and take back
+    face(g, FX + 4, FY);
+    selectItem(g, 130, SLOT_BIG);
+    pressA(g);
+    pressA(g);
+    assert(g.chestOpen && g.openChest());
+    int woodSlot = -1;
+    for (int i = 0; i < INV_SIZE; i++)
+        if (g.inv[i].type == SLOT_OBJECT && g.inv[i].id == 388) woodSlot = i;
+    int wood = count(g, 388);
+    g.chestTransfer(true, woodSlot);
+    assert(count(g, 388) == 0 && g.openChest()->items[0].count == wood);
+    g.chestTransfer(false, 0);
+    assert(count(g, 388) == wood);
+    g.closeChest();
+
+    // sprinkler waters its neighbours each morning
+    assert(g.craft(*recipe(d, "Sprinkler")));
+    const int SX = 50, SY = 26;
+    for (int dx = -1; dx <= 1; dx++) {   // till around it
+        g.teleport("Farm", SX + dx, SY - 1);
+    }
+    face(g, SX, SY);
+    selectItem(g, 599);
+    pressA(g);
+    assert(g.placedAt(SX, SY) && !g.placedAt(SX, SY)->big);
+    // pickaxe picks a placed thing back up
+    face(g, FX, FY);
+    for (int i = 0; i < INV_SIZE; i++)
+        if (g.inv[i].type == SLOT_TOOL && d.tool(g.inv[i].id)->kind == TOOL_PICKAXE) {
+            if (i >= HOTBAR) { g.swapSlots(i, 0); i = 0; }
+            g.selectSlot(i);
+        }
+    pressA(g);
+    assert(!g.placedAt(FX, FY) && count(g, 13, SLOT_BIG) == 1);
+    printf("all crafting tests passed\n");
+    return 0;
+}

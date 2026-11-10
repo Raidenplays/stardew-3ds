@@ -145,6 +145,7 @@ int main() {
         }
         if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
         if (!ui.shop.empty() && (kDown & KEY_B)) { ui.shop.clear(); ui.cart.clear(); }
+        if (game.chestOpen && (kDown & KEY_B)) game.closeChest();
 
         if (game.dialogue.active) {
             if (kDown & KEY_A) dialogueAdvance(game, ui);
