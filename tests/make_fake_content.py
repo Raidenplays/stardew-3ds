@@ -472,6 +472,43 @@ def tree_sheet():
     return img
 
 
+def title_sheet():
+    """Original stand-in for Minigames/TitleButtons: same layout, own art."""
+    img = Image.new("RGBA", (400, 360), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # sign board 400x187
+    d.rounded_rectangle([6, 10, 393, 180], radius=14, fill=(196, 140, 86), outline=(110, 66, 30), width=5)
+    for y in range(30, 170, 22):
+        d.line([14, y, 386, y], fill=(176, 120, 70), width=2)
+    for x, y in ((24, 24), (370, 24), (24, 160), (370, 160)):
+        d.ellipse([x, y, x + 8, y + 8], fill=(220, 220, 210), outline=(90, 90, 90))
+    # big blocky letters (own simple pixel lettering)
+    def word(text, x0, y0, s):
+        glyphs = {"S": ["111", "100", "111", "001", "111"], "T": ["111", "010", "010", "010", "010"],
+                  "A": ["111", "101", "111", "101", "101"], "R": ["110", "101", "110", "101", "101"],
+                  "D": ["110", "101", "101", "101", "110"], "E": ["111", "100", "110", "100", "111"],
+                  "W": ["101", "101", "101", "111", "101"], "3": ["111", "001", "011", "001", "111"]}
+        x = x0
+        for ch in text:
+            g = glyphs[ch]
+            for r, row in enumerate(g):
+                for c, bit in enumerate(row):
+                    if bit == "1":
+                        d.rectangle([x + c * s, y0 + r * s, x + c * s + s - 1, y0 + r * s + s - 1],
+                                    fill=(240, 226, 196), outline=(120, 70, 30))
+            x += 4 * s
+    word("STARDEW", 40, 40, 11)
+    word("3DS", 140, 110, 11)
+    # buttons 74x58 at y 187 (normal) and 245 (lit)
+    for row, lit in ((187, False), (245, True)):
+        for i, label in enumerate(("NEW", "LOAD", "COOP", "EXIT")):
+            x = i * 74
+            d.rectangle([x + 2, row + 2, x + 71, row + 55], fill=(255, 246, 214) if lit else (236, 214, 170),
+                        outline=(150, 90, 40), width=3)
+            d.text((x + 16, row + 20), label, fill=(200, 80, 70))
+    return img
+
+
 def crops_sheet():
     img = Image.new("RGBA", (256, 3 * 32), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -907,6 +944,7 @@ def main():
     save(objects_sheet(), "Maps/springobjects")
     save(crops_sheet(), "TileSheets/crops")
     save(craftables_sheet(), "TileSheets/Craftables")
+    save(title_sheet(), "Minigames/TitleButtons")
     save(tree_sheet(), "TerrainFeatures/tree1_spring")
     save(tools_sheet(), "TileSheets/tools")
     save(hoe_dirt(), "TerrainFeatures/hoeDirt")
