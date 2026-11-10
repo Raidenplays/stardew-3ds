@@ -133,6 +133,7 @@ int main() {
         if (kHeld & KEY_DUP) in.my = -1;
         if (kHeld & KEY_DDOWN) in.my = 1;
         in.walk = kHeld & KEY_B;
+        in.hold = kHeld & (KEY_A | KEY_Y);
         in.prev = kDown & KEY_L;
         in.next = kDown & KEY_R;
         bool aDown = kDown & (KEY_A | KEY_Y);

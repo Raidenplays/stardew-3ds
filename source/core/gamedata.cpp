@@ -193,6 +193,8 @@ bool GameData::load(const std::string& root, std::string* err) {
         t.upgrade = atoi(f[3].c_str());
         t.spriteIndex = atoi(f[4].c_str());
         t.texture = f[5];
+        if (f.size() > 6) t.price = atoi(f[6].c_str());
+        if (f.size() > 7) t.upgradeFrom = f[7];
         t.kind = classify(t.className, t.key);
         tools.push_back(t);
     }
@@ -446,6 +448,13 @@ const ToolDef* GameData::toolByKind(ToolKind k) const {
     for (auto& t : tools)
         if (t.kind == k && (!best || t.upgrade < best->upgrade)) best = &t;
     return best;
+}
+
+int GameData::toolUpgrade(int index) const {
+    if (index < 0 || index >= (int)tools.size()) return -1;
+    for (size_t i = 0; i < tools.size(); i++)
+        if (!tools[i].upgradeFrom.empty() && tools[i].upgradeFrom == tools[index].key) return (int)i;
+    return -1;
 }
 
 const ToolDef* GameData::tool(int index) const {

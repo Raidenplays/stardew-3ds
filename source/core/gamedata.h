@@ -44,6 +44,8 @@ struct ToolDef {
     std::string key, className, name, texture;
     int upgrade = 0;
     int spriteIndex = 0;
+    int price = -1;                  // Clint's upgrade price (gold) for this level
+    std::string upgradeFrom;         // key of the tool this one upgrades
     ToolKind kind = TOOL_OTHER;
 };
 
@@ -169,6 +171,7 @@ public:
     const ObjectDef* object(int id) const;
     const ToolDef* toolByKind(ToolKind k) const;   // upgrade level 0 version
     const ToolDef* tool(int index) const;
+    int toolUpgrade(int index) const;              // index of the next level, -1 = none
     int toolCount() const { return (int)tools.size(); }
 
     std::unordered_map<int, CropDef> crops;      // keyed by seed id

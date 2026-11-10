@@ -491,6 +491,13 @@ def tools_sheet():
     x = 64
     d.line([x + 6, 15, x + 9, 3], fill=(139, 90, 43), width=2)
     d.polygon([(x + 9, 3), (x + 15, 5), (x + 14, 8), (x + 9, 5)], fill=(185, 194, 202), outline=(74, 79, 85))
+    x = 80   # copper hoe
+    d.line([x + 3, 14, x + 12, 4], fill=(139, 90, 43), width=2)
+    d.polygon([(x + 10, 1), (x + 15, 1), (x + 15, 5), (x + 12, 5)], fill=(214, 134, 74), outline=(120, 66, 30))
+    x = 96   # copper can
+    d.rectangle([x + 3, 6, x + 11, 14], fill=(214, 134, 74), outline=(120, 66, 30))
+    d.line([x + 11, 9, x + 15, 5], fill=(120, 66, 30), width=2)
+    d.arc([x + 4, 2, x + 10, 10], 180, 360, fill=(120, 66, 30))
     return img
 
 
@@ -711,6 +718,10 @@ def data_files():
         "Axe": {"ClassName": "Axe", "Name": "Axe", "SpriteIndex": 2, "UpgradeLevel": 0},
         "Pickaxe": {"ClassName": "Pickaxe", "Name": "Pickaxe", "SpriteIndex": 3, "UpgradeLevel": 0},
         "Scythe": {"ClassName": "MeleeWeapon", "Name": "Scythe", "SpriteIndex": 4, "UpgradeLevel": 0},
+        "CopperHoe": {"ClassName": "Hoe", "Name": "Copper Hoe", "SpriteIndex": 5, "UpgradeLevel": 1,
+                      "SalePrice": 2000, "ConventionalUpgradeFrom": "(T)Hoe"},
+        "CopperWateringCan": {"ClassName": "WateringCan", "Name": "Copper Watering Can", "SpriteIndex": 6,
+                              "UpgradeLevel": 1, "SalePrice": 2000, "ConventionalUpgradeFrom": "(T)WateringCan"},
     }
     for t in tools.values():
         t["Texture"] = "TileSheets\\tools"

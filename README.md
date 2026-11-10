@@ -281,7 +281,8 @@ mkdir -p shots && tools/preview/preview out/3ds/stardew3ds/ shots
 4. **Systems**: skills + crafting + machines + chests + sprinklers done
    (Craft tab; recipes, machines and artisan pricing come from your own
    Data/CraftingRecipes, BigCraftables and Machines). Still to come: tool
-   upgrades, cooking, trees, fishing minigame
+   cooking, trees, fishing minigame. Tool upgrades at the blacksmith done
+   (Upgrade tab in his shop; hold A with an upgraded hoe/can to charge)
 5. **Mines and combat**: floors, monsters, weapons, ore
 6. **Animals and buildings**: coops, barns, Robin's construction
 7. **Community Center**: bundles, Joja, festivals, events

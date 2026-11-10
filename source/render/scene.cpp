@@ -413,8 +413,21 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     drawLayer(L_FRONT, 1.0f);
     drawLayer(L_ALWAYSFRONT, 1.5f);
 
+    if (g.charging && !cs.active) {   // charged hoe / can: show the area and a meter
+        std::vector<std::pair<int, int>> tiles;
+        int lv = g.chargeLevel();
+        g.chargedTiles(lv, tiles);
+        for (auto& t : tiles)
+            c.rect(t.first * TILE - camX + c.shift(-1.0f), t.second * TILE - camY, 16, 16,
+                   RGBA(0xFF, 0xFF, 0xFF, 0x50));
+        const ToolDef* td = g.data.tool(g.inv[g.selected].id);
+        int max = td ? std::max(1, td->upgrade) : 1;
+        float bx = std::floor(g.px - 12 - camX), by = std::floor(g.py - 44 - camY);
+        c.rect(bx, by, 24, 5, RGBA(0x30, 0x20, 0x10, 0xD0));
+        c.rect(bx + 1, by + 1, 22.0f * lv / max, 3, RGBA(0xFF, 0xD0, 0x40));
+    }
     const Slot& sel = g.inv[g.selected];
-    if (!sel.empty() && g.toolTimer <= 0 && !cs.active) {
+    if (!sel.empty() && g.toolTimer <= 0 && !cs.active && !g.charging) {
         int tx, ty;
         g.targetTile(tx, ty);
         float cx = tx * TILE - camX + c.shift(-1.0f), cy = ty * TILE - camY;
@@ -473,7 +486,7 @@ static void drawHud(Canvas& c, Game& g) {
         if (td && td->kind == TOOL_CAN) {
             float wx = TOP_W - 34 + hs, wy = TOP_H - 74;
             box(c, wx - 2, wy - 2, 14, 72, COL_PANEL, COL_BORDER);
-            float wk = (float)g.water / CAN_CAPACITY;
+            float wk = (float)g.water / g.canCapacity();
             c.rect(wx + 1, wy + 1 + 66 * (1 - wk), 8, 66 * wk, COL_WATER);
         }
     }
@@ -1039,14 +1052,50 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
     box(c, BOT_W - 38, 7, 28, 26, COL_PANEL_DARK, COL_BORDER, 1);
     c.text(BOT_W - 24, 10, 0.5f, COL_TEXT, "X", ALIGN_CENTER);
 
-    // Buy / Sell toggle
-    for (int i = 0; i < 2; i++) {
-        bool on = (i == 1) == ui.shopSell;
+    // Buy / Sell (/ Upgrade at the blacksmith) toggle
+    bool smith = ui.shop == "Blacksmith";
+    for (int i = 0; i < (smith ? 3 : 2); i++) {
+        bool on = i == 2 ? ui.shopUpgrade : (!ui.shopUpgrade && (i == 1) == ui.shopSell);
         box(c, 4 + i * 60, 38, 58, 18, on ? COL_PANEL : COL_TAB_OFF, COL_BORDER, 1);
-        c.text(33 + i * 60, 39, 0.45f, COL_TEXT, i ? "Sell" : "Buy", ALIGN_CENTER);
+        c.text(33 + i * 60, 39, 0.45f, COL_TEXT, i == 2 ? "Upgrade" : (i ? "Sell" : "Buy"), ALIGN_CENTER);
     }
+    float scrollX = smith ? 190 : 128;
 
-    if (!ui.shopSell) {
+    if (ui.shopUpgrade) {
+        auto offers = g.upgradeOffers();
+        if (g.upgradeTool >= 0) {
+            const ToolDef* t = g.data.tool(g.upgradeTool);
+            int left = g.upgradeReadyDay - g.absoluteDay();
+            std::string msg = (t ? t->name : std::string("Your tool")) +
+                              (left > 0 ? " - ready in " + std::to_string(left) + (left == 1 ? " day" : " days")
+                                        : " is ready!");
+            box(c, 4, LIST_Y, BOT_W - 8, ROW_H - 2, COL_SLOT_ON, COL_SEL, 1);
+            Slot ts; ts.type = SLOT_TOOL; ts.id = g.upgradeTool; ts.count = 1;
+            slotIcon(c, g, ts, 8, LIST_Y + 3);
+            c.text(28, LIST_Y + 4, 0.42f, COL_TEXT, msg);
+        }
+        float y0 = LIST_Y + (g.upgradeTool >= 0 ? ROW_H + 4 : 0);
+        for (size_t i = 0; i < offers.size() && i < 5; i++) {
+            const UpgradeOffer& o = offers[i];
+            float y = y0 + i * (ROW_H + 6);
+            box(c, 4, y, BOT_W - 8, ROW_H + 4, COL_SLOT, COL_SLOT_EDGE, 1);
+            Slot ts; ts.type = SLOT_TOOL; ts.id = o.next; ts.count = 1;
+            slotIcon(c, g, ts, 8, y + 5);
+            const ToolDef* t = g.data.tool(o.next);
+            c.text(28, y + 1, 0.45f, COL_TEXT, t ? t->name : "?");
+            int have = o.bar >= 0 ? g.countOf(Ingredient{o.bar, o.bars, false}) : 0;
+            const ObjectDef* bar = g.data.object(o.bar);
+            snprintf(buf, sizeof buf, "%dg + %d/%d %s", o.price, std::min(have, 99), o.bars,
+                     bar ? bar->name.c_str() : "bars");
+            bool ok = g.money >= o.price && have >= o.bars && g.upgradeTool < 0;
+            c.text(28, y + 14, 0.36f, ok ? COL_GREEN : COL_TEXT_SOFT, buf);
+            box(c, 232, y + 4, 78, 20, ok ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK, 1);
+            c.text(271, y + 6, 0.42f, COL_CREAM, "Upgrade", ALIGN_CENTER);
+        }
+        if (offers.empty() && g.upgradeTool < 0)
+            c.text(160, 110, 0.45f, COL_PANEL, "Nothing to upgrade.", ALIGN_CENTER);
+        c.text(8, 214, 0.36f, COL_CREAM, "Takes 2 days. Come back to pick it up.");
+    } else if (!ui.shopSell) {
         auto stock = g.shopStock(ui.shop);
         ui.shopScroll = std::max(0, std::min(ui.shopScroll, (int)stock.size() - SHOP_ROWS));
         for (int r = 0; r < SHOP_ROWS; r++) {
@@ -1070,10 +1119,10 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
         }
         if (stock.empty()) c.text(160, 110, 0.5f, COL_PANEL, "Nothing for sale right now.", ALIGN_CENTER);
         if ((int)stock.size() > SHOP_ROWS) {
-            box(c, 128, 38, 40, 18, COL_PANEL_DARK, COL_BORDER, 1);
-            c.text(148, 39, 0.42f, COL_TEXT, "Up", ALIGN_CENTER);
-            box(c, 172, 38, 40, 18, COL_PANEL_DARK, COL_BORDER, 1);
-            c.text(192, 39, 0.42f, COL_TEXT, "Down", ALIGN_CENTER);
+            box(c, scrollX, 38, 40, 18, COL_PANEL_DARK, COL_BORDER, 1);
+            c.text(scrollX + 20, 39, 0.42f, COL_TEXT, "Up", ALIGN_CENTER);
+            box(c, scrollX + 44, 38, 40, 18, COL_PANEL_DARK, COL_BORDER, 1);
+            c.text(scrollX + 64, 39, 0.42f, COL_TEXT, "Down", ALIGN_CENTER);
         }
         int total = cartTotal(g, ui);
         bool afford = total <= g.money;
@@ -1107,10 +1156,20 @@ static void touchShop(Game& g, Ui& ui, int tx, int ty) {
         ui.cart.clear();
         return;
     }
-    if (hit(tx, ty, 4, 38, 58, 18)) { ui.shopSell = false; ui.shopScroll = 0; return; }
-    if (hit(tx, ty, 64, 38, 58, 18)) { ui.shopSell = true; ui.shopScroll = 0; return; }
-    if (hit(tx, ty, 128, 38, 40, 18)) { ui.shopScroll--; return; }
-    if (hit(tx, ty, 172, 38, 40, 18)) { ui.shopScroll++; return; }
+    bool smith = ui.shop == "Blacksmith";
+    float scrollX = smith ? 190 : 128;
+    if (hit(tx, ty, 4, 38, 58, 18)) { ui.shopSell = false; ui.shopUpgrade = false; ui.shopScroll = 0; return; }
+    if (hit(tx, ty, 64, 38, 58, 18)) { ui.shopSell = true; ui.shopUpgrade = false; ui.shopScroll = 0; return; }
+    if (smith && hit(tx, ty, 124, 38, 58, 18)) { ui.shopUpgrade = true; return; }
+    if (ui.shopUpgrade) {
+        auto offers = g.upgradeOffers();
+        float y0 = LIST_Y + (g.upgradeTool >= 0 ? ROW_H + 4 : 0);
+        for (size_t i = 0; i < offers.size() && i < 5; i++)
+            if (hit(tx, ty, 232, y0 + i * (ROW_H + 6) + 4, 78, 20)) { g.startUpgrade(offers[i]); return; }
+        return;
+    }
+    if (hit(tx, ty, scrollX, 38, 40, 18)) { ui.shopScroll--; return; }
+    if (hit(tx, ty, scrollX + 44, 38, 40, 18)) { ui.shopScroll++; return; }
     if (!ui.shopSell) {
         auto stock = g.shopStock(ui.shop);
         for (int r = 0; r < SHOP_ROWS; r++) {
@@ -1213,6 +1272,7 @@ bool sceneAfterUpdate(Game& g, Ui& ui, const std::string& savePath) {
     if (!g.openShop.empty()) {
         ui.shop = g.openShop;
         ui.shopSell = false;
+        ui.shopUpgrade = false;
         ui.shopScroll = 0;
         ui.cart.clear();
         g.openShop.clear();
