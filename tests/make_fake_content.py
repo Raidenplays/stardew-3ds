@@ -766,6 +766,14 @@ def data_files():
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
     # crafting: placeholder recipes in the 1.6 formats
+    # placeholder letters (own wording) + a trigger, in the 1.6 formats
+    json.dump({
+        "spring_2_1": "Dear @,^Some wood for your new place.^- The Test Town Council%item object 388 10 %%[#]Welcome Wood",
+        "testQuestLetter": "Hi @,^Could you take a walk into town?%item quest 7 %%[#]A Walk",
+    }, open(os.path.join(C, "Data/mail.json"), "w"), indent=1)
+    json.dump([{"Id": "Test_Day3", "Trigger": "DayStarted", "Condition": "DAY_OF_MONTH 3",
+                "Action": "AddMail Current testQuestLetter", "MarkActionApplied": True}],
+              open(os.path.join(C, "Data/TriggerActions.json"), "w"), indent=1)
     # placeholder quests (own wording) in the 1.6 Data/Quests format
     json.dump({
         "6": "ItemHarvest/First Crop/Grow something./Harvest a parsnip./(O)24/h7/100/-1/true",

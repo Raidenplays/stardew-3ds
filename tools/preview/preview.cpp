@@ -76,7 +76,8 @@ int main(int argc, char** argv) {
     std::string modsArg;    // "a,b" or "auto" (mods.txt + new mods)
     bool modScreenShot = false;
     bool craftDemo = false;
-    bool fishDemo = false;    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    bool fishDemo = false;
+    bool mailDemo = false;    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
@@ -85,6 +86,7 @@ int main(int argc, char** argv) {
         else if (a == "--modscreen") modScreenShot = true;
         else if (a == "--craft") craftDemo = true;
         else if (a == "--fish") fishDemo = true;
+        else if (a == "--mail") mailDemo = true;
         else font = a;
     }
 
@@ -130,6 +132,18 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (mailDemo) {
+        g.passedOut = true;
+        g.goToBed();
+        step(g, ui, none, 10);
+        ui.showSummary = false;
+        g.levelUps.clear();
+        step(g, ui, none, 10);
+        shot(c, g, ui, "mail_waiting");
+        if (g.openMail()) shot(c, g, ui, "letter");
+        return 0;
+    }
 
     if (fishDemo) {
         g.timeOfDay = 9 * 60;

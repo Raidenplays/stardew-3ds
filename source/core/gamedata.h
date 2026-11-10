@@ -118,6 +118,12 @@ struct QuestDef {
     int reward = 0;
 };
 
+struct MailTrigger {
+    std::string id, when;            // "DayStarted" / "DayEnding"
+    std::string condition;           // game query, "-" = always
+    std::vector<std::string> actions;
+};
+
 struct BuildingDef {
     std::string name, texture;
     int srcX = 0, srcY = 0, srcW = 0, srcH = 0;
@@ -222,6 +228,8 @@ public:
     std::unordered_map<int, TreeDef> trees;   // by type
     std::unordered_map<int, FishDef> fish;
     std::unordered_map<std::string, QuestDef> quests;
+    std::unordered_map<std::string, std::string> mail;   // key -> letter text
+    std::vector<MailTrigger> mailTriggers;
     const QuestDef* quest(const std::string& id) const;
     std::unordered_map<std::string, std::vector<FishSpot>> fishSpots;   // by location ("Default" = everywhere)
     const TreeDef* treeForSeed(int objId) const;

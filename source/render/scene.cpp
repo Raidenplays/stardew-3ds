@@ -564,6 +564,8 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     }
 }
 
+static void countText(Canvas& c, float rightX, float y, int count);
+
 static void drawHud(Canvas& c, Game& g) {
     float hs = c.shift(3.0f);
     static const char* days[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
@@ -605,6 +607,17 @@ static void drawHud(Canvas& c, Game& g) {
         c.text(x + 6, y + 34, 0.45f, COL_TEXT, seasonShort(g.season));
     }
 
+    if (!g.mailbox.empty() && !g.letterOpen) {   // you've got mail
+        static uint32_t t = 0;
+        t++;
+        float bob = (t / 8) % 2 ? 1.0f : 0.0f;
+        float mx = TOP_W - 30 + hs, my = 70 + bob;
+        c.rect(mx, my, 20, 14, RGBA(0x5A, 0x24, 0x0C));
+        c.rect(mx + 1, my + 1, 18, 12, RGBA(0xFA, 0xEE, 0xD2));
+        c.line(mx + 1, my + 1, mx + 10, my + 8, RGBA(0x8A, 0x4A, 0x20), 1);
+        c.line(mx + 19, my + 1, mx + 10, my + 8, RGBA(0x8A, 0x4A, 0x20), 1);
+        if (g.mailbox.size() > 1) countText(c, mx + 22, my + 8, (int)g.mailbox.size());
+    }
     float ex = TOP_W - 16 + hs, ey = TOP_H - 74;
     box(c, ex - 2, ey - 2, 14, 72, COL_PANEL, COL_BORDER);
     c.rect(ex + 1, ey + 1, 8, 66, COL_ENERGY_BG);
@@ -1447,6 +1460,73 @@ void fishingTouch(const sv::Game& g, bool down, bool held, int x, int y, sv::Inp
     }
 }
 
+// ---------------------------------------------------------------- letters
+static const float LT_BTN_Y = 206;
+
+static void drawLetter(Canvas& c, Game& g) {
+    const Game::Letter& L = g.letter;
+    c.rect(0, 0, BOT_W, BOT_H, COL_BG);
+    if (c.texWidth("LooseSprites_letterBG") > 0)
+        c.image("LooseSprites_letterBG", 0, 0, 312, 196, 4, 4);   // the paper from your files
+    else
+        box(c, 4, 4, 312, 196, RGBA(0xFA, 0xEE, 0xD2), COL_BORDER, 2);
+    // body: '^' is a line break in letters
+    float textH = L.items.empty() && L.money <= 0 ? 186 : 150;
+    std::string body = L.text;
+    {
+        std::string ln, word, rest = body + " ";
+        float y = 14;
+        auto flush = [&](bool force) {
+            if (y < 4 + textH) c.text(16, y, 0.42f, COL_TEXT, ln);
+            y += 14;
+            ln.clear();
+            (void)force;
+        };
+        for (char ch : rest) {
+            if (ch == ' ' || ch == '^') {
+                if (c.textWidth(ln + word, 0.42f) > 288 && !ln.empty()) flush(false);
+                ln += word + " ";
+                word.clear();
+                if (ch == '^') flush(true);
+            } else {
+                word += ch;
+            }
+        }
+        if (!ln.empty()) flush(true);
+    }
+    // attachments
+    if (!L.items.empty() || L.money > 0) {
+        float x = 16, y = 164;
+        for (auto& it : L.items) {
+            box(c, x, y, 26, 26, COL_SLOT, COL_SLOT_EDGE, 1);
+            itemIcon(c, g.data.object(it.first), x + 5, y + 5);
+            if (it.second > 1) countText(c, x + 24, y + 16, it.second);
+            x += 30;
+        }
+        if (L.money > 0) {
+            char buf[32];
+            snprintf(buf, sizeof buf, "%dg", L.money);
+            c.text(x + 4, y + 6, 0.5f, COL_TEXT, buf);
+        }
+    }
+    bool hasStuff = !L.items.empty() || L.money > 0;
+    if (hasStuff) {
+        box(c, 8, LT_BTN_Y, 150, 28, COL_GREEN, COL_GREEN_DARK, 2);
+        c.text(83, LT_BTN_Y + 6, 0.48f, COL_CREAM, "Take", ALIGN_CENTER);
+    }
+    box(c, hasStuff ? 162 : 8, LT_BTN_Y, hasStuff ? 150 : 304, 28, COL_PANEL_DARK, COL_BORDER, 2);
+    c.text(hasStuff ? 237 : 160, LT_BTN_Y + 6, 0.48f, COL_TEXT, g.mailbox.size() > 1 ? "Next letter" : "Close", ALIGN_CENTER);
+}
+
+static void touchLetter(Game& g, int tx, int ty) {
+    bool hasStuff = !g.letter.items.empty() || g.letter.money > 0;
+    if (hasStuff && hit(tx, ty, 8, LT_BTN_Y, 150, 28)) { g.takeLetterItems(); return; }
+    if (hit(tx, ty, hasStuff ? 162 : 8, LT_BTN_Y, hasStuff ? 150 : 304, 28)) {
+        g.closeLetter();
+        g.openMail();   // straight on to the next one, if any
+    }
+}
+
 // ---------------------------------------------------------------- journal
 static const int QJ_ROWS = 4, QJ_ROW_H = 18, QJ_Y = PANEL_Y + 18;
 
@@ -1614,6 +1694,7 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
     }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
     if (g.fishingActive()) { drawFishing(c, g); return; }
+    if (g.letterOpen) { drawLetter(c, g); return; }
     if (g.chestOpen) { drawChest(c, g); return; }
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     drawHotbarAndTabs(c, g, ui);
@@ -1631,6 +1712,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
     if (g.fishingActive()) return;   // handled by fishingTouch() as input
+    if (g.letterOpen) { touchLetter(g, tx, ty); return; }
     if (g.chestOpen) { touchChest(g, tx, ty); return; }
     int s = slotAt(tx, ty, ui.tab == TAB_ITEMS);
     if (s >= 0) {

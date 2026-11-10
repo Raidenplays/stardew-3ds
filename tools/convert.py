@@ -72,6 +72,7 @@ EXTRA_TEXTURES = [
     ("LooseSprites/Cursors", False),
     ("LooseSprites/emotes", False),
     ("LooseSprites/font_bold", False),
+    ("LooseSprites/letterBG", False),
 ]
 
 # Maps are discovered from Maps/*.tmx; these must exist.
@@ -595,6 +596,7 @@ def write_data(content, out_dir):
     write_trees(content, out_dir)
     write_fish(content, out_dir)
     write_quests(content, out_dir)
+    write_mail(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -855,6 +857,44 @@ def write_quests(content, out_dir):
                 int(p[6]) if p[6].strip().lstrip("-").isdigit() else 0]) + "\n")
             n += 1
     print(f"  quests.dat: {n} quests")
+
+
+def write_mail(content, out_dir):
+    """data/mail.dat (letters; item ids converted) and data/mailtriggers.dat (when they arrive)."""
+    mail = _load_json(content, "Data/mail.json")
+
+    def fix_items(text):
+        def conv(m):
+            kind, rest = m.group(1), m.group(2).split()
+            if kind in ("object", "id") and rest:
+                out, i = [], 0
+                while i < len(rest):
+                    ref = rest[i]
+                    iid = ITEM_IDS.get(ref) if not ref.startswith("(") or ref.startswith("(O)") else None
+                    cnt = rest[i + 1] if i + 1 < len(rest) and rest[i + 1].isdigit() else "1"
+                    if iid is not None:
+                        out += [str(iid), cnt]
+                    i += 2
+                return f"%item object {' '.join(out)} %%" if out else ""
+            return m.group(0)
+        return re.sub(r"%item (\w+)([^%]*)%%", conv, text)
+
+    n = 0
+    with open(os.path.join(out_dir, "mail.dat"), "w", encoding="utf-8") as f:
+        for key, text in mail.items():
+            f.write(f"{_clean(key)}\t{_clean(fix_items(str(text)))}\n")
+            n += 1
+    trig = _load_json(content, "Data/TriggerActions.json") or []
+    m = 0
+    with open(os.path.join(out_dir, "mailtriggers.dat"), "w", encoding="utf-8") as f:
+        for t in trig:
+            acts = t.get("Actions") or ([t["Action"]] if t.get("Action") else [])
+            if not acts:
+                continue
+            f.write("\t".join(_clean(x) for x in [
+                t.get("Id", ""), t.get("Trigger", ""), t.get("Condition") or "-", "|".join(acts)]) + "\n")
+            m += 1
+    print(f"  mail.dat: {n} letters, mailtriggers.dat: {m}")
 
 
 # ---------------------------------------------------------------- crafting / machines

@@ -300,6 +300,29 @@ public:
     void chestTransfer(bool toChest, int index);   // whole stack
     void closeChest() { chestOpen = false; }
 
+    // ---- mail (game_mail.cpp) ----
+    std::vector<std::string> mailbox;        // unread letters, oldest first
+    std::set<std::string> mailTomorrow;      // arrives next morning
+    std::set<std::string> triggersApplied;
+    long long totalEarned = 0;               // for "money earned" conditions
+    void deliverMorningMail();               // dated letters + DayStarted triggers
+    void runTriggers(const std::string& when);
+    bool checkCondition(const std::string& query) const;
+    // reading: the letter at the front of the mailbox
+    struct Letter {
+        std::string key, text, title;
+        std::vector<std::pair<int, int>> items;   // object id, count
+        int money = 0;
+        std::string quest, recipe;               // added when read
+        bool cooking = false;
+    };
+    bool letterOpen = false;
+    Letter letter;
+    bool openMail();                         // false = mailbox empty
+    void takeLetterItems();
+    void closeLetter();
+    static Letter parseLetter(const std::string& key, const std::string& raw, const std::string& farmer);
+
     // ---- quests (game_quests.cpp) ----
     std::vector<QuestState> quests;          // the journal
     std::set<std::string> questsFinished;    // collected, never offered again
