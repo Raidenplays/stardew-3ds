@@ -1606,7 +1606,6 @@ def main():
         print(__doc__)
         print("Options: --mods=<folder with Content Patcher packs, e.g. SVE / Ridgeside>")
         print("         --jobs=N  processes to use (default: all CPU cores, 1 = no parallel work)")
-        print("         --logo=FILE.png  your logo for the 'Ported by' credit")
         sys.exit(1)
     t_start = time.time()
     stamp = [time.time()]
@@ -1711,27 +1710,6 @@ def main():
     write_events(content, os.path.join(out_root, "data"))
     print("Fonts...")
     write_fonts(content, out_root)
-    write_badge(out_root)
-    # your own logo for the "Ported by" credit (--logo=path/to/logo.png)
-    logo = opts.get("--logo")
-    if logo and logo is not True:
-        if os.path.isfile(logo):
-            img = Image.open(logo).convert("RGBA")
-            bb = img.getchannel("A").getbbox()
-            if bb:
-                img = img.crop(bb)
-            # keep it screen-sized: 150px tall at most. Big paintings shrink smoothly;
-            # small pixel art is left alone (the 3DS scales it up in whole steps)
-            if img.size[0] > 240 or img.size[1] > 150:
-                k = min(240 / img.size[0], 150 / img.size[1])
-                img = img.resize((max(1, round(img.size[0] * k)), max(1, round(img.size[1] * k))), Image.LANCZOS)
-            tmp = os.path.join(out_root, "tex", "_logo.png")
-            img.save(tmp)
-            convert_texture(tmp, os.path.join(out_root, "tex", "UiLogo_user.s3t"))
-            os.remove(tmp)
-            print(f"  your logo: {img.size[0]}x{img.size[1]}")
-        else:
-            print(f"  ! --logo file not found: {logo}")
     took("data, villagers, events")
 
     for t in sorted(TEXTURES_FROM_DATA):

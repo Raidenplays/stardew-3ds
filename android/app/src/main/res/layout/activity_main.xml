@@ -22,11 +22,6 @@
         <TextView android:id="@+id/modsName" style="@style/Value" />
         <Button android:id="@+id/clearMods" style="@style/Small" android:text="x" />
     </LinearLayout>
-    <LinearLayout style="@style/Row">
-        <Button android:id="@+id/pickLogo" style="@style/Btn" android:text="Your logo" />
-        <TextView android:id="@+id/logoName" style="@style/Value" />
-        <Button android:id="@+id/clearLogo" style="@style/Small" android:text="x" />
-    </LinearLayout>
 
     <!-- 2. convert -->
     <TextView style="@style/Label" android:text="2. Convert" />

@@ -16,7 +16,7 @@ SOURCES		:=	source source/core source/platform source/render
 DATA		:=	data
 INCLUDES	:=	source
 GRAPHICS	:=
-ROMFS		:=
+ROMFS		:=	romfs
 
 APP_TITLE	:=	stardew3ds
 APP_DESCRIPTION	:=	Farming engine for your own Stardew Valley assets
