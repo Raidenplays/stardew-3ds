@@ -157,7 +157,13 @@ int main() {
             in = Input();
             dt = 0;
         }
-        if (kDown & KEY_TOUCH) {
+        if (game.fishingActive()) {
+            if (kHeld & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                fishingTouch(game, kDown & KEY_TOUCH, true, tp.px, tp.py, in);
+            }
+        } else if (kDown & KEY_TOUCH) {
             touchPosition tp;
             hidTouchRead(&tp);
             touchBottom(game, ui, tp.px, tp.py, savePath);

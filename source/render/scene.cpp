@@ -461,21 +461,6 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 c.text(pxs, pys - 58, 0.55f, RGBA(0xD0, 0x20, 0x20), "!", ALIGN_CENTER);
             }
         }
-        if (f.state == FS_REEL) {   // the reeling meter, beside the farmer
-            float mx = std::min(pxs + 24.0f, (float)TOP_W - 64), my = 56;
-            const float H = 140;
-            c.rect(mx - 3, my - 3, 36, H + 6, RGBA(0x85, 0x3D, 0x1A));
-            c.rect(mx, my, 24, H, RGBA(0x3A, 0x7C, 0xC8));
-            float barY = my + H * (1 - f.barPos - f.barSize);
-            c.rect(mx + 1, barY, 22, H * f.barSize, RGBA(0x7C, 0xD0, 0x42, 0xD0));
-            float fy = my + H * (1 - f.fishPos) - 8;
-            itemIcon(c, g.data.object(f.fish), mx + 4, std::max(my, std::min(my + H - 16, fy)));
-            c.rect(mx + 26, my, 4, H, RGBA(0x30, 0x20, 0x10));
-            float ph = H * std::max(0.0f, std::min(1.0f, f.progress));
-            uint32_t pc = f.progress > 0.66f ? RGBA(0x7C, 0xD0, 0x42)
-                        : f.progress > 0.33f ? RGBA(0xFF, 0xD0, 0x40) : RGBA(0xE0, 0x50, 0x30);
-            c.rect(mx + 26, my + H - ph, 4, ph, pc);
-        }
     }
     if (g.charging && !cs.active) {   // charged hoe / can: show the area and a meter
         std::vector<std::pair<int, int>> tiles;
@@ -1265,6 +1250,109 @@ static void touchShop(Game& g, Ui& ui, int tx, int ty) {
 }
 
 // --------------------------------------------------------------- summary
+// ---------------------------------------------------------------- fishing takeover
+// Bottom screen while fishing: the reeling meter on the left, what to do on
+// the right, a big button. The top screen stays on you at the water's edge.
+static const float FM_X = 10, FM_Y = 8, FM_W = 76, FM_H = 224;
+static const float FB_X = 94, FB_Y = 166, FB_W = 216, FB_H = 64;   // big button
+
+static void drawFishing(Canvas& c, Game& g) {
+    const Fishing& f = g.fishing;
+    c.rect(0, 0, BOT_W, BOT_H, COL_BG);
+    // meter panel
+    box(c, FM_X, FM_Y, FM_W, FM_H, COL_PANEL, COL_BORDER, 2);
+    float wx = FM_X + 14, wy = FM_Y + 8, ww = 30, wh = FM_H - 16;
+    box(c, wx, wy, ww, wh, RGBA(0x2F, 0x6F, 0xA0), RGBA(0x1C, 0x3C, 0x5C), 2);
+    float px2 = wx + ww + 6, pw2 = 10;
+    box(c, px2, wy, pw2, wh, RGBA(0x5C, 0x3A, 0x22), RGBA(0x30, 0x20, 0x10), 2);
+    if (f.state == FS_REEL || (f.state == FS_DONE && f.fish >= 0)) {
+        float inner = wh - 4;
+        float barH = inner * f.barSize, barY = wy + 2 + inner * (1 - f.barPos - f.barSize);
+        c.rect(wx + 2, barY, ww - 4, barH, RGBA(0x7C, 0xC8, 0x6A));
+        c.rect(wx + 2, barY, ww - 4, 2, RGBA(0x4E, 0x96, 0x3E));
+        c.rect(wx + 2, barY + barH - 2, ww - 4, 2, RGBA(0x4E, 0x96, 0x3E));
+        float fy = wy + 2 + inner * (1 - f.fishPos) - 8;
+        fy = std::max(wy + 2, std::min(wy + wh - 18, fy));
+        itemIcon(c, g.data.object(f.fish), wx + ww / 2 - 8, fy);
+        float ph = (wh - 4) * std::max(0.0f, std::min(1.0f, f.progress));
+        uint32_t pc = f.progress > 0.66f ? RGBA(0x7C, 0xD0, 0x42)
+                    : f.progress > 0.33f ? RGBA(0xF0, 0xC0, 0x30) : RGBA(0xE0, 0x50, 0x30);
+        c.rect(px2 + 2, wy + wh - 2 - ph, pw2 - 4, ph, pc);
+    }
+
+    // what's happening
+    std::string title, line;
+    switch (f.state) {
+        case FS_CHARGE: title = "Casting..."; line = "Let go of A to cast. Further when the meter is full."; break;
+        case FS_CAST:
+        case FS_WAIT: title = "Waiting for a bite"; line = "Watch the bobber. Something will nibble soon."; break;
+        case FS_BITE: title = "Something's biting!"; line = "Press A or tap the button now!"; break;
+        case FS_REEL: title = "Fish on!"; line = "Keep the green bar over the fish until the meter fills."; break;
+        case FS_DONE: {
+            const ObjectDef* o = g.data.object(f.fish);
+            title = f.caught ? "Caught it!" : "It got away...";
+            line = f.caught ? (o ? o->name : std::string("A fish")) +
+                                  (f.size > 0 ? "  " + std::to_string(f.size) + " in" : std::string()) +
+                                  (f.perfect && f.size > 0 ? "  Perfect!" : "")
+                            : "Keep the bar on the fish next time.";
+            break;
+        }
+        default: break;
+    }
+    box(c, FB_X, FM_Y, FB_W, 64, COL_PANEL, COL_BORDER, 2);
+    c.text(FB_X + 8, FM_Y + 4, 0.58f, COL_TEXT, title);
+    // wrap the line
+    {
+        std::string ln, word, rest = line + " ";
+        float y = FM_Y + 26;
+        for (char ch : rest) {
+            if (ch == ' ') {
+                if (c.textWidth(ln + word, 0.4f) > FB_W - 16 && !ln.empty()) {
+                    c.text(FB_X + 8, y, 0.4f, COL_TEXT_SOFT, ln);
+                    y += 14;
+                    ln.clear();
+                }
+                ln += word + " ";
+                word.clear();
+            } else {
+                word += ch;
+            }
+        }
+        c.text(FB_X + 8, y, 0.4f, COL_TEXT_SOFT, ln);
+    }
+    if (f.state == FS_REEL) {
+        box(c, FB_X, FM_Y + 72, FB_W, 80, COL_SLOT, COL_SLOT_EDGE, 1);
+        c.text(FB_X + 8, FM_Y + 78, 0.42f, COL_TEXT, "Hold A or touch and hold anywhere");
+        c.text(FB_X + 8, FM_Y + 92, 0.42f, COL_TEXT, "to lift the bar.");
+        c.text(FB_X + 8, FM_Y + 110, 0.42f, COL_TEXT_SOFT, "Let go to let it sink.");
+        char buf[48];
+        snprintf(buf, sizeof buf, "Fishing level %d", g.skillLevel(SK_FISHING));
+        c.text(FB_X + 8, FM_Y + 128, 0.38f, COL_TEXT_SOFT, buf);
+    }
+    // the big button
+    const char* label = f.state == FS_REEL ? "Hold to reel"
+                      : f.state == FS_BITE ? "Hook it!"
+                      : f.state == FS_DONE ? "OK"
+                      : f.state == FS_CHARGE ? "" : "Reel in";
+    if (*label) {
+        bool hot = f.state == FS_BITE || f.state == FS_REEL;
+        box(c, FB_X, FB_Y, FB_W, FB_H, hot ? COL_GREEN : COL_PANEL_DARK, hot ? COL_GREEN_DARK : COL_BORDER, 2);
+        c.text(FB_X + FB_W / 2, FB_Y + 20, 0.62f, hot ? COL_CREAM : COL_TEXT, label, ALIGN_CENTER);
+    }
+}
+
+void fishingTouch(const sv::Game& g, bool down, bool held, int x, int y, sv::Input& in) {
+    const Fishing& f = g.fishing;
+    bool onButton = hit(x, y, FB_X, FB_Y, FB_W, FB_H);
+    switch (f.state) {
+        case FS_REEL: if (held) in.hold = true; break;       // anywhere
+        case FS_BITE: if (down) in.action = true; break;     // anywhere: speed matters
+        case FS_WAIT:
+        case FS_DONE: if (down && onButton) in.action = true; break;
+        default: break;
+    }
+}
+
 static void drawSummary(Canvas& c, Game& g) {
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     box(c, 20, 40, 280, 150, COL_PANEL, COL_BORDER, 3);
@@ -1292,6 +1380,7 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
         return;
     }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
+    if (g.fishingActive()) { drawFishing(c, g); return; }
     if (g.chestOpen) { drawChest(c, g); return; }
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     drawHotbarAndTabs(c, g, ui);
@@ -1307,6 +1396,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
+    if (g.fishingActive()) return;   // handled by fishingTouch() as input
     if (g.chestOpen) { touchChest(g, tx, ty); return; }
     int s = slotAt(tx, ty, ui.tab == TAB_ITEMS);
     if (s >= 0) {

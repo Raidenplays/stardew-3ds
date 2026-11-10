@@ -43,6 +43,8 @@ bool sceneAfterUpdate(sv::Game& g, Ui& ui, const std::string& savePath);
 void drawTop(Canvas& c, sv::Game& g, Ui& ui, uint32_t timeMs);
 void drawBottom(Canvas& c, sv::Game& g, Ui& ui);
 void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath);
-void dialogueAdvance(sv::Game& g, Ui& ui);   // A pressed while someone is talking
+void dialogueAdvance(sv::Game& g, Ui& ui);
+// While fishing, the touch screen feeds the game input (hold to reel, tap to hook).
+void fishingTouch(const sv::Game& g, bool down, bool held, int x, int y, sv::Input& in);   // A pressed while someone is talking
 std::string shopTitle(const std::string& id);
 std::string placeName(const std::string& id);   // "Town" -> "Pelican Town"
