@@ -6,7 +6,7 @@
 #include "canvas.h"
 #include "core/game.h"
 
-enum TitleScreen { TS_TITLE = 0, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE };
+enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE };
 
 // Fields on the creation screen, top to bottom.
 enum CreateField {
@@ -22,6 +22,7 @@ struct TitleUi {
     sv::Game::Character draft;
     int hairColor = 0, pantsColor = 0;
     float t = 0;                 // for the little walk animation
+    float splashT = 0;           // seconds into the opening credits
     std::string note;            // e.g. "Give your farmer a name"
     // text entry: the 3DS app plugs in the system keyboard; returns the new text
     std::function<std::string(const std::string& hint, const std::string& current, int maxLen)> keyboard;
@@ -29,6 +30,9 @@ struct TitleUi {
 
 void titleInit(TitleUi& t, const sv::GameData& data, bool hasSave);
 void drawTitleTop(Canvas& c, const sv::Game& g, TitleUi& t);
+// opening credits run for this long, then the title shows
+static const float SPLASH_SECONDS = 7.0f;
+void titleTick(TitleUi& t, float dt);
 void drawTitleBottom(Canvas& c, const sv::Game& g, TitleUi& t);
 
 enum TitleKey { TK_UP, TK_DOWN, TK_LEFT, TK_RIGHT, TK_A, TK_B, TK_START };

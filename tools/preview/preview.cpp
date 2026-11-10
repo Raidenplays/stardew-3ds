@@ -157,6 +157,11 @@ int main(int argc, char** argv) {
             c.writePng(path.c_str(), 2);
             printf("  %s\n", path.c_str());
         };
+        t.splashT = 1.5f;
+        shoot("credits_original");
+        t.splashT = 5.0f;
+        shoot("credits_port");
+        titleKey(t, data, TK_A);              // skip to the title
         shoot("title");
         titleKey(t, data, TK_A);              // New farm
         titleKey(t, data, TK_A);              // type a name

@@ -23,6 +23,7 @@ public:
     void text(float x, float y, float scale, uint32_t color, const std::string& s, int align) override;
     float textWidth(const std::string& s, float scale) override;
     int texWidth(const std::string& tex) override;
+    int texHeight(const std::string& tex) override;
     void dropTextures() override {
         cache.clear();
         lastTex = nullptr;

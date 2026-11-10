@@ -85,6 +85,11 @@ int C2DCanvas::texWidth(const std::string& tex) {
     return t ? t->width : 0;
 }
 
+int C2DCanvas::texHeight(const std::string& tex) {
+    const Texture* t = get(tex);
+    return t ? t->height : 0;
+}
+
 float C2DCanvas::textWidth(const std::string& s, float scale) {
     if (scale < 0.41f && pixelTiny()) return pixelWidth(s);
     if (const BitmapFont* f = fontFor(scale)) return bitmapWidth(*f, s);

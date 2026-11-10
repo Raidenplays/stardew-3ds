@@ -93,6 +93,11 @@ int HostCanvas::texWidth(const std::string& tex) {
     return t ? t->w : 0;
 }
 
+int HostCanvas::texHeight(const std::string& tex) {
+    const HostTexture* t = get(tex);
+    return t ? t->h : 0;
+}
+
 void HostCanvas::blend(int x, int y, uint32_t c) {
     x += ox;
     y += oy;

@@ -123,8 +123,12 @@ int main() {
             return b == SWKBD_BUTTON_RIGHT ? std::string(buf) : cur;
         };
         if (hasSave) game.load(savePath);   // the title shows your farmer
-        while (aptMainLoop() && (title.screen == TS_TITLE || title.screen == TS_CREATE)) {
+        u64 tLast = osGetTime();
+        while (aptMainLoop() && (title.screen == TS_SPLASH || title.screen == TS_TITLE || title.screen == TS_CREATE)) {
             hidScanInput();
+            u64 tNow = osGetTime();
+            titleTick(title, std::min(0.1f, (tNow - tLast) / 1000.0f));
+            tLast = tNow;
             u32 k = hidKeysDown();
             if (k & KEY_UP) titleKey(title, data, TK_UP);
             if (k & KEY_DOWN) titleKey(title, data, TK_DOWN);
