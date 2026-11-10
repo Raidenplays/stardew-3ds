@@ -1,0 +1,21 @@
+# Builds stardew3ds.3dsx with devkitPro's official image. The .3dsx is only
+# the engine; game files come from your own copy via tools/convert.py.
+name: build
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  3dsx:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make -j"$(nproc)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stardew3ds
+          path: |
+            stardew3ds.3dsx
+            stardew3ds.smdh
