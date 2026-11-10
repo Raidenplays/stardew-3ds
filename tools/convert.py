@@ -1428,50 +1428,103 @@ def _write_bold_font(content, out_root):
 
 
 # ---------------------------------------------------------------- 3DS badge
-# An original "3DS" plank that hangs under the title logo (drawn here, not
-# taken from the game).
-OUT = (92, 50, 22)        # dark outline
-WOOD = (214, 148, 84)     # plank
-WOOD_D = (180, 112, 58)   # grain / shade
-WOOD_L = (238, 184, 120)  # highlight
-LET = (246, 222, 170)     # letter boards
-LET_D = (206, 166, 104)
-NAIL = (222, 222, 214)
+# An original "3DS" sign that hangs under the title logo: chunky shaded
+# boards on a planked sign (drawn here, not taken from the game).
+import random as _random
+# palette (warm woods)
+OUTL = (74, 36, 14)
+SHADOW = (60, 30, 12, 140)
+BOARD = [(150, 92, 48), (178, 112, 60), (204, 136, 78), (226, 162, 98)]   # sign planks: dark..light
+LETTER = [(126, 60, 22), (176, 92, 40), (214, 126, 62), (240, 166, 96), (252, 198, 132)]  # letter wood
+NAIL = [(90, 84, 80), (176, 172, 166), (232, 230, 224)]
 
-def plank_letter(d, ox, oy, rects):
-    """Each letter is a few little boards: outline, fill, a highlight line, a nail."""
-    for (x, y, w, h) in rects:
-        x, y = ox + x, oy + y
-        d.rectangle([x - 1, y - 1, x + w, y + h], fill=OUT)
-        d.rectangle([x, y, x + w - 1, y + h - 1], fill=LET)
-        if w >= h:
-            d.line([x, y + h - 1, x + w - 1, y + h - 1], fill=LET_D)
+def shade_box(px, x0, y0, x1, y1, ramp, rng, vertical):
+    """A board: outline, light top/left edge, dark bottom/right edge, grain streaks."""
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            edge = x in (x0, x1) or y in (y0, y1)
+            if edge:
+                px[x, y] = OUTL + (255,)
+                continue
+            c = ramp[2]
+            if (not vertical and y == y0 + 1) or (vertical and x == x0 + 1):
+                c = ramp[-1]
+            elif (not vertical and y == y1 - 1) or (vertical and x == x1 - 1):
+                c = ramp[1]
+            px[x, y] = c + (255,)
+    # grain: short darker streaks along the board
+    n = max(1, ((x1 - x0) * (y1 - y0)) // 40)
+    for _ in range(n):
+        if vertical:
+            gx = rng.randint(x0 + 2, max(x0 + 2, x1 - 2))
+            gy = rng.randint(y0 + 2, max(y0 + 2, y1 - 5))
+            for k in range(rng.randint(2, 4)):
+                if gy + k < y1 - 1:
+                    px[gx, gy + k] = ramp[1] + (255,)
         else:
-            d.line([x + w - 1, y, x + w - 1, y + h - 1], fill=LET_D)
-    for (x, y, w, h) in rects[:1]:
-        d.point((ox + x + 1, oy + y + 1), fill=NAIL)
+            gy = rng.randint(y0 + 2, max(y0 + 2, y1 - 2))
+            gx = rng.randint(x0 + 2, max(x0 + 2, x1 - 5))
+            for k in range(rng.randint(2, 5)):
+                if gx + k < x1 - 1:
+                    px[gx + k, gy] = ramp[1] + (255,)
+
+def nail(px, x, y):
+    px[x, y] = NAIL[2] + (255,)
+    px[x + 1, y] = NAIL[1] + (255,)
+    px[x, y + 1] = NAIL[1] + (255,)
+    px[x + 1, y + 1] = NAIL[0] + (255,)
+
+def letter(img, ox, oy, boards, rng):
+    """boards: (x, y, w, h). Drop shadow first, then each board, then a nail on each."""
+    sh = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(sh)
+    for (x, y, w, h) in boards:
+        sd.rectangle([ox + x + 2, oy + y + 2, ox + x + w + 1, oy + y + h + 1], fill=SHADOW)
+    img.alpha_composite(sh)
+    px = img.load()
+    for (x, y, w, h) in boards:
+        shade_box(px, ox + x, oy + y, ox + x + w - 1, oy + y + h - 1, LETTER, rng, h > w)
+    for (x, y, w, h) in boards:
+        if w >= 8 or h >= 8:
+            if h > w:
+                nail(px, ox + x + w // 2 - 1, oy + y + 2)
+            else:
+                nail(px, ox + x + 2, oy + y + h // 2 - 1)
 
 def make_badge():
-    W, H = 100, 40
+    rng = _random.Random(3)
+    W, H = 132, 62
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    px = img.load()
     d = ImageDraw.Draw(img)
-    # two short ropes it hangs from
-    for rx in (22, 77):
-        d.line([rx, 0, rx, 6], fill=OUT, width=2)
-        d.line([rx, 0, rx, 6], fill=(170, 130, 80), width=1)
-    # the plank
-    d.rounded_rectangle([2, 6, W - 3, H - 2], radius=4, fill=WOOD, outline=OUT, width=2)
-    d.line([6, 9, W - 7, 9], fill=WOOD_L)
-    for gy in (17, 26, 33):
-        d.line([6, gy, W - 7, gy], fill=WOOD_D)
-    for nx, ny in ((7, 11), (W - 9, 11), (7, H - 7), (W - 9, H - 7)):
-        d.rectangle([nx, ny, nx + 1, ny + 1], fill=NAIL)
-    # "3" : top, middle, bottom bars + right post
-    plank_letter(d, 20, 12, [(0, 0, 14, 4), (14, 0, 4, 22), (4, 9, 11, 4), (0, 18, 14, 4)])
-    # "D" : left post, top, bottom, right post (set in a little)
-    plank_letter(d, 42, 12, [(0, 0, 4, 22), (4, 0, 11, 4), (4, 18, 11, 4), (14, 2, 4, 18)])
-    # "S" : top, left upper post, middle, right lower post, bottom
-    plank_letter(d, 64, 12, [(0, 0, 17, 4), (0, 3, 4, 8), (0, 9, 17, 4), (13, 12, 4, 8), (0, 18, 17, 4)])
+    # two ropes with a knot
+    for rx in (30, 101):
+        for y in range(0, 10):
+            px[rx, y] = (120, 88, 50, 255) if y % 2 else (168, 128, 80, 255)
+            px[rx + 1, y] = (96, 68, 38, 255)
+        px[rx - 1, 8] = OUTL + (255,); px[rx + 2, 8] = OUTL + (255,)
+    # sign: three horizontal planks with ragged ends, outlined
+    rows = [(10, 25), (25, 40), (40, 55)]
+    for i, (y0, y1) in enumerate(rows):
+        l = 4 + rng.choice([0, 1, 2]); r = W - 5 - rng.choice([0, 1, 2])
+        shade_box(px, l, y0, r, y1, BOARD, rng, False)
+    # a darker frame strip top and bottom
+    d.line([6, 10, W - 7, 10], fill=OUTL)
+    # sign shadow under it
+    for x in range(8, W - 6):
+        px[x, 56] = (60, 30, 12, 120)
+    # corner nails in the sign
+    for (nx, ny) in ((8, 13), (W - 11, 13), (8, 50), (W - 11, 50)):
+        nail(px, nx, ny)
+    # letters, 34 px tall, chunky boards 7 px thick
+    T = 7
+    top = 14
+    # 3
+    letter(img, 18, top, [(0, 0, 24, T), (17, 0, T, 34), (5, 13, 18, T), (0, 27, 24, T)], rng)
+    # D
+    letter(img, 52, top, [(0, 0, T, 34), (T - 1, 0, 15, T), (T - 1, 27, 15, T), (19, 3, T, 28)], rng)
+    # S
+    letter(img, 88, top, [(0, 0, 26, T), (0, 0, T, 17), (0, 13, 26, T), (19, 13, T, 21), (0, 27, 26, T)], rng)
     return img
 
 

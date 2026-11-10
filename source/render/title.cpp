@@ -61,9 +61,9 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
         if (officialTitle(c)) {
             t.t += 1.0f / 60;
             float bob = (int)(t.t * 2) % 2 ? 1.0f : 0.0f;   // the logo breathes a little
-            c.image(TITLE_TEX, 0, 0, LOGO_W, LOGO_H, 0, 14 + bob);
-            // our own "3DS" plank hanging under the logo
-            if (c.texWidth("UiBadge_3ds") > 0) c.image("UiBadge_3ds", 0, 0, 100, 40, 150, 14 + LOGO_H - 8 + bob);
+            c.image(TITLE_TEX, 0, 0, LOGO_W, LOGO_H, 0, 2 + bob);
+            // our own "3DS" sign hanging under the logo
+            if (c.texWidth("UiBadge_3ds") > 0) c.image("UiBadge_3ds", 0, 0, 132, 62, 134, LOGO_H - 12 + bob);
             return;
         }
         uiFrame(c, 70, 34, 260, 64);
