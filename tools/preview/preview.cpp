@@ -13,6 +13,8 @@
 #include "render/fonts.h"
 #include "render/modscreen.h"
 #include "render/title.h"
+#include "render/setupscreen.h"
+#include "setup/setup.h"
 #include "render/scene.h"
 
 using namespace sv;
@@ -80,6 +82,7 @@ int main(int argc, char** argv) {
     bool fishDemo = false;
     bool mailDemo = false;
     bool titleDemo = false;   // title screen + character creation
+    bool setupDemo = false;   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
@@ -92,7 +95,38 @@ int main(int argc, char** argv) {
         else if (a == "--mail") mailDemo = true;
         else if (a == "--title") titleDemo = true;
         else if (a == "--intro-frames") introFrames = true;
+        else if (a == "--setup") setupDemo = true;
         else font = a;
+    }
+
+    if (setupDemo) {
+        setup::Setup su(g_root);
+        auto shot = [&](SetupView v, const char* name) {
+            HostCanvas mc(g_root, font);
+            mc.resize(400, 480);
+            mc.rect(0, 0, 400, 480, RGBA(0x18, 0x18, 0x1C));
+            mc.setClip(0, 0, 400, 240);
+            drawSetupTop(mc, su, v);
+            mc.setOrigin(40, 240);
+            mc.setClip(40, 240, 320, 240);
+            drawSetupBottom(mc, su, v);
+            std::string path = g_out + "/setup_" + name + ".png";
+            mc.writePng(path.c_str(), 2);
+            printf("  %s\n", path.c_str());
+        };
+        shot(SetupView::NeedFiles, "1_needfiles");
+        shot(SetupView::Confirm, "2_confirm");
+        su.begin();
+        unsigned fake = 0;
+        auto now = [&] { return fake += 10; };
+        size_t half = su.jobCount() / 2;
+        for (size_t i = 0; i < half; i++) su.step(0, now);
+        shot(SetupView::Running, "3_running");
+        while (su.step(0, now)) {}
+        shot(SetupView::Result, "4_result");
+        for (auto& w : su.warnings()) printf("  warning: %s\n", w.c_str());
+        printf("  state %d: %s\n", (int)su.state(), su.error().c_str());
+        return 0;
     }
 
     GameData data;
