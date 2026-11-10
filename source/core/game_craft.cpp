@@ -12,34 +12,30 @@ static const int LEVEL_XP[10] = {100, 380, 770, 1300, 2150, 3300, 4800, 6900, 10
 
 int Game::xpForLevel(int level) { return level < 1 ? 0 : LEVEL_XP[std::min(level, 10) - 1]; }
 
-int Game::skillLevel(int skill) const {
+int Game::xpLevel(int skill) const {
     if (skill < 0 || skill >= SK_COUNT) return 0;
     int l = 0;
     while (l < 10 && skillXp[skill] >= LEVEL_XP[l]) l++;
     return l;
 }
 
+int Game::skillLevel(int skill) const {
+    if (skill < 0 || skill >= SK_COUNT) return 0;
+    return skillLevels[skill];
+}
+
+// XP counts up during the day; the level itself only goes up overnight,
+// like the game, and that's when new recipes unlock.
 void Game::gainXp(int skill, int xp) {
     if (skill < 0 || skill >= SK_COUNT || xp <= 0) return;
-    int before = skillLevel(skill);
-    std::vector<std::string> knewBefore;
-    for (auto& r : data.recipes)
-        if (recipeKnown(r)) knewBefore.push_back(r.name);
     skillXp[skill] += xp;
-    int after = skillLevel(skill);
-    for (int l = before + 1; l <= after; l++) levelUps.push_back({skill, l});
-    if (after > before) {
-        std::string msg = std::string(SKILL_NAMES[skill]) + " level " + std::to_string(after) + "!";
-        int fresh = 0;
-        std::string first;
-        for (auto& r : data.recipes)
-            if (recipeKnown(r) && std::find(knewBefore.begin(), knewBefore.end(), r.name) == knewBefore.end()) {
-                if (!fresh) first = r.name;
-                fresh++;
-            }
-        if (fresh == 1) msg += " New recipe: " + first;
-        else if (fresh > 1) msg += " " + std::to_string(fresh) + " new recipes";
-        say(msg);
+}
+
+void Game::applyLevelUps() {
+    for (int sk = 0; sk < SK_COUNT; sk++) {
+        int target = xpLevel(sk);
+        for (int l = skillLevels[sk] + 1; l <= target; l++) levelUps.push_back({sk, l});
+        skillLevels[sk] = std::max(skillLevels[sk], target);
     }
 }
 

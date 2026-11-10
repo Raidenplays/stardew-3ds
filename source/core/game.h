@@ -271,7 +271,10 @@ public:
 
     // ---- skills, crafting, machines (game_craft.cpp) ----
     int skillXp[SK_COUNT] = {};
-    int skillLevel(int skill) const;
+    int skillLevels[SK_COUNT] = {};       // levels you have; they go up while you sleep
+    int skillLevel(int skill) const;      // current level (recipes, bar size...)
+    int xpLevel(int skill) const;         // level your XP has reached (applied at night)
+    void applyLevelUps();                 // called when the day ends
     static int xpForLevel(int level);     // total xp needed to reach level (1..10)
     void gainXp(int skill, int xp);
     bool recipeKnown(const Recipe& r) const;
