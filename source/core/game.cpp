@@ -112,6 +112,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
     warpCooldown = 0.35f;
     toolTimer = 0;
     npcsEnterLocation();
+    checkEvents();
     return true;
 }
 
@@ -194,6 +195,9 @@ uint8_t Game::debrisVariant(int x, int y) const {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    eventsSeen.clear();
+    mailReceived.clear();
+    cutscene = Cutscene();
     npcs.clear();
     dialogue = DialogueBox();
     locations.clear();
@@ -650,6 +654,11 @@ void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
     if (fade > 0) fade = std::max(0.0f, fade - dt * 3.0f);
     if (warpCooldown > 0) warpCooldown -= dt;
+    if (cutscene.active) {           // cutscenes drive everything (and stop the clock)
+        moving = false;
+        eventUpdate(dt);
+        return;
+    }
     if (dialogue.active) {           // the world waits while someone's talking
         moving = false;   // the UI advances pages (it knows about long-page scrolling)
         return;
@@ -791,7 +800,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 2;   // 2: villager friendships
+static const uint32_t SAVE_VERSION = 3;   // 2: villager friendships, 3: events seen + mail
 
 namespace {
 struct W {
@@ -846,6 +855,14 @@ bool Game::save(const std::string& path) const {
         w.i32(n.friendship);
         w.u8(n.introduced ? 1 : 0);
         w.u8((uint8_t)n.giftsWeek);
+    }
+    for (const std::set<std::string>* set : {&eventsSeen, &mailReceived}) {
+        w.u32((uint32_t)set->size());
+        for (auto& id : *set) {
+            uint16_t len = (uint16_t)std::min<size_t>(id.size(), 65535);
+            fwrite(&len, 2, 1, f);
+            fwrite(id.data(), 1, len, f);
+        }
     }
     bool ok = ferror(f) == 0;
     fclose(f);
@@ -909,6 +926,21 @@ bool Game::load(const std::string& path, std::string* err) {
                     n.introduced = intro != 0;
                     n.giftsWeek = gw;
                 }
+        }
+    }
+    eventsSeen.clear();
+    mailReceived.clear();
+    cutscene = Cutscene();
+    if (version >= 3 && r.ok) {
+        for (std::set<std::string>* set : {&eventsSeen, &mailReceived}) {
+            uint32_t cnt = r.u32();
+            for (uint32_t i = 0; i < cnt && r.ok && i < 100000; i++) {
+                uint16_t len = 0;
+                if (fread(&len, 2, 1, f) != 1) { r.ok = false; break; }
+                std::string id(len, ' ');
+                if (len && fread(&id[0], 1, len, f) != len) { r.ok = false; break; }
+                set->insert(id);
+            }
         }
     }
     fclose(f);

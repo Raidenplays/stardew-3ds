@@ -100,7 +100,10 @@ int main() {
         if (kHeld & (KEY_A | KEY_Y)) holdA += dt; else holdA = 0;
         in.action = aDown || (holdA > 0.45f && game.toolTimer <= 0);
 
-        if (kDown & KEY_START) ui.tab = TAB_OPTIONS;
+        if (kDown & KEY_START) {
+            if (game.cutscene.active) game.skipEvent();
+            else ui.tab = TAB_OPTIONS;
+        }
         if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
         if (!ui.shop.empty() && (kDown & KEY_B)) { ui.shop.clear(); ui.cart.clear(); }
 

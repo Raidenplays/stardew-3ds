@@ -292,6 +292,10 @@ void Game::dialogueChoose(int i) {
     DialoguePage& p = dialogue.pages[dialogue.page];
     if (i < 0 || i >= (int)p.choices.size()) return;
     DialogueChoice ch = p.choices[i];
+    if (cutscene.active && cutscene.questionPending) {
+        cutscene.forkFlag = (i == cutscene.forkWant);
+        cutscene.questionPending = false;
+    }
     std::vector<DialoguePage> reply;
     for (auto& n : npcs)
         if (n.def->name == dialogue.npc) {

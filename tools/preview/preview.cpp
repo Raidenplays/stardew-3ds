@@ -67,7 +67,13 @@ int main(int argc, char** argv) {
     g_root = argv[1];
     if (g_root.back() != '/') g_root += '/';
     g_out = argv[2];
-    std::string font = argc > 3 ? argv[3] : "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+    std::string font = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+    std::string eventArg;   // "Location:eventId" -> record that cutscene instead of the walk
+    for (int i = 3; i < argc; i++) {
+        std::string a = argv[i];
+        if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
+        else font = a;
+    }
 
     GameData data;
     std::string err;
@@ -78,6 +84,52 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (!eventArg.empty()) {
+        std::string loc = eventArg.substr(0, eventArg.find(':')), id = eventArg.substr(eventArg.find(':') + 1);
+        FILE* f = fopen((g_root + "data/events/" + loc + ".dat").c_str(), "rb");
+        std::string key, script;
+        if (f) {
+            char buf[1 << 16];
+            std::string line;
+            int ch;
+            while ((ch = fgetc(f)) != EOF) {
+                if (ch != '\n') { line += (char)ch; continue; }
+                size_t tab = line.find('\t');
+                std::string k = line.substr(0, tab);
+                if (tab != std::string::npos && k.substr(0, k.find('/')) == id) { key = k; script = line.substr(tab + 1); break; }
+                line.clear();
+            }
+            (void)buf;
+            fclose(f);
+        }
+        if (script.empty()) { fprintf(stderr, "event %s not found\n", eventArg.c_str()); return 1; }
+        g.timeOfDay = 10 * 60;
+        g.teleport(loc, 10, 10);
+        if (!g.cutscene.active && !g.startEvent(loc, key, script)) { fprintf(stderr, "couldn't start\n"); return 1; }
+        int dialogues = 0, frames = 0;
+        float sinceShot = 99;
+        while (g.cutscene.active && frames < 60 * 600) {
+            if (g.dialogue.active) {
+                if (dialogues++ < 4 || (dialogues % 6) == 0) shot(c, g, ui, "event_" + std::to_string(g_shot + 1));
+                const DialogueBox& d = g.dialogue;
+                if (d.page < d.pages.size() && !d.pages[d.page].choices.empty()) g.dialogueChoose(0);
+                else dialogueAdvance(g, ui);
+                sinceShot = 0;
+            }
+            step(g, ui, none, 1);
+            frames++;
+            sinceShot += 1.0f / 60;
+            if (sinceShot > 2.5f && g.cutscene.active && g.cutscene.fade < 0.5f) {
+                shot(c, g, ui, "event_" + std::to_string(g_shot + 1));
+                sinceShot = 0;
+            }
+            if (g_shot >= 10) break;
+        }
+        printf("  cutscene %s: %d dialogue pages, %d frames, %s\n", eventArg.c_str(), dialogues, frames,
+               g.cutscene.active ? "still running (stopped capturing)" : "finished");
+        return 0;
+    }
 
     // 1. Wake up at home
     step(g, ui, none, 30);

@@ -65,6 +65,7 @@ EXTRA_TEXTURES = [
     ("Buildings/houses", False),
     ("Buildings/Shipping Bin", False),
     ("LooseSprites/Cursors", False),
+    ("LooseSprites/emotes", False),
     ("LooseSprites/font_bold", False),
 ]
 
@@ -650,6 +651,30 @@ def _load_npc_defs(content):
     return out
 
 
+def write_events(content, out_dir):
+    """Data/Events/<Location>.json -> data/events/<Location>.dat (base language only)."""
+    src = os.path.join(content, "Data", "Events")
+    if not os.path.isdir(src):
+        print("  no Data/Events folder")
+        return
+    os.makedirs(os.path.join(out_dir, "events"), exist_ok=True)
+    files = n = 0
+    for fn in sorted(os.listdir(src)):
+        if not fn.endswith(".json") or re.search(r"\.[a-z]{2}-[A-Z]{2}\.json$", fn):
+            continue
+        try:
+            ev = json.load(open(os.path.join(src, fn), encoding="utf-8-sig"))
+        except ValueError as e:
+            print(f"  ! {fn}: {e}")
+            continue
+        with open(os.path.join(out_dir, "events", fn[:-5] + ".dat"), "w", encoding="utf-8") as f:
+            for k, v in ev.items():
+                f.write(f"{_flat(k)}\t{_flat(v)}\n")
+                n += 1
+        files += 1
+    print(f"  {n} events in {files} locations")
+
+
 def write_npcs(content, out_dir, textures):
     defs = _load_npc_defs(content)
     tastes = _load_json(content, "Data/NPCGiftTastes.json") if os.path.isfile(
@@ -780,6 +805,8 @@ def main():
     write_data(content, os.path.join(out_root, "data"))
     print("Villagers...")
     write_npcs(content, os.path.join(out_root, "data"), textures)
+    print("Events...")
+    write_events(content, os.path.join(out_root, "data"))
 
     for cp, required in EXTRA_TEXTURES:
         if find_png(content, cp):
