@@ -6,6 +6,48 @@ art, maps or data from the game. You convert your own Steam install's content
 on your PC, and the 3DS reads the result from the SD card. This is the same
 model as ScummVM or OpenMW. Personal use only.
 
+## Mods: SVE, Ridgeside Village (Content Patcher packs)
+
+Put the mods you downloaded (as unzipped from Nexus) in one folder and add
+`--mods`:
+
+```bash
+python3 tools/convert.py "<game>/Content (unpacked)" out/ --mods=path/to/mods
+```
+
+The converter applies every Content Patcher pack it finds there before
+converting, so the 3DS just loads a bigger world. Nothing on the console
+knows it's a mod. You don't need SMAPI's DLLs; the framework parts are
+done here.
+
+- **Patches:** `Load`, `EditData` (`Entries`, `Fields`, `TargetField`,
+  `TextOperations`), `EditImage` (areas, Replace/Overlay), `EditMap`
+  (area patches with Replace/ReplaceByLayer/Overlay, `MapProperties`,
+  `MapTiles`, `AddWarps`, warp text operations), `Include`, and
+  `CustomLocations`. New 1.6 locations come from `Data/Locations`
+  (`CreateOnLoad`), with their display names.
+- **Tokens:** `i18n` (with parameters), config (`ConfigSchema` defaults or
+  your `config.json`), `DynamicTokens`, `ModId`, `Target` /
+  `TargetWithoutPath`, `HasMod`, `Range`, `Random`, `Lowercase`,
+  `FirstValidFile`, `HasValue`, `HasFile`, simple `Query`, `|contains=`.
+- **Day-one baseline:** patches are evaluated for spring 1, year 1, sunny,
+  nothing seen yet, default config. Event-, heart- and season-gated
+  content plays out through the game's own systems; seasonal map variants
+  come in a later per-season pass.
+- **Formats:** `.tbin` maps (tIDE binary) are read natively. Mod JSON with
+  comments, trailing or doubled commas, `.5`-style numbers and unquoted
+  keys is accepted, and file names match case-insensitively (mods are
+  written on Windows).
+- **Not yet:** `.xnb` files inside mods (skipped), Farm Type Manager spawns,
+  Custom Companions, and features that need the mods' C# code.
+- **Tested with your files:** SVE + Ridgeside Village together produced 445
+  maps, 138 villagers, 545 events and 409 shop items, and every map loads
+  in the engine. `tests/` has an original test pack (`[CP] Test Meadow`)
+  that covers the patch types.
+
+`tools/preview/preview <root> <out> --tour=Town,Custom_Ridgeside_RidgesideVillage`
+screenshots any list of locations.
+
 ## Cutscenes
 
 - **Events from your files:** the converter exports `Data/Events/<map>.json`

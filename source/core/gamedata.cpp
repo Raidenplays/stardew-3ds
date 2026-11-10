@@ -212,6 +212,12 @@ bool GameData::load(const std::string& root, std::string* err) {
             }
         }
     lines.clear();
+    if (readLines(root + "data/location_names.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() >= 2) locationNames[f[0]] = f[1];
+        }
+    lines.clear();
     if (readLines(root + "data/furniture.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);

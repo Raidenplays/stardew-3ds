@@ -694,6 +694,62 @@ def data_files():
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
     json.dump(shops, open(os.path.join(C, "Data/Shops.json"), "w"), indent=1)
+    json.dump({}, open(os.path.join(C, "Data/Locations.json"), "w"))
+
+
+def test_mod():
+    """An original Content Patcher pack for testing tools/cp.py: adds a meadow
+    east of town, edits the town map, adds an item, overlays an icon."""
+    pack = os.path.join(OUT, "mods", "[CP] Test Meadow")
+    os.makedirs(os.path.join(pack, "assets"), exist_ok=True)
+    os.makedirs(os.path.join(pack, "i18n"), exist_ok=True)
+    with open(os.path.join(pack, "manifest.json"), "w") as f:
+        f.write("""{
+  // comments and trailing commas, like real packs
+  "Name": "Test Meadow", "Author": "stardew3ds tests", "Version": "1.0.0",
+  "UniqueID": "stardew3ds.TestMeadow",
+  "ContentPackFor": { "UniqueID": "Pathoschild.ContentPatcher", },
+}""")
+    with open(os.path.join(pack, "i18n", "default.json"), "w") as f:
+        f.write('{ "item.name": "Meadow Tea", "meadow.name": "Quiet Meadow", }')
+    # the meadow map: grass with a pond and a path back west
+    g = Grid(20, 15)
+    g.fill("Back", 0, 0, 19, 14, GRASS)
+    g.fill("Back", 0, 6, 19, 8, PATH)
+    g.fill("Back", 12, 2, 15, 4, WATER)
+    write_tmx("_tmp_meadow", 20, 15, [OUT_TS], g.L, {"Outdoors": "T", "Warp": "-1 7 Town 58 30"}, [])
+    os.replace(os.path.join(C, "Maps", "_tmp_meadow.tmx"), os.path.join(pack, "assets", "Meadow.tmx"))
+    # a 3x3 patch for the town: a pond corner (water tiles)
+    p = Grid(3, 3)
+    p.fill("Back", 0, 0, 2, 2, WATER)
+    write_tmx("_tmp_patch", 3, 3, [OUT_TS], p.L, {}, [])
+    os.replace(os.path.join(C, "Maps", "_tmp_patch.tmx"), os.path.join(pack, "assets", "pond.tmx"))
+    icon = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    ImageDraw.Draw(icon).ellipse([3, 3, 12, 12], fill=(120, 200, 140), outline=(40, 90, 50))
+    icon.save(os.path.join(pack, "assets", "tea.png"))
+    with open(os.path.join(pack, "content.json"), "w") as f:
+        f.write("""{
+  "Format": "2.0.0",
+  "ConfigSchema": { "EnablePond": { "AllowValues": "true, false", "Default": "true" } },
+  "DynamicTokens": [ { "Name": "Mood", "Value": "calm" }, { "Name": "Mood", "Value": "stormy", "When": { "Weather": "Rain" } } ],
+  "Changes": [
+    { "Action": "Load", "Target": "Maps/Custom_TestMeadow", "FromFile": "assets/Meadow.tmx" },
+    { "Action": "EditData", "Target": "Data/Locations",
+      "Entries": { "Custom_TestMeadow": { "DisplayName": "{{i18n:meadow.name}}", "CreateOnLoad": { "MapPath": "Maps/Custom_TestMeadow" } } } },
+    { "Action": "EditMap", "Target": "Maps/Town",
+      "TextOperations": [ { "Operation": "Append", "Target": ["MapProperties", "Warp"], "Value": "60 30 Custom_TestMeadow 1 7" } ],
+      "MapTiles": [ { "Position": { "X": 30, "Y": 22 }, "Layer": "Back", "SetProperties": { "Action": "Message \\"Hi\\"" } } ], },
+    { "Action": "EditMap", "Target": "Maps/Town", "FromFile": "assets/pond.tmx",
+      "ToArea": { "X": 50, "Y": 36, "Width": 3, "Height": 3 }, "When": { "EnablePond": true } },
+    { "Action": "EditData", "Target": "Data/Objects",
+      "Entries": { "9001": { "Name": "{{i18n:item.name}}", "Price": .5e2, "SpriteIndex": 9001, "Category": -26, "Edibility": 25, "Texture": null, }, }, },
+    { "Action": "EditData", "Target": "Data/Objects", "Fields": { "24": { "Price": 99 } } },
+    { "Action": "EditData", "Target": "Data/Objects", "When": { "Season": "winter" },
+      "Entries": { "24": null } },
+    { "Action": "EditImage", "Target": "Maps/springobjects", "FromFile": "assets/tea.png",
+      "ToArea": { "X": 0, "Y": 0, "Width": 16, "Height": 16 }, "PatchMode": "Overlay" },
+  ],
+}""")
 
 
 def main():
@@ -713,6 +769,7 @@ def main():
     save(bin_, "Buildings/Shipping Bin")
     data_files()
     villager_data()
+    test_mod()
     print(f"placeholder content written to {C}")
 
 
