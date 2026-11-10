@@ -64,8 +64,13 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
     if (t->health > 0) return true;
     if (!t->stump) {
         int wood = 10 + (int)(rand32() % 3);
+        if (has(PR_FORESTER)) wood = wood * 5 / 4;
         addItem(OBJ_WOOD_T, wood);
         std::string msg = "+" + std::to_string(wood) + " Wood";
+        if (has(PR_LUMBERJACK) && rand32() % 4 == 0 && data.object(709)) {
+            addItem(709, 1);
+            msg += ", +1 Hardwood";
+        }
         const TreeDef* d = data.trees.count(t->type) ? &data.trees.at(t->type) : nullptr;
         if (d && d->seed >= 0 && rand32() % 4 != 0) {
             int n = 1 + (int)(rand32() % 2);

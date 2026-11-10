@@ -118,6 +118,19 @@ struct QuestDef {
     int reward = 0;
 };
 
+struct ProfessionDef {
+    int id = -1, skill = 0, level = 5, parent = -1;
+    std::string key, name, description;
+};
+
+// The game's profession numbering (what the effects check).
+enum Profession : int {
+    PR_RANCHER = 0, PR_TILLER = 1, PR_ARTISAN = 4, PR_AGRICULTURIST = 5,
+    PR_FISHER = 6, PR_ANGLER = 8,
+    PR_FORESTER = 12, PR_GATHERER = 13, PR_LUMBERJACK = 14,
+    PR_MINER = 18, PR_BLACKSMITH = 20, PR_GEMOLOGIST = 23,
+};
+
 struct MailTrigger {
     std::string id, when;            // "DayStarted" / "DayEnding"
     std::string condition;           // game query, "-" = always
@@ -230,6 +243,10 @@ public:
     std::unordered_map<std::string, QuestDef> quests;
     std::unordered_map<std::string, std::string> mail;   // key -> letter text
     std::vector<MailTrigger> mailTriggers;
+    std::vector<ProfessionDef> professions;   // 30, by id
+    const ProfessionDef* profession(int id) const {
+        return id >= 0 && id < (int)professions.size() ? &professions[id] : nullptr;
+    }
     const QuestDef* quest(const std::string& id) const;
     std::unordered_map<std::string, std::vector<FishSpot>> fishSpots;   // by location ("Default" = everywhere)
     const TreeDef* treeForSeed(int objId) const;

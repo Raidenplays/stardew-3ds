@@ -223,6 +223,10 @@ int main(int argc, char** argv) {
         g.levelUps.push_back({SK_FARMING, 2});
         ui.showSummary = true;
         shot(c, g, ui, "level_up");
+        g.levelUps.clear();
+        g.levelUps.push_back({SK_FARMING, 5});
+        ui.profSel = 1;
+        shot(c, g, ui, "profession");
         ui.showSummary = false;
         g.levelUps.clear();
         ui.tab = TAB_CRAFT;

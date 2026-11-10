@@ -597,6 +597,7 @@ def write_data(content, out_dir):
     write_fish(content, out_dir)
     write_quests(content, out_dir)
     write_mail(content, out_dir)
+    write_professions(content, out_dir)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -895,6 +896,32 @@ def write_mail(content, out_dir):
                 t.get("Id", ""), t.get("Trigger", ""), t.get("Condition") or "-", "|".join(acts)]) + "\n")
             m += 1
     print(f"  mail.dat: {n} letters, mailtriggers.dat: {m}")
+
+
+# profession ids by skill (the game's numbering): level 5 pair, then the two
+# level 10 pairs that follow each level 5 choice
+PROFESSIONS = [
+    ("Farming", ["Rancher", "Tiller", "Coopmaster", "Shepherd", "Artisan", "Agriculturist"]),
+    ("Fishing", ["Fisher", "Trapper", "Angler", "Pirate", "Mariner", "Luremaster"]),
+    ("Foraging", ["Forester", "Gatherer", "Lumberjack", "Tapper", "Botanist", "Tracker"]),
+    ("Mining", ["Miner", "Geologist", "Blacksmith", "Prospector", "Excavator", "Gemologist"]),
+    ("Combat", ["Fighter", "Scout", "Brute", "Defender", "Acrobat", "Desperado"]),
+]
+
+
+def write_professions(content, out_dir):
+    """data/professions.dat: id, skill, level, parent, name, description (text from your Strings/UI)."""
+    ui = _load_json(content, "Strings/UI.json")
+    with open(os.path.join(out_dir, "professions.dat"), "w", encoding="utf-8") as f:
+        for si, (skill, names) in enumerate(PROFESSIONS):
+            for k, key in enumerate(names):
+                pid = si * 6 + k
+                level = 5 if k < 2 else 10
+                parent = -1 if k < 2 else si * 6 + (0 if k < 4 else 1)
+                name = ui.get(f"LevelUp_ProfessionName_{key}", key)
+                desc = ui.get(f"LevelUp_ProfessionDescription_{key}", "")
+                f.write("\t".join(_clean(x) for x in [pid, si, level, parent, key, name, desc]) + "\n")
+    print("  professions.dat: 30")
 
 
 # ---------------------------------------------------------------- crafting / machines

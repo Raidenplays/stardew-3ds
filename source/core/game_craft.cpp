@@ -39,6 +39,27 @@ void Game::applyLevelUps() {
     }
 }
 
+std::vector<int> Game::professionChoices(int skill, int level) const {
+    std::vector<int> out;
+    if (level == 5) {
+        out = {skill * 6, skill * 6 + 1};
+    } else if (level == 10) {
+        // the pair that follows whichever level 5 profession you took
+        int base = has(skill * 6 + 1) ? skill * 6 + 4 : skill * 6 + 2;
+        out = {base, base + 1};
+    }
+    for (int id : out)
+        if (has(id)) return {};   // already chosen
+    return out;
+}
+
+void Game::chooseProfession(int id) {
+    if (id < 0 || id >= 30) return;
+    professions.insert(id);
+    const ProfessionDef* p = data.profession(id);
+    if (p && (id == PR_FISHER || id == PR_ANGLER)) {}   // effects are checked where they apply
+}
+
 // ---------------------------------------------------------------- crafting
 
 static int skillIndex(const std::string& name) {
@@ -165,6 +186,21 @@ int Game::itemPrice(const Slot& s) const {
         return b ? b->price : 0;
     }
     if (s.type != SLOT_OBJECT) return 0;
+    const ObjectDef* o = data.object(s.id);
+    if (!o) return 0;
+    int base = itemBasePrice(s);
+    // profession bonuses on what you sell
+    float k = 1.0f;
+    int cat = o->category;
+    if (has(PR_TILLER) && (cat == -75 || cat == -79 || cat == -80)) k *= 1.1f;
+    if (has(PR_ARTISAN) && cat == -26) k *= 1.4f;
+    if (cat == -4) k *= has(PR_ANGLER) ? 1.5f : (has(PR_FISHER) ? 1.25f : 1.0f);
+    if (has(PR_BLACKSMITH) && (s.id >= 334 && s.id <= 337)) k *= 1.5f;
+    if (has(PR_GEMOLOGIST) && (cat == -2 || cat == -12)) k *= 1.3f;
+    return (int)(base * k);
+}
+
+int Game::itemBasePrice(const Slot& s) const {
     const ObjectDef* o = data.object(s.id);
     if (!o) return 0;
     int p = std::max(0, o->price);

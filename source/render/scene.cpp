@@ -1621,13 +1621,30 @@ static void touchQuestsTab(Game& g, Ui& ui, int tx, int ty) {
 // ---------------------------------------------------------------- level up
 static const char* SKILL_TITLE[SK_COUNT] = {"Farming", "Fishing", "Foraging", "Mining", "Combat"};
 
-static void drawLevelUp(Canvas& c, Game& g) {
+static const float PC_Y = 64, PC_W = 140, PC_H = 128;
+
+static void drawLevelUp(Canvas& c, Game& g, Ui& ui) {
     auto lu = g.levelUps.front();
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     box(c, 12, 10, 296, 220, COL_PANEL, COL_BORDER, 3);
     char buf[64];
     snprintf(buf, sizeof buf, "%s Level %d", SKILL_TITLE[lu.first], lu.second);
     c.text(160, 18, 0.7f, COL_TEXT, buf, ALIGN_CENTER);
+    std::vector<int> choice = g.professionChoices(lu.first, lu.second);
+    if (!choice.empty()) {
+        c.text(160, 44, 0.45f, COL_TEXT, "Choose a profession", ALIGN_CENTER);
+        for (int k = 0; k < 2; k++) {
+            const ProfessionDef* p = g.data.profession(choice[k]);
+            float x = 18 + k * (PC_W + 4);
+            bool on = ui.profSel == k;
+            box(c, x, PC_Y, PC_W, PC_H, on ? COL_SLOT_ON : COL_SLOT, on ? COL_SEL : COL_SLOT_EDGE, on ? 2 : 1);
+            if (!p) continue;
+            c.text(x + PC_W / 2, PC_Y + 6, 0.5f, COL_TEXT, p->name, ALIGN_CENTER);
+            wrapText(c, x + 8, PC_Y + 28, PC_W - 16, 0.38f, COL_TEXT_SOFT, p->description, 9);
+        }
+        c.text(160, 210, 0.4f, COL_BORDER, "Tap one, or pick with left/right and A", ALIGN_CENTER);
+        return;
+    }
     // recipes that this level unlocked
     snprintf(buf, sizeof buf, "s %s %d", SKILL_TITLE[lu.first], lu.second);
     std::vector<const Recipe*> fresh;
@@ -1657,8 +1674,31 @@ static void drawLevelUp(Canvas& c, Game& g) {
     c.text(160, 210, 0.42f, COL_BORDER, "Tap or press A", ALIGN_CENTER);
 }
 
+void summaryMove(Game& g, Ui& ui, int dir) {
+    (void)g;
+    ui.profSel = std::max(0, std::min(1, ui.profSel + dir));
+}
+
+static void touchLevelUp(Game& g, Ui& ui, int tx, int ty) {
+    auto lu = g.levelUps.front();
+    std::vector<int> choice = g.professionChoices(lu.first, lu.second);
+    if (choice.empty()) { summaryAdvance(g, ui); return; }
+    for (int k = 0; k < 2; k++)
+        if (hit(tx, ty, 18 + k * (PC_W + 4), PC_Y, PC_W, PC_H)) {
+            ui.profSel = k;
+            summaryAdvance(g, ui);
+        }
+}
+
 void summaryAdvance(Game& g, Ui& ui) {
-    if (!g.levelUps.empty()) { g.levelUps.erase(g.levelUps.begin()); return; }
+    if (!g.levelUps.empty()) {
+        auto lu = g.levelUps.front();
+        std::vector<int> choice = g.professionChoices(lu.first, lu.second);
+        if (!choice.empty()) g.chooseProfession(choice[std::max(0, std::min(1, ui.profSel))]);
+        ui.profSel = 0;
+        g.levelUps.erase(g.levelUps.begin());
+        return;
+    }
     ui.showSummary = false;
 }
 
@@ -1680,7 +1720,7 @@ static void drawSummary(Canvas& c, Game& g) {
 // --------------------------------------------------------------- entry points
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
     if (ui.showSummary) {
-        if (!g.levelUps.empty()) drawLevelUp(c, g);
+        if (!g.levelUps.empty()) drawLevelUp(c, g, ui);
         else drawSummary(c, g);
         return;
     }
@@ -1707,7 +1747,11 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
 }
 
 void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
-    if (ui.showSummary) { summaryAdvance(g, ui); return; }
+    if (ui.showSummary) {
+        if (!g.levelUps.empty()) touchLevelUp(g, ui, tx, ty);
+        else summaryAdvance(g, ui);
+        return;
+    }
     if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }

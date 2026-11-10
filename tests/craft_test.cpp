@@ -358,6 +358,23 @@ int main(int argc, char** argv) {
         gm2.goToBed();
         assert(gm2.mailbox.empty());   // triggers fire once
     }
+    // ---- professions: level 5 offers the pair, level 10 follows your pick
+    {
+        Game gp(d);
+        assert(gp.newGame(3, &err));
+        auto c5 = gp.professionChoices(SK_FARMING, 5);
+        assert(c5.size() == 2 && c5[0] == PR_RANCHER && c5[1] == PR_TILLER);
+        Slot parsnip; parsnip.type = SLOT_OBJECT; parsnip.id = 24; parsnip.count = 1;
+        int before = gp.itemPrice(parsnip);
+        gp.chooseProfession(PR_TILLER);
+        assert(gp.itemPrice(parsnip) == (int)(before * 1.1f));
+        assert(gp.professionChoices(SK_FARMING, 5).empty());
+        auto c10 = gp.professionChoices(SK_FARMING, 10);
+        assert(c10.size() == 2 && c10[0] == PR_ARTISAN && c10[1] == PR_AGRICULTURIST);
+        assert(gp.save("/tmp/prof_test.sav"));
+        Game gp2(d);
+        assert(gp2.load("/tmp/prof_test.sav") && gp2.has(PR_TILLER));
+    }
     printf("all crafting tests passed\n");
     return 0;
 }
