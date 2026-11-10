@@ -36,6 +36,7 @@ import os
 import re
 import struct
 import sys
+import time
 import base64
 import zlib
 import gzip
@@ -1174,76 +1175,159 @@ def location_maps(content):
     return out
 
 
+# ---------------------------------------------------------------- parallel work
+# Python threads can't use more than one core for this kind of work, so the
+# heavy steps run in separate processes (--jobs=N, default: all cores).
+
+def _season_merge(base, mods, alt, season):
+    import cp
+    t0 = time.time()
+    cp.apply_all(base, mods, alt, log=lambda *_: None, season=season, maps_only=True)
+    return season, time.time() - t0
+
+
+def _season_maps(content, alt, season, spring_locs, out_maps, out_tex):
+    """Convert maps that differ from spring; returns (season, count, textures, extra, errors)."""
+    import filecmp
+    alt_locs = location_maps(alt)
+    n = 0
+    alt_tex = set()
+    errors = []
+    for name, path in sorted(alt_locs.items()):
+        spring = spring_locs.get(name)
+        if spring and os.path.isfile(spring) and filecmp.cmp(spring, path, shallow=False):
+            continue
+        try:
+            if convert_map(alt, f"{name}@{season}", out_maps, alt_tex, path):
+                n += 1
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{name}@{season}: {e}")
+    # tilesheets that only exist in this season's merge are converted here;
+    # the rest are converted with the spring textures
+    keep, extra = set(), 0
+    for t in alt_tex:
+        if find_png(content, t):
+            keep.add(t)
+        elif find_png(alt, t):
+            convert_texture(find_png(alt, t), os.path.join(out_tex, tex_name(t) + ".s3t"))
+            extra += 1
+    shutil.rmtree(alt, ignore_errors=True)
+    return season, n, keep, extra, errors
+
+
+def _texture_batch(jobs):
+    out = []
+    for name, src, dst in jobs:
+        try:
+            w, h = convert_texture(src, dst)
+            out.append((name, w, h, None))
+        except Exception as e:  # noqa: BLE001
+            out.append((name, 0, 0, str(e)))
+    return out
+
+
+def _pool(jobs):
+    if jobs <= 1:
+        return None
+    import concurrent.futures
+    return concurrent.futures.ProcessPoolExecutor(max_workers=jobs)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     opts = {a.split("=")[0]: (a.split("=", 1)[1] if "=" in a else True) for a in sys.argv[1:] if a.startswith("--")}
     if len(args) < 2:
         print(__doc__)
         print("Options: --mods=<folder with Content Patcher packs, e.g. SVE / Ridgeside>")
+        print("         --jobs=N  processes to use (default: all CPU cores, 1 = no parallel work)")
         sys.exit(1)
+    t_start = time.time()
+    stamp = [time.time()]
+
+    def took(what):
+        now = time.time()
+        print(f"  [{what}: {now - stamp[0]:.0f}s]")
+        stamp[0] = now
+
+    jobs = int(opts.get("--jobs", 0) or 0) or (os.cpu_count() or 1)
+    pool = _pool(jobs)
+    print(f"Using {jobs} process{'es' if jobs != 1 else ''}")
     content = args[0]
     out_root = os.path.join(args[1], "3ds", "stardew3ds")
+    season_merges = []
     if opts.get("--mods") and opts["--mods"] is not True:
         import cp
         merged = os.path.join(args[1], "_merged_content")
         BASE_CONTENT[0] = content
+        MODS_DIR[0] = opts["--mods"]
+        # summer / fall / winter merges run alongside the main (spring) one
+        for season in ("summer", "fall", "winter"):
+            alt = os.path.join(args[1], f"_merged_{season}")
+            if pool:
+                season_merges.append((season, alt, pool.submit(_season_merge, content, MODS_DIR[0], alt, season)))
+            else:
+                season_merges.append((season, alt, None))
         print("Mods...")
         cp.apply_all(content, opts["--mods"], merged)
         content = merged
-        MODS_DIR[0] = opts["--mods"]
+        took("mods merged")
     if not os.path.isdir(os.path.join(content, "Maps")):
         sys.exit(f"'{content}' doesn't look like an unpacked Content folder "
                  "(no Maps/ inside). Run StardewXnbHack first.")
 
+    locs = location_maps(content)
+    out_maps, out_tex = os.path.join(out_root, "maps"), os.path.join(out_root, "tex")
+    # seasonal map conversion: each season starts as soon as its merge is done
+    season_maps = []
+    for season, alt, fut in season_merges:
+        if pool:
+            def start(f, season=season, alt=alt):
+                return pool.submit(_season_maps, content, alt, season, locs, out_maps, out_tex)
+            season_maps.append((season, alt, fut, start))
+        else:
+            season_maps.append((season, alt, None, None))
+
     print("Maps...")
     textures = set()
-    locs = location_maps(content)
     names = sorted(locs)
     for m in REQUIRED_MAPS:
         if m not in names:
             sys.exit(f"Maps/{m}.tmx missing -- is this really an unpacked Content folder?")
+    # kick off the seasonal map work now (waits for each merge in its own worker)
+    running = []
+    for season, alt, fut, start in season_maps:
+        if pool:
+            fut.result()
+            running.append(start(fut))
     ok = 0
     graph = {}
     for m in names:
         try:
-            info = convert_map(content, m, os.path.join(out_root, "maps"), textures, locs[m])
+            info = convert_map(content, m, out_maps, textures, locs[m])
             if info:
                 ok += 1
                 graph[m] = info
         except Exception as e:   # one odd map shouldn't stop the rest
             print(f"  ! {m}: {e}")
     print(f"  {ok}/{len(names)} maps converted")
-    # Seasonal variants of modded maps: re-apply the packs per season and keep
-    # only maps that differ from spring. Saved as maps/<Location>@<season>.smap.
-    if MODS_DIR[0]:
-        import cp
-        import filecmp
-        for season in ("summer", "fall", "winter"):
-            print(f"Seasonal maps: {season}...")
-            alt = os.path.join(os.path.dirname(content), f"_merged_{season}")
-            cp.apply_all(BASE_CONTENT[0], MODS_DIR[0], alt, log=lambda *_: None, season=season, maps_only=True)
-            alt_locs = location_maps(alt)
-            n = 0
-            alt_tex = set()
-            for name, path in sorted(alt_locs.items()):
-                spring = locs.get(name)
-                if spring and os.path.isfile(spring) and filecmp.cmp(spring, path, shallow=False):
-                    continue
-                try:
-                    if convert_map(alt, f"{name}@{season}", os.path.join(out_root, "maps"), alt_tex, path):
-                        n += 1
-                except Exception as e:
-                    print(f"  ! {name}@{season}: {e}")
-            # tilesheets that only exist in this season's merge: convert them now
-            extra = 0
-            for t in alt_tex:
-                if find_png(content, t):
-                    textures.add(t)
-                elif find_png(alt, t):
-                    convert_texture(find_png(alt, t), os.path.join(out_root, "tex", tex_name(t) + ".s3t"))
-                    extra += 1
+    took("maps")
+    # Seasonal variants of modded maps: kept only where they differ from
+    # spring, saved as maps/<Location>@<season>.smap.
+    if season_maps:
+        results = []
+        if pool:
+            results = [f.result() for f in running]
+        else:
+            for season, alt, _, _ in season_maps:
+                print(f"Seasonal maps: {season}...")
+                _season_merge(BASE_CONTENT[0], MODS_DIR[0], alt, season)
+                results.append(_season_maps(content, alt, season, locs, out_maps, out_tex))
+        for season, n, keep, extra, errors in results:
+            textures |= keep
+            for e in errors:
+                print(f"  ! {e}")
             print(f"  {n} maps differ in {season} ({extra} season-only tilesheets)")
-            shutil.rmtree(alt, ignore_errors=True)
+        took("seasonal maps")
 
     os.makedirs(os.path.join(out_root, "data"), exist_ok=True)
     with open(os.path.join(out_root, "data", "graph.dat"), "w", encoding="utf-8") as f:
@@ -1258,24 +1342,39 @@ def main():
     write_npcs(content, os.path.join(out_root, "data"), textures)
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
+    took("data, villagers, events")
 
     for t in sorted(TEXTURES_FROM_DATA):
         if find_png(content, t):
             textures.add(t)
-    for cp, required in EXTRA_TEXTURES:
-        if find_png(content, cp):
-            textures.add(cp)
+    for cp_path, required in EXTRA_TEXTURES:
+        if find_png(content, cp_path):
+            textures.add(cp_path)
         elif required:
-            print(f"  ! required texture {cp}.png missing")
+            print(f"  ! required texture {cp_path}.png missing")
 
     print(f"Textures ({len(textures)})...")
-    for cp in sorted(textures):
-        src = find_png(content, cp)
+    work = []
+    for name in sorted(textures):
+        src = find_png(content, name)
         if not src:
-            print(f"  ! {cp}.png missing")
+            print(f"  ! {name}.png missing")
             continue
-        w, h = convert_texture(src, os.path.join(out_root, "tex", tex_name(cp) + ".s3t"))
-        print(f"  {cp}  {w}x{h}")
+        work.append((name, src, os.path.join(out_tex, tex_name(name) + ".s3t")))
+    if pool and len(work) > 8:
+        # biggest files first, spread round-robin so batches are even
+        work.sort(key=lambda j: -os.path.getsize(j[1]))
+        batches = [work[i::jobs * 4] for i in range(jobs * 4)]
+        done = []
+        for fut in [pool.submit(_texture_batch, b) for b in batches if b]:
+            done += fut.result()
+    else:
+        done = _texture_batch(work)
+    for name, w, h, err in sorted(done):
+        print(f"  ! {name}: {err}" if err else f"  {name}  {w}x{h}")
+    took("textures")
+    if pool:
+        pool.shutdown()
 
     lay = os.path.join(out_root, "layout.txt")
     if not os.path.exists(lay):
@@ -1283,7 +1382,7 @@ def main():
             f.write(DEFAULT_LAYOUT)
     with open(os.path.join(out_root, "VERSION"), "w") as f:
         f.write("assets 1\n")
-    print(f"\nDone. Copy '{os.path.join(sys.argv[2], '3ds')}' to the root of your SD card.")
+    print(f"\nDone in {time.time() - t_start:.0f}s. Copy '{os.path.join(sys.argv[2], '3ds')}' to the root of your SD card.")
 
 
 if __name__ == "__main__":
