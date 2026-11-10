@@ -82,6 +82,13 @@ struct MachineRule {
     bool autoRun = false;
 };
 
+struct TreeDef {
+    int type = 0;
+    int seed = -1;                   // object id that plants it
+    std::string texture[4];          // per season
+    float growthChance = 0.2f;
+};
+
 struct BuildingDef {
     std::string name, texture;
     int srcX = 0, srcY = 0, srcW = 0, srcH = 0;
@@ -183,6 +190,8 @@ public:
     std::unordered_map<int, BigDef> bigs;
     std::vector<Recipe> recipes;
     std::vector<MachineRule> machineRules;
+    std::unordered_map<int, TreeDef> trees;   // by type
+    const TreeDef* treeForSeed(int objId) const;
     const BigDef* big(int id) const;
     bool isMachine(int bigId) const;
     std::unordered_map<std::string, std::string> locationNames;   // from Data/Locations

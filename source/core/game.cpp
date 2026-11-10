@@ -57,6 +57,7 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
     loc->map.name = name;
     loc->isFarm = (name == "Farm");
     loc->initState();
+    if (loc->map.outdoors) treesFromMap(*loc);
     Location* out = loc.get();
     locations[name] = std::move(loc);
     return out;
@@ -356,6 +357,8 @@ bool Game::tileSolid(int tx, int ty) const {
     for (auto& o : cur->objects)
         if (o.x == tx && o.y == ty) return true;
     if (placedAt(tx, ty)) return true;
+    for (auto& t : cur->trees)
+        if (t.x == tx && t.y == ty && (t.stage > 0 || t.stump)) return true;
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
@@ -628,6 +631,7 @@ void Game::useSelected(int tx, int ty) {
                 }
                 break;
             case TOOL_AXE:
+                if (chopTree(tx, ty, t->upgrade)) break;
                 if (deb == DEB_TWIG) {
                     deb = DEB_NONE;
                     addItem(OBJ_WOOD, 1);
@@ -668,6 +672,7 @@ void Game::useSelected(int tx, int ty) {
         return;
     }
 
+    if (plantTree(tx, ty)) return;
     if (placeSelected(tx, ty)) return;
     const CropDef* crop = sl.type == SLOT_OBJECT ? data.cropForSeed(sl.id) : nullptr;
     if (crop) {
@@ -693,6 +698,8 @@ void Game::useSelected(int tx, int ty) {
 
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
+    for (auto& t : cur->trees)
+        if (t.shake > 0) t.shake -= dt;
     if (fade > 0) fade = std::max(0.0f, fade - dt * 3.0f);
     if (warpCooldown > 0) warpCooldown -= dt;
     if (cutscene.active) {           // cutscenes drive everything (and stop the clock)
@@ -866,6 +873,7 @@ bool Game::goToBed() {
 
     sprinklersWater();
     machinesDayStart();
+    treesGrow();
 
     uint32_t r = rand32();
     spawnDebris(6, r);
@@ -881,9 +889,10 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 5;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 6;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
+                                          // 6: farm trees
 
 namespace {
 struct W {
@@ -980,6 +989,11 @@ bool Game::save(const std::string& path) const {
     }
     w.i32(upgradeTool);
     w.i32(upgradeReadyDay);
+    w.u32((uint32_t)farm->trees.size());
+    for (auto& t : farm->trees) {
+        w.i32(t.x); w.i32(t.y); w.i32(t.type);
+        w.u8(t.stage); w.u8((uint8_t)t.health); w.u8(t.stump);
+    }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1092,6 +1106,16 @@ bool Game::load(const std::string& path, std::string* err) {
         upgradeTool = r.i32();
         upgradeReadyDay = r.i32();
         if (upgradeTool >= data.toolCount()) upgradeTool = -1;
+    }
+    if (version >= 6 && r.ok) {
+        uint32_t nt = r.u32();
+        farm->trees.clear();
+        for (uint32_t i = 0; i < nt && r.ok && i < 100000; i++) {
+            Tree t;
+            t.x = r.i32(); t.y = r.i32(); t.type = r.i32();
+            t.stage = r.u8(); t.health = (int8_t)r.u8(); t.stump = r.u8() != 0;
+            farm->trees.push_back(t);
+        }
     }
     fclose(f);
     if (!r.ok) return false;

@@ -152,6 +152,18 @@ bool GameData::load(const std::string& root, std::string* err) {
         recipes.push_back(r);
     }
     lines.clear();
+    readLines(root + "data/trees.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 7) continue;
+        TreeDef t;
+        t.type = atoi(f[0].c_str());
+        t.seed = atoi(f[1].c_str());
+        for (int i = 0; i < 4; i++) t.texture[i] = f[2 + i];
+        t.growthChance = (float)atof(f[6].c_str());
+        trees[t.type] = t;
+    }
+    lines.clear();
     readLines(root + "data/machines.dat", lines);
     for (auto& l : lines) {
         auto f = splitTabs(l);
@@ -430,6 +442,13 @@ const CropDef* GameData::cropForSeed(int seedId) const {
 const BigDef* GameData::big(int id) const {
     auto it = bigs.find(id);
     return it == bigs.end() ? nullptr : &it->second;
+}
+
+const TreeDef* GameData::treeForSeed(int objId) const {
+    if (objId < 0) return nullptr;
+    for (auto& kv : trees)
+        if (kv.second.seed == objId) return &kv.second;
+    return nullptr;
 }
 
 bool GameData::isMachine(int bigId) const {

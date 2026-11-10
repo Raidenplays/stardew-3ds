@@ -63,6 +63,18 @@ struct WorldObject {
     bool ore = false;
 };
 
+// A wild tree (oak, maple, pine...). Stage 5 is fully grown.
+struct Tree {
+    int x = 0, y = 0;
+    int type = 1;
+    uint8_t stage = 5;
+    int8_t health = 10;
+    bool stump = false;
+    float shake = 0;        // seconds left of the hit wobble
+};
+
+static const int TREE_GROWN = 5;
+
 // One map plus whatever lives on it.
 struct Location {
     std::string name;
@@ -71,6 +83,7 @@ struct Location {
     std::vector<Soil> soils;
     std::vector<uint8_t> debris, debrisVar;
     std::vector<WorldObject> objects;
+    std::vector<Tree> trees;
     int spawnDay = -1;                 // absolute day the objects were spawned
     std::string file;                  // which .smap is loaded (seasonal variants differ)
     void initState();
@@ -267,6 +280,8 @@ public:
     int upgradeReadyDay = 0;        // absolute day it's ready
     bool collectUpgrade();          // at the blacksmith
     int canCapacity() const;
+    Tree* treeAt(int x, int y);
+    const Tree* treeAt(int x, int y) const;
     int toolLevel(ToolKind k) const;   // best owned level of that tool kind
     bool charging = false;          // holding A with an upgraded hoe / can
     float chargeTime = 0;
@@ -362,6 +377,10 @@ private:
     bool pickUpPlaced(int tx, int ty);
     void machinesDayStart();
     void sprinklersWater();
+    void treesFromMap(Location& loc);
+    void treesGrow();
+    bool chopTree(int tx, int ty, int axeLevel);
+    bool plantTree(int tx, int ty);
     void startMachine(Placed& p, int ruleIdx, int input);
     bool blockedPx(float x, float y) const;
     bool tileSolid(int tx, int ty) const;

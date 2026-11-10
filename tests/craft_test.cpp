@@ -196,6 +196,43 @@ int main(int argc, char** argv) {
     for (auto& t : line) tilled += g3.soil(t.first, t.second).tilled;
     assert(want >= 2 && tilled == want);
     assert(g3.canCapacity() == 40);   // can not upgraded
+    // ---- trees: plant a seed, it grows (100% in the test data), chop it down
+    g3.addItem(309, 1);
+    for (int i = 0; i < INV_SIZE; i++)
+        if (g3.inv[i].type == SLOT_OBJECT && g3.inv[i].id == 309) { g3.swapSlots(i, 5); }
+    g3.selectSlot(5);
+    int TX = -1, TY = -1;   // a clear grass tile with a clear tile above it
+    for (int y = 20; y < 40 && TX < 0; y++)
+        for (int x = 30; x < 60 && TX < 0; x++)
+            if (g3.debris(x, y) == DEB_NONE && g3.debris(x, y - 1) == DEB_NONE && !g3.soil(x, y).tilled &&
+                (g3.map().flags(x, y) & CF_DIGGABLE) && !(g3.map().flags(x, y) & (CF_WATER | CF_BLOCKED)) &&
+                !(g3.map().flags(x, y - 1) & CF_BLOCKED) && !g3.treeAt(x, y) && !g3.buildingAt(x, y) &&
+                !g3.buildingAt(x, y - 1))
+                TX = x, TY = y;
+    assert(TX >= 0);
+    g3.teleport("Farm", TX, TY - 1);
+    g3.facing = FACE_DOWN;
+    int tx, ty;
+    g3.targetTile(tx, ty);
+    pressA(g3);
+    if (!g3.treeAt(tx, ty)) fprintf(stderr, "plant at %d,%d flags %d toast [%s] sel %d id %d solid\n", tx, ty, g3.map().flags(tx, ty), g3.toast.c_str(), g3.selected, g3.inv[g3.selected].id);
+    assert(g3.treeAt(tx, ty) && g3.treeAt(tx, ty)->stage == 0);
+    for (int n = 0; n < 6; n++) { g3.passedOut = true; g3.goToBed(); }
+    g3.passedOut = false;
+    g3.teleport("Farm", tx, ty - 1);
+    g3.facing = FACE_DOWN;
+    assert(g3.treeAt(tx, ty) && g3.treeAt(tx, ty)->stage == TREE_GROWN);
+    for (int i = 0; i < INV_SIZE; i++)
+        if (g3.inv[i].type == SLOT_TOOL && d.tool(g3.inv[i].id)->kind == TOOL_AXE) {
+            if (i >= HOTBAR) { g3.swapSlots(i, 1); i = 1; }
+            g3.selectSlot(i);
+        }
+    int wood0 = count(g3, 388);
+    for (int hit = 0; hit < 10 && !g3.treeAt(tx, ty)->stump; hit++) pressA(g3);
+    assert(g3.treeAt(tx, ty)->stump && count(g3, 388) >= wood0 + 10);
+    for (int hit = 0; hit < 5 && g3.treeAt(tx, ty); hit++) pressA(g3);
+    assert(!g3.treeAt(tx, ty));
+    assert(g3.save("/tmp/craft_test3.sav"));
     printf("all crafting tests passed\n");
     return 0;
 }
