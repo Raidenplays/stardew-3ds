@@ -576,6 +576,14 @@ static void drawHud(Canvas& c, Game& g) {
         snprintf(buf, sizeof buf, "%s. %d", days[g.weekday()], g.day);
         c.text(x + 47, y + 2, 0.4f, COL_TEXT, buf, ALIGN_CENTER);
         c.text(x + 48, y + 27, 0.34f, COL_TEXT, g.timeString(), ALIGN_CENTER);
+        // weather and season icons in the dial's middle row
+        int wx = 341;                                   // sunny
+        if (g.raining) wx = 365;                        // rain
+        else if (g.season == 3) wx = 401;               // snow
+        else if (g.season == 2) wx = 389;               // falling leaves
+        else if (g.season == 0) wx = 353;               // spring breeze
+        c.image(UI_TEX, wx, 421, 12, 8, x + 29, y + 17);
+        c.image(UI_TEX, 406, 441 + 8 * (g.season & 3), 12, 8, x + 54, y + 17);
         c.image(UI_TEX, 340, 472, 65, 17, x + 4, y + DH + 1);
         snprintf(buf, sizeof buf, "%d", g.money);
         c.text(x + 62, y + DH + 3, 0.4f, COL_TEXT, buf, ALIGN_RIGHT);
