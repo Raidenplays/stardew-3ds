@@ -10,6 +10,14 @@ using namespace sv;
 static const uint32_t TXT = RGBA(0x3B, 0x1F, 0x0E), SOFT = RGBA(0x6B, 0x44, 0x23), BG = RGBA(0x2A, 0x1A, 0x10);
 static const uint32_t SEL = RGBA(0xC8, 0x32, 0x1E), CREAM = RGBA(0xFF, 0xE8, 0xB0);
 
+// The game's title sheet from your files (Minigames/TitleButtons): logo on
+// top, then the New / Load / Co-op / Exit buttons, then their lit-up versions.
+static const char* TITLE_TEX = "Minigames_TitleButtons";
+static const int LOGO_W = 400, LOGO_H = 187, BTN_W = 74, BTN_H = 58, BTN_Y = 187;
+static const float NEW_X = 82, LOAD_X = 164, BTNS_Y = 70;   // on the bottom screen
+
+static bool officialTitle(Canvas& c) { return c.texWidth(TITLE_TEX) >= 400; }
+
 // colour choices (picked by hand; the sprites are tinted by these)
 struct Rgb { uint8_t r, g, b; };
 static const Rgb HAIR_COLORS[] = {{138, 78, 38}, {60, 36, 20}, {20, 20, 22}, {214, 168, 92}, {240, 220, 150},
@@ -50,6 +58,12 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 170, 400, 70, RGBA(0x5C, 0x9C, 0x3C));  // hill
     c.rect(0, 168, 400, 4, RGBA(0x4A, 0x82, 0x30));
     if (t.screen == TS_TITLE) {
+        if (officialTitle(c)) {
+            t.t += 1.0f / 60;
+            float bob = (int)(t.t * 2) % 2 ? 1.0f : 0.0f;   // the logo breathes a little
+            c.image(TITLE_TEX, 0, 0, LOGO_W, LOGO_H, 0, 18 + bob);
+            return;
+        }
         uiFrame(c, 70, 34, 260, 64);
         c.text(200, 46, 0.8f, TXT, "stardew3ds", ALIGN_CENTER);
         c.text(200, 74, 0.45f, SOFT, "a farm for the bus ride", ALIGN_CENTER);
@@ -78,6 +92,22 @@ static void arrows(Canvas& c, float y, bool on) {
 
 void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 320, 240, BG);
+    if (t.screen == TS_TITLE && officialTitle(c)) {
+        c.rect(0, 0, 320, 240, RGBA(0x5C, 0x9C, 0xD8));
+        c.rect(0, 150, 320, 90, RGBA(0x5C, 0x9C, 0x3C));
+        c.rect(0, 148, 320, 4, RGBA(0x4A, 0x82, 0x30));
+        // New, then Load (dimmed when there's no farm to load); the lit row when picked
+        for (int i = 0; i < 2; i++) {
+            bool on = t.cursor == i;
+            int sx = i == 0 ? 0 : BTN_W;
+            float dx = i == 0 ? NEW_X : LOAD_X;
+            bool off = i == 1 && !t.hasSave;
+            c.image(TITLE_TEX, sx, BTN_Y + (on && !off ? BTN_H : 0), BTN_W, BTN_H, dx, BTNS_Y, false,
+                    off ? RGBA(0x90, 0x90, 0x90) : 0);
+        }
+        if (!t.hasSave) c.text(160, 200, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        return;
+    }
     if (t.screen == TS_TITLE) {
         const char* labels[2] = {"New farm", "Continue"};
         for (int i = 0; i < 2; i++) {
@@ -169,7 +199,7 @@ static void confirm(TitleUi& t) {
 
 void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
     if (t.screen == TS_TITLE) {
-        if (k == TK_UP || k == TK_DOWN) t.cursor = t.cursor ? 0 : (t.hasSave ? 1 : 0);
+        if (k == TK_UP || k == TK_DOWN || k == TK_LEFT || k == TK_RIGHT) t.cursor = t.cursor ? 0 : (t.hasSave ? 1 : 0);
         if (k == TK_A || k == TK_START) {
             if (t.cursor == 1 && t.hasSave) t.screen = TS_DONE_CONTINUE;
             else t.screen = TS_CREATE;
@@ -194,6 +224,15 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
 
 void titleTouch(TitleUi& t, const GameData& data, int x, int y) {
     if (t.screen == TS_TITLE) {
+        // works for both layouts: the official buttons side by side, or the plain ones stacked
+        for (int i = 0; i < 2; i++) {
+            float bx = i == 0 ? NEW_X : LOAD_X;
+            if (x >= bx && x < bx + BTN_W && y >= BTNS_Y && y < BTNS_Y + BTN_H) {
+                t.cursor = i;
+                titleKey(t, data, TK_A);
+                return;
+            }
+        }
         for (int i = 0; i < 2; i++)
             if (x >= 40 && x < 280 && y >= 60 + i * 64 && y < 112 + i * 64) {
                 t.cursor = i;

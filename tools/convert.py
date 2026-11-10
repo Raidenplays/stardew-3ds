@@ -73,6 +73,7 @@ EXTRA_TEXTURES = [
     ("LooseSprites/emotes", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
+    ("Minigames/TitleButtons", False),
 ]
 
 # Maps are discovered from Maps/*.tmx; these must exist.
