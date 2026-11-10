@@ -38,14 +38,20 @@ static void box(Canvas& c, float x, float y, float w, float h, uint32_t fill, ui
 }
 
 // ---------------------------------------------------------------- icons
-static void objectIcon(Canvas& c, int spriteIndex, float x, float y) {
-    c.image("Maps_springobjects", (spriteIndex % 24) * 16, (spriteIndex / 24) * 16, 16, 16, x, y);
+static void objectIcon(Canvas& c, int spriteIndex, float x, float y,
+                       const std::string& tex = "Maps_springobjects") {
+    int cols = std::max(1, c.texWidth(tex) / 16);
+    if (tex == "Maps_springobjects") cols = 24;
+    c.image(tex, (spriteIndex % cols) * 16, (spriteIndex / cols) * 16, 16, 16, x, y);
+}
+
+static void itemIcon(Canvas& c, const ObjectDef* o, float x, float y) {
+    if (o) objectIcon(c, o->spriteIndex, x, y, o->texture);
 }
 
 static void slotIcon(Canvas& c, const Game& g, const Slot& s, float x, float y) {
     if (s.type == SLOT_OBJECT) {
-        const ObjectDef* o = g.data.object(s.id);
-        if (o) objectIcon(c, o->spriteIndex, x, y);
+        itemIcon(c, g.data.object(s.id), x, y);
     } else if (s.type == SLOT_TOOL) {
         const ToolDef* td = g.data.tool(s.id);
         if (!td) return;
@@ -255,6 +261,10 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             auto& b = g.data.layout.buildings[i];
             items.push_back({(float)((b.tileY + b.footH) * TILE), 2, (int)i, 0});
         }
+    for (size_t i = 0; i < g.location().objects.size(); i++) {
+        const WorldObject& o = g.location().objects[i];
+        if (o.x >= x0 && o.x <= x1 && o.y >= y0 && o.y <= y1) items.push_back({(float)(o.y * TILE + 14), 7, (int)i, 0});
+    }
     if (cs.active) {
         for (size_t i = 0; i < cs.actors.size(); i++)
             if (cs.actors[i].visible) items.push_back({cs.actors[i].y, 6, (int)i, 0});
@@ -289,7 +299,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 if (!cd) break;
                 int frame = g.cropFrame(it.a, it.b);
                 int sx = (cd->spriteIndex % 2) * 128 + frame * 16, sy = (cd->spriteIndex / 2) * 32;
-                c.image("TileSheets_crops", sx, sy, 16, 32, it.a * TILE - camX,
+                c.image(cd->texture, sx, sy, 16, 32, it.a * TILE - camX,
                         it.b * TILE - 16 - camY, ((it.a + it.b) & 1) != 0,
                         s.dead ? RGBA(0x90, 0x70, 0x40) : 0);
                 break;
@@ -336,6 +346,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     box(c, ax - tw / 2, ay - 52, tw, 18, RGBA(0xFF, 0xFF, 0xFF), RGBA(0x60, 0x40, 0x30), 1);
                     c.text(ax, ay - 50, 0.42f, COL_TEXT, a.bubble, ALIGN_CENTER);
                 }
+                break;
+            }
+            case 7: {
+                const WorldObject& o = g.location().objects[it.a];
+                const ObjectDef* od = g.data.object(o.itemId);
+                if (od) itemIcon(c, od, o.x * TILE - camX, o.y * TILE - camY);
+                else objectIcon(c, o.itemId, o.x * TILE - camX, o.y * TILE - camY);
                 break;
             }
             case 5: {
@@ -835,7 +852,7 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
             box(c, 4, y, BOT_W - 8, ROW_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
             const ObjectDef* o = g.data.object(stock[i].itemId);
             if (o) {
-                objectIcon(c, o->spriteIndex, 8, y + 3);
+                itemIcon(c, o, 8, y + 3);
                 c.text(28, y + 3, 0.45f, COL_TEXT, o->name);
             }
             snprintf(buf, sizeof buf, "%dg", stock[i].price);

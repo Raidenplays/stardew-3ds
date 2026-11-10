@@ -14,6 +14,9 @@ enum CellFlag : uint8_t {
     CF_BLOCKED = 4,
     CF_NOSPAWN = 8,
     CF_PASSABLE = 16,
+    CF_GRASS = 32,
+    CF_DIRT = 64,
+    CF_SPAWNABLE = 128,
 };
 
 struct TileAnim {

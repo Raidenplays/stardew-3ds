@@ -36,6 +36,13 @@ struct Soil {
     uint8_t variant = 0;
 };
 
+// Something placed on a map tile for the day: forage or an ore node.
+struct WorldObject {
+    int x = 0, y = 0;
+    int itemId = 0;       // object id (also its sprite)
+    bool ore = false;
+};
+
 // One map plus whatever lives on it.
 struct Location {
     std::string name;
@@ -43,6 +50,9 @@ struct Location {
     bool isFarm = false;
     std::vector<Soil> soils;
     std::vector<uint8_t> debris, debrisVar;
+    std::vector<WorldObject> objects;
+    int spawnDay = -1;                 // absolute day the objects were spawned
+    std::string file;                  // which .smap is loaded (seasonal variants differ)
     void initState();
 };
 
@@ -143,6 +153,8 @@ struct Input {
     bool prev = false, next = false;   // L / R
 };
 
+int oreNodeDrop(int node);   // ore node object id -> item it drops
+
 enum Facing : int { FACE_DOWN = 0, FACE_RIGHT = 1, FACE_UP = 2, FACE_LEFT = 3 };
 
 static const int INV_SIZE = 36;
@@ -177,6 +189,9 @@ public:
     bool trashSlot(int i);
     bool eatSlot(int i);
 
+    WorldObject* objectAt(int x, int y);
+    std::string mapFileFor(const std::string& name) const;   // seasonal variant if there is one
+
     // Debug / preview tool: jump straight to a map tile.
     bool teleport(const std::string& name, int tx, int ty) { return warpTo(name, tx, ty); }
 
@@ -202,6 +217,7 @@ public:
     bool buildingAt(int x, int y) const; // farm buildings, current location only
     void targetTile(int& tx, int& ty) const;
     int weekday() const { return (day - 1) % 7; }   // 0 = Mon
+    int absoluteDay() const { return (year - 1) * 112 + season * 28 + day; }
     std::string timeString() const;
     static std::string timeString(int minutes);
 
@@ -263,6 +279,9 @@ private:
     void showDialogue(const NpcState& n, const std::vector<DialoguePage>& pages);
     Location* loadLocation(const std::string& name, std::string* err = nullptr);
     bool hasMap(const std::string& name) const;
+    void refreshSeasonMaps();
+    void spawnObjects(Location& loc);
+    bool canSpawnAt(const Location& loc, int x, int y, const std::string& terrain, bool vanilla) const;
     bool warpTo(const std::string& name, int tx, int ty);
     bool enterFrom(const std::string& name);   // arrive at name's warp back to cur
     bool runMapAction(const std::string& action, bool bumped);

@@ -239,7 +239,8 @@ def write_tmx(name, w, h, tilesets, layers, props, objects):
 
 
 OUT_TS = (1, "spring_outdoorsTileSheet", 25, 25 * 79,
-          {GRASS: {"Diggable": "T"}, GRASS2: {"Diggable": "T"}, FLOWERS: {"Diggable": "T"},
+          {GRASS: {"Diggable": "T", "Spawnable": "T", "Type": "Grass"}, GRASS2: {"Diggable": "T", "Type": "Grass"},
+           FLOWERS: {"Diggable": "T"}, PATH: {"Type": "Dirt"},
            WATER: {"Water": "T"}, WATER2: {"Water": "T"}},
           {WATER: [(WATER, 400), (WATER2, 400)]})
 IN_TS = (1, "townInterior", 16, 256, {}, {})
@@ -694,7 +695,10 @@ def data_files():
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
     json.dump(shops, open(os.path.join(C, "Data/Shops.json"), "w"), indent=1)
-    json.dump({}, open(os.path.join(C, "Data/Locations.json"), "w"))
+    json.dump({"Town": {"DisplayName": "Pelican Town (placeholder)", "MinDailyForageSpawn": 4, "MaxDailyForageSpawn": 4,
+                        "MaxSpawnedForageAtOnce": 6,
+                        "Forage": [{"ItemId": "(O)24", "Season": "Spring", "Chance": 1.0}]}},
+              open(os.path.join(C, "Data/Locations.json"), "w"))
 
 
 def test_mod():
@@ -746,10 +750,29 @@ def test_mod():
     { "Action": "EditData", "Target": "Data/Objects", "Fields": { "24": { "Price": 99 } } },
     { "Action": "EditData", "Target": "Data/Objects", "When": { "Season": "winter" },
       "Entries": { "24": null } },
+    { "Action": "EditMap", "Target": "Maps/Custom_TestMeadow", "FromFile": "assets/pond.tmx",
+      "ToArea": { "X": 2, "Y": 2, "Width": 3, "Height": 3 }, "When": { "Season": "summer" } },
     { "Action": "EditImage", "Target": "Maps/springobjects", "FromFile": "assets/tea.png",
       "ToArea": { "X": 0, "Y": 0, "Width": 16, "Height": 16 }, "PatchMode": "Overlay" },
   ],
 }""")
+
+
+def test_ftm():
+    """An original Farm Type Manager pack: copper ore on the bus stop road."""
+    pack = os.path.join(OUT, "mods", "[FTM] Test Ore")
+    os.makedirs(pack, exist_ok=True)
+    with open(os.path.join(pack, "manifest.json"), "w") as f:
+        f.write('{ "Name": "Test Ore", "UniqueID": "stardew3ds.TestOre", "Version": "1.0.0",'
+                ' "ContentPackFor": { "UniqueID": "Esca.FarmTypeManager" }, }')
+    with open(os.path.join(pack, "content.json"), "w") as f:
+        json.dump({"ForageSpawnEnabled": False, "OreSpawnEnabled": True,
+                   "Ore_Spawn_Settings": {"Areas": [{
+                       "UniqueAreaID": "bus stop copper", "MapName": "BusStop",
+                       "MinimumSpawnsPerDay": 5, "MaximumSpawnsPerDay": 5,
+                       "IncludeTerrainTypes": ["Dirt"], "IncludeCoordinates": ["2,20;10,24"],
+                       "ExcludeCoordinates": [], "StartingSpawnChance": {"Copper": 100},
+                       "ExtraConditions": {"Seasons": []}}]}}, f, indent=1)
 
 
 def main():
@@ -770,6 +793,7 @@ def main():
     data_files()
     villager_data()
     test_mod()
+    test_ftm()
     print(f"placeholder content written to {C}")
 
 

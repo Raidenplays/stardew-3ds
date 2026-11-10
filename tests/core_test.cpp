@@ -74,6 +74,7 @@ int main(int argc, char** argv) {
     // east to the bus stop and town
     g.teleport("Farm", g.map().width() - 3, 16);
     assert(walkUntil(g, 1, 0, "BusStop"));
+    g.teleport("BusStop", 28, 22);               // past the test ore area (columns 2-10)
     assert(walkUntil(g, 1, 0, "Town"));
 
     // Pierre's door is locked before 9
@@ -238,7 +239,45 @@ int main(int argc, char** argv) {
         for (int y = 36; y < 39; y++)
             for (int x = 50; x < 53; x++) water |= (g.map().flags(x, y) & CF_WATER) != 0;
         assert(water);                                              // map patch from the pack
-        printf("mod pack checks passed\n");
+        // forage: vanilla-style Data/Locations forage in Town (spring parsnips)
+        g.teleport("Town", 30, 30);
+        int forage = 0;
+        for (auto& o : g.location().objects) if (!o.ore && o.itemId == 24) forage++;
+        assert(forage == 4);
+        const WorldObject fo = g.location().objects[0];
+        g.teleport("Town", fo.x, fo.y - 1);
+        g.facing = FACE_DOWN;
+        int before = 0;
+        for (auto& sl : g.inv) if (sl.type == SLOT_OBJECT && sl.id == 24) before += sl.count;
+        run(g, none, 30);
+        run(g, act, 1);
+        int after = 0;
+        for (auto& sl : g.inv) if (sl.type == SLOT_OBJECT && sl.id == 24) after += sl.count;
+        assert(after == before + 1 && g.location().objects.size() == 3);
+        // ore: Farm Type Manager copper at the bus stop, broken with the pickaxe
+        g.teleport("BusStop", 15, 22);
+        int ore = 0;
+        for (auto& o : g.location().objects) if (o.ore && o.itemId == 751) ore++;
+        assert(ore == 5);
+        const WorldObject oo = g.location().objects[0];
+        assert(oo.y >= 20 && oo.y <= 24);
+        g.teleport("BusStop", oo.x, oo.y - 1);
+        if (g.objectAt(oo.x, oo.y - 1)) g.teleport("BusStop", oo.x, oo.y + 1);
+        g.facing = g.objectAt(oo.x, oo.y - 1) ? FACE_UP : FACE_DOWN;
+        g.facing = (int)((g.py - 4) / 16) < oo.y ? FACE_DOWN : FACE_UP;
+        for (int i = 0; i < HOTBAR; i++)
+            if (g.inv[i].type == SLOT_TOOL && d.tool(g.inv[i].id)->kind == TOOL_PICKAXE) g.selectSlot(i);
+        run(g, none, 30);
+        run(g, act, 1);
+        bool copper = false;
+        for (auto& sl : g.inv) if (sl.type == SLOT_OBJECT && sl.id == 378) copper = true;
+        assert(copper && g.location().objects.size() == 4);
+        // seasonal map: the meadow gets a pond only in summer
+        assert(g.mapFileFor("Custom_TestMeadow").find("@summer") == std::string::npos);
+        int sv = g.season; g.season = SUMMER;
+        assert(g.mapFileFor("Custom_TestMeadow").find("Custom_TestMeadow@summer.smap") != std::string::npos);
+        g.season = sv;
+        printf("mod pack checks passed (incl. forage, ore, seasonal map)\n");
     }
 
     // save / load round trip
