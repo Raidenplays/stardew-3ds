@@ -74,6 +74,9 @@ EXTRA_TEXTURES = [
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
     ("Minigames/TitleButtons", False),
+    ("Minigames/Clouds", False),
+    ("Minigames/treestrip", False),
+    ("LooseSprites/stardewPanorama", False),
 ]
 
 # Maps are discovered from Maps/*.tmx; these must exist.

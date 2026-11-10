@@ -1,6 +1,7 @@
 #include "title.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include "scene.h"
@@ -14,9 +15,38 @@ static const uint32_t SEL = RGBA(0xC8, 0x32, 0x1E), CREAM = RGBA(0xFF, 0xE8, 0xB
 // top, then the New / Load / Co-op / Exit buttons, then their lit-up versions.
 static const char* TITLE_TEX = "Minigames_TitleButtons";
 static const int LOGO_W = 400, LOGO_H = 187, BTN_W = 74, BTN_H = 58, BTN_Y = 187;
-static const float NEW_X = 82, LOAD_X = 164, BTNS_Y = 70;   // on the bottom screen
+static const float NEW_X = 82, LOAD_X = 164, BTNS_Y = 84;   // on the bottom screen
 
 static bool officialTitle(Canvas& c) { return c.texWidth(TITLE_TEX) >= 400; }
+
+// Background pieces from your files: a scenic panorama, two big cloud shapes
+// (sized for the PC, drawn small here) and a strip of treetops.
+static const char* PANORAMA = "LooseSprites_stardewPanorama";
+static const char* CLOUDS = "Minigames_Clouds";
+static const char* TREES = "Minigames_treestrip";
+
+static void titleSky(Canvas& c, float w, float h, float t, bool bottom) {
+    c.rect(0, 0, w, h, RGBA(0x6C, 0xB4, 0xEC));
+    c.rect(0, h * 0.45f, w, h * 0.55f, RGBA(0x8C, 0xC8, 0xF2));
+    if (!bottom && c.texWidth(PANORAMA) > 0)                   // 640x400 -> fills the top screen
+        c.imageScaled(PANORAMA, 0, 0, 640, 400, 0, -10, w / 640.0f);
+    if (c.texWidth(CLOUDS) > 0) {
+        // the smaller clouds on the sheet, drawn at half size, drifting right
+        struct Cl { int x, y, w, h; float sy, speed, phase; };
+        static const Cl cl[5] = {{260, 336, 168, 116, 6, 5, 0},   {115, 349, 123, 82, 50, 3.5f, 180},
+                                 {152, 447, 123, 55, 24, 6.5f, 300}, {20, 414, 82, 46, 74, 4.5f, 90},
+                                 {410, 467, 64, 36, 92, 3, 240}};
+        const float k = 0.5f;
+        int n = bottom ? 3 : 5;
+        for (int i = 0; i < n; i++) {
+            float cw = cl[i].w * k;
+            float x = std::fmod(cl[i].phase + t * cl[i].speed, w + cw) - cw;
+            c.imageScaled(CLOUDS, cl[i].x, cl[i].y, cl[i].w, cl[i].h, x, cl[i].sy, k);
+        }
+    }
+    if (bottom && c.texWidth(TREES) > 0)
+        for (float x = 0; x < w; x += 256) c.image(TREES, 0, 0, 256, 64, x, h - 64);
+}
 
 // colour choices (picked by hand; the sprites are tinted by these)
 struct Rgb { uint8_t r, g, b; };
@@ -60,6 +90,7 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     if (t.screen == TS_TITLE) {
         if (officialTitle(c)) {
             t.t += 1.0f / 60;
+            titleSky(c, 400, 240, t.t, false);
             float bob = (int)(t.t * 2) % 2 ? 1.0f : 0.0f;   // the logo breathes a little
             c.image(TITLE_TEX, 0, 0, LOGO_W, LOGO_H, 0, 2 + bob);
             // our own "3DS" sign hanging under the logo
@@ -95,9 +126,7 @@ static void arrows(Canvas& c, float y, bool on) {
 void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 320, 240, BG);
     if (t.screen == TS_TITLE && officialTitle(c)) {
-        c.rect(0, 0, 320, 240, RGBA(0x5C, 0x9C, 0xD8));
-        c.rect(0, 150, 320, 90, RGBA(0x5C, 0x9C, 0x3C));
-        c.rect(0, 148, 320, 4, RGBA(0x4A, 0x82, 0x30));
+        titleSky(c, 320, 240, t.t, true);
         // New, then Load (dimmed when there's no farm to load); the lit row when picked
         for (int i = 0; i < 2; i++) {
             bool on = t.cursor == i;
@@ -105,9 +134,9 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
             float dx = i == 0 ? NEW_X : LOAD_X;
             bool off = i == 1 && !t.hasSave;
             c.image(TITLE_TEX, sx, BTN_Y + (on && !off ? BTN_H : 0), BTN_W, BTN_H, dx, BTNS_Y, false,
-                    off ? RGBA(0x90, 0x90, 0x90) : 0);
+                    off ? RGBA(0xC8, 0xC8, 0xC8) : 0);
         }
-        if (!t.hasSave) c.text(160, 200, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        if (!t.hasSave) c.text(160, BTNS_Y + BTN_H + 8, 0.4f, TXT, "No saved farm yet", ALIGN_CENTER);
         return;
     }
     if (t.screen == TS_TITLE) {
