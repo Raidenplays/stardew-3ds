@@ -35,23 +35,6 @@ static std::vector<std::string> splitTabs(const std::string& line) {
     return out;
 }
 
-static bool readLines(const std::string& path, std::vector<std::string>& lines) {
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) return false;
-    std::string cur;
-    char buf[1024];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof buf, f)) > 0) {
-        for (size_t i = 0; i < n; i++) {
-            char c = buf[i];
-            if (c == '\n') { lines.push_back(cur); cur.clear(); }
-            else if (c != '\r') cur += c;
-        }
-    }
-    if (!cur.empty()) lines.push_back(cur);
-    fclose(f);
-    return true;
-}
 
 static std::string lower(std::string s) {
     for (auto& c : s) c = (char)std::tolower((unsigned char)c);
@@ -71,6 +54,13 @@ static ToolKind classify(const std::string& cls, const std::string& key) {
 
 bool GameData::load(const std::string& root, std::string* err) {
     std::vector<std::string> lines;
+    if (vfs.root().empty()) vfs.setRoot(root);
+    auto readLines = [this](const std::string& full, std::vector<std::string>& out) {
+        // full paths under root become layered table reads
+        const std::string& r = vfs.root();
+        if (full.compare(0, r.size(), r) == 0) return vfs.readTable(full.substr(r.size()), out);
+        return readTextLines(full, out);
+    };
 
     if (!readLines(root + "data/crops.dat", lines)) {
         if (err) *err = "missing data/crops.dat";

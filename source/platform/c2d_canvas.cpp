@@ -4,7 +4,9 @@ static inline u32 toC2D(uint32_t c) {
     return C2D_Color32((c >> 24) & 0xFF, (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
 }
 
-C2DCanvas::C2DCanvas(const std::string& root) : cache(root) { textBuf = C2D_TextBufNew(4096); }
+C2DCanvas::C2DCanvas(std::function<std::string(const std::string&)> resolve) : cache(resolve) {
+    textBuf = C2D_TextBufNew(4096);
+}
 C2DCanvas::~C2DCanvas() { C2D_TextBufDelete(textBuf); }
 
 void C2DCanvas::beginFrame() { C2D_TextBufClear(textBuf); }

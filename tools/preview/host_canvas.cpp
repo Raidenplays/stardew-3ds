@@ -82,7 +82,9 @@ const HostTexture* HostCanvas::get(const std::string& name) {
     auto it = cache.find(name);
     if (it != cache.end()) return it->second.w ? &it->second : nullptr;
     HostTexture& t = cache[name];
-    if (!loadS3T(root + "tex/" + name + ".s3t", t)) t = HostTexture();
+    std::string rel = "tex/" + name + ".s3t";
+    std::string full = resolveFn ? resolveFn(rel, resolveCtx) : root + rel;
+    if (!loadS3T(full, t)) t = HostTexture();
     return t.w ? &t : nullptr;
 }
 

@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "vfs.h"
+
 namespace sv {
 
 enum Season : int { SPRING = 0, SUMMER = 1, FALL = 2, WINTER = 3 };
@@ -152,6 +154,7 @@ public:
     const NpcDef* npc(const std::string& name) const;
     Layout layout;
     std::string root;   // SD folder the data came from
+    Vfs vfs;            // base + enabled mod layers (set mods before load())
 };
 
 } // namespace sv

@@ -9,6 +9,7 @@
 
 #include "core/game.h"
 #include "host_canvas.h"
+#include "render/modscreen.h"
 #include "render/scene.h"
 
 using namespace sv;
@@ -69,20 +70,56 @@ int main(int argc, char** argv) {
     g_out = argv[2];
     std::string font = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
     std::string eventArg;   // "Location:eventId" -> record that cutscene instead of the walk
-    std::string tourArg;    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    std::string tourArg;
+    std::string modsArg;    // "a,b" or "auto" (mods.txt + new mods)
+    bool modScreenShot = false;    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
         else if (a.rfind("--tour=", 0) == 0) tourArg = a.substr(7);
+        else if (a.rfind("--mods=", 0) == 0) modsArg = a.substr(7);
+        else if (a == "--modscreen") modScreenShot = true;
         else font = a;
     }
 
     GameData data;
     std::string err;
+    data.vfs.setRoot(g_root);
+    if (modsArg == "auto" || modScreenShot) {
+        ModScreen ms;
+        modScreenInit(ms, data.vfs);
+        if (modScreenShot) {
+            HostCanvas mc(g_root, font);
+            mc.resize(400, 480);
+            mc.rect(0, 0, 400, 480, RGBA(0x18, 0x18, 0x1C));
+            mc.setClip(0, 0, 400, 240);
+            drawModTop(mc, ms);
+            mc.setOrigin(40, 240);
+            mc.setClip(40, 240, 320, 240);
+            drawModBottom(mc, ms);
+            std::string path = g_out + "/mods.png";
+            mc.writePng(path.c_str(), 2);
+            printf("  %s\n", path.c_str());
+            return 0;
+        }
+        data.vfs.setMods(modScreenEnabled(ms));
+    } else if (!modsArg.empty()) {
+        std::vector<std::string> ids;
+        size_t pos = 0;
+        while (pos <= modsArg.size()) {
+            size_t comma = modsArg.find(',', pos);
+            ids.push_back(modsArg.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos));
+            if (comma == std::string::npos) break;
+            pos = comma + 1;
+        }
+        data.vfs.setMods(ids);
+    }
     if (!data.load(g_root, &err)) { fprintf(stderr, "data: %s\n", err.c_str()); return 1; }
     Game g(data);
     if (!g.newGame(42, &err)) { fprintf(stderr, "newGame: %s\n", err.c_str()); return 1; }
     HostCanvas c(g_root, font);
+    c.resolveFn = [](const std::string& rel, void* ctx) { return ((Vfs*)ctx)->path(rel); };
+    c.resolveCtx = &data.vfs;
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
@@ -116,7 +153,7 @@ int main(int argc, char** argv) {
 
     if (!eventArg.empty()) {
         std::string loc = eventArg.substr(0, eventArg.find(':')), id = eventArg.substr(eventArg.find(':') + 1);
-        FILE* f = fopen((g_root + "data/events/" + loc + ".dat").c_str(), "rb");
+        FILE* f = fopen(data.vfs.path("data/events/" + loc + ".dat").c_str(), "rb");
         std::string key, script;
         if (f) {
             char buf[1 << 16];

@@ -16,6 +16,9 @@ struct HostTexture {
 class HostCanvas : public Canvas {
 public:
     HostCanvas(const std::string& root, const std::string& fontPath);
+    // optional: resolve "tex/Name.s3t" through mod layers
+    std::string (*resolveFn)(const std::string& rel, void* ctx) = nullptr;
+    void* resolveCtx = nullptr;
     void resize(int w, int h);
     void setOrigin(int x, int y) { ox = x; oy = y; }
     void setClip(int x, int y, int w, int h) { cx = x; cy = y; cw = w; ch = h; }

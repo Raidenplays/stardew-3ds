@@ -73,23 +73,14 @@ static bool truthy(const std::string& s) { return s == "true" || s == "continue"
 
 // ------------------------------------------------------------ event files
 
-static bool readEventFile(const std::string& path, std::vector<std::pair<std::string, std::string>>& out) {
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) return false;
-    std::string line;
-    int c;
-    auto flush = [&]() {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
+static bool readEventFile(const Vfs& vfs, const std::string& location,
+                          std::vector<std::pair<std::string, std::string>>& out) {
+    std::vector<std::string> lines;
+    if (!vfs.readTable("data/events/" + location + ".dat", lines)) return false;
+    for (auto& line : lines) {
         size_t tab = line.find('\t');
         if (tab != std::string::npos) out.push_back({line.substr(0, tab), line.substr(tab + 1)});
-        line.clear();
-    };
-    while ((c = fgetc(f)) != EOF) {
-        if (c == '\n') flush();
-        else line += (char)c;
     }
-    flush();
-    fclose(f);
     return true;
 }
 
@@ -188,7 +179,7 @@ EventActor* Game::eventActor(const std::string& name) {
 bool Game::checkEvents() {
     if (cutscene.active || !cur) return false;
     std::vector<std::pair<std::string, std::string>> evs;
-    if (!readEventFile(data.root + "data/events/" + cur->name + ".dat", evs)) return false;
+    if (!readEventFile(data.vfs, cur->name, evs)) return false;
     for (auto& e : evs) {
         std::string id = e.first.substr(0, e.first.find('/'));
         if (!isNum(id) && e.first.find('/') == std::string::npos) continue;   // fork targets
@@ -528,7 +519,7 @@ bool Game::eventStep(const std::string& raw) {
                   (w.size() > 2 && (mailReceived.count(arg(1)) || eventsSeen.count(arg(1))));
         if (!go) return true;
         g_forkCache.clear();
-        readEventFile(data.root + "data/events/" + cs.location + ".dat", g_forkCache);
+        readEventFile(data.vfs, cs.location, g_forkCache);
         for (auto& e : g_forkCache)
             if (e.first == target || e.first.rfind(target + "/", 0) == 0) {
                 cs.cmds = splitSlash(e.second);
