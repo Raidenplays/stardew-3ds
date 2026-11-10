@@ -13,13 +13,33 @@
 
 namespace sv {
 
-enum SlotType : uint8_t { SLOT_EMPTY = 0, SLOT_TOOL = 1, SLOT_OBJECT = 2 };
+enum SlotType : uint8_t { SLOT_EMPTY = 0, SLOT_TOOL = 1, SLOT_OBJECT = 2, SLOT_BIG = 3 };
 
 struct Slot {
     SlotType type = SLOT_EMPTY;
-    int id = 0;        // tool index into GameData::tools, or object id
+    int id = 0;        // tool index into GameData::tools, object id, or big craftable id
     int count = 0;
+    int flavor = -1;   // artisan goods: the object it was made from (Blueberry -> Blueberry Wine)
     bool empty() const { return type == SLOT_EMPTY; }
+    bool stacksWith(const Slot& o) const {
+        return type != SLOT_TOOL && type == o.type && id == o.id && flavor == o.flavor;
+    }
+};
+
+enum Skill : int { SK_FARMING = 0, SK_FISHING, SK_FORAGING, SK_MINING, SK_COMBAT, SK_COUNT };
+
+// Something the player put down: a machine, chest, scarecrow or sprinkler.
+struct Placed {
+    int x = 0, y = 0;
+    bool big = true;           // big craftable (else a placeable object such as a sprinkler)
+    int id = 0;
+    // machines
+    int rule = -1;             // index into GameData::machineRules while working/ready
+    Slot held;                 // the finished (or cooking) output
+    int input = -1;            // what went in (for flavored output)
+    int64_t readyAt = -1;      // absolute minutes; <= now = ready to collect
+    // chests
+    std::vector<Slot> items;
 };
 
 enum DebrisType : uint8_t { DEB_NONE = 0, DEB_WEED, DEB_STONE, DEB_TWIG };
@@ -158,6 +178,7 @@ int oreNodeDrop(int node);   // ore node object id -> item it drops
 enum Facing : int { FACE_DOWN = 0, FACE_RIGHT = 1, FACE_UP = 2, FACE_LEFT = 3 };
 
 static const int INV_SIZE = 36;
+static const int CHEST_SIZE = 36;
 static const int HOTBAR = 12;
 static const int MAX_ENERGY = 270;
 static const int CAN_CAPACITY = 40;
@@ -202,6 +223,34 @@ public:
     const NpcState* npcByName(const std::string& name) const;
     bool isBirthday(const NpcDef& n) const { return n.birthSeason == season && n.birthDay == day; }
     ScheduleContext scheduleContext(const NpcState& n) const;
+
+    // ---- skills, crafting, machines (game_craft.cpp) ----
+    int skillXp[SK_COUNT] = {};
+    int skillLevel(int skill) const;
+    static int xpForLevel(int level);     // total xp needed to reach level (1..10)
+    void gainXp(int skill, int xp);
+    bool recipeKnown(const Recipe& r) const;
+    int countOf(const Ingredient& in) const;
+    bool canCraft(const Recipe& r) const;
+    bool craft(const Recipe& r);
+    std::string itemName(const Slot& s) const;
+    int itemPrice(const Slot& s) const;   // per item
+    bool addSlot(Slot s);                 // stacks; false = no room (nothing added)
+    bool addItem(int objId, int count);
+    std::map<std::string, std::vector<Placed>> placed;   // by location name
+    const std::vector<Placed>& placedHere() const;
+    Placed* placedAt(int x, int y);
+    const Placed* placedAt(int x, int y) const;
+    bool isChest(const Placed& p) const;
+    bool machineReady(const Placed& p) const;
+    float machineProgress(const Placed& p) const;   // 0..1 while working
+    int64_t nowMinutes() const { return (int64_t)absoluteDay() * 1440 + timeOfDay; }
+    // chest UI
+    bool chestOpen = false;
+    int chestX = 0, chestY = 0;
+    Placed* openChest();
+    void chestTransfer(bool toChest, int index);   // whole stack
+    void closeChest() { chestOpen = false; }
 
     bool save(const std::string& path) const;
     bool load(const std::string& path, std::string* err = nullptr);
@@ -287,7 +336,12 @@ private:
     bool runMapAction(const std::string& action, bool bumped);
     void useSelected(int tx, int ty);
     bool tryInteract(int tx, int ty);
-    bool addItem(int objId, int count);
+    bool placeSelected(int tx, int ty);
+    bool interactPlaced(Placed& p);
+    bool pickUpPlaced(int tx, int ty);
+    void machinesDayStart();
+    void sprinklersWater();
+    void startMachine(Placed& p, int ruleIdx, int input);
     bool blockedPx(float x, float y) const;
     bool tileSolid(int tx, int ty) const;
     void spawnDebris(int count, uint32_t& rng);

@@ -109,6 +109,75 @@ bool GameData::load(const std::string& root, std::string* err) {
         objects[o.id] = o;
     }
 
+    // crafting (optional: older conversions don't have these)
+    lines.clear();
+    readLines(root + "data/bigcraftables.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 5) continue;
+        BigDef b;
+        b.id = atoi(f[0].c_str());
+        b.name = f[1];
+        b.price = atoi(f[2].c_str());
+        b.spriteIndex = atoi(f[3].c_str());
+        if (!f[4].empty()) b.texture = f[4];
+        b.stringId = f.size() > 5 ? f[5] : f[0];
+        bigs[b.id] = b;
+    }
+    lines.clear();
+    readLines(root + "data/crafting.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 6) continue;
+        Recipe r;
+        r.name = f[0];
+        size_t p = 0;
+        const std::string& ing = f[1];
+        while (p < ing.size()) {
+            size_t c = ing.find(',', p);
+            std::string part = ing.substr(p, c == std::string::npos ? std::string::npos : c - p);
+            Ingredient in{0, 1, false};
+            int big = 0;
+            if (sscanf(part.c_str(), "%d:%d:%d", &in.id, &in.count, &big) >= 2) {
+                in.big = big == 1;
+                r.ingredients.push_back(in);
+            }
+            if (c == std::string::npos) break;
+            p = c + 1;
+        }
+        r.outBig = f[2] == "1";
+        r.outId = atoi(f[3].c_str());
+        r.outCount = std::max(1, atoi(f[4].c_str()));
+        r.unlock = f[5];
+        recipes.push_back(r);
+    }
+    lines.clear();
+    readLines(root + "data/machines.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 12) continue;
+        MachineRule m;
+        m.machine = atoi(f[0].c_str());
+        size_t p = 0;
+        while (p < f[1].size()) {
+            size_t c = f[1].find(',', p);
+            m.inputs.push_back(atoi(f[1].c_str() + p));
+            if (c == std::string::npos) break;
+            p = c + 1;
+        }
+        m.inputCount = std::max(1, atoi(f[2].c_str()));
+        m.output = atoi(f[3].c_str());
+        m.outCount = std::max(1, atoi(f[4].c_str()));
+        m.flavor = f[5] == "-" ? "" : f[5];
+        m.copyInput = f[6] == "1";
+        m.minutes = atoi(f[7].c_str());
+        m.days = atoi(f[8].c_str());
+        m.fuel = atoi(f[9].c_str());
+        m.fuelCount = atoi(f[10].c_str());
+        m.autoRun = f[11] == "1";
+        machineRules.push_back(m);
+    }
+
     lines.clear();
     if (!readLines(root + "data/tools.dat", lines)) {
         if (err) *err = "missing data/tools.dat";
@@ -354,6 +423,17 @@ const NpcDef* GameData::npc(const std::string& name) const {
 const CropDef* GameData::cropForSeed(int seedId) const {
     auto it = crops.find(seedId);
     return it == crops.end() ? nullptr : &it->second;
+}
+
+const BigDef* GameData::big(int id) const {
+    auto it = bigs.find(id);
+    return it == bigs.end() ? nullptr : &it->second;
+}
+
+bool GameData::isMachine(int bigId) const {
+    for (auto& m : machineRules)
+        if (m.machine == bigId) return true;
+    return false;
 }
 
 const ObjectDef* GameData::object(int id) const {

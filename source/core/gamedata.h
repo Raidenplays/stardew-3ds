@@ -47,6 +47,39 @@ struct ToolDef {
     ToolKind kind = TOOL_OTHER;
 };
 
+// Big craftables (machines, chests, scarecrows...): 16x32 sprites.
+struct BigDef {
+    int id = -1;
+    std::string name;
+    int price = 0;
+    int spriteIndex = 0;             // 8 per row in TileSheets/Craftables
+    std::string texture = "TileSheets_Craftables";
+    std::string stringId;
+};
+
+struct Ingredient { int id; int count; bool big; };   // id < 0 (not big): any item of that category
+
+struct Recipe {
+    std::string name;
+    std::vector<Ingredient> ingredients;
+    bool outBig = false;
+    int outId = 0, outCount = 1;
+    std::string unlock;              // "default", "s Farming 2", "f Name 5", "l 2", "null"
+};
+
+// One way a machine can be used, flattened by the converter.
+struct MachineRule {
+    int machine = 0;                 // big craftable id
+    std::vector<int> inputs;         // object ids accepted (empty = runs by itself)
+    int inputCount = 1;
+    int output = 0, outCount = 1;
+    std::string flavor;              // "Wine", "Jelly"... output is "<input> <thing>"
+    bool copyInput = false;          // output = the input item (crystalarium)
+    int minutes = -1, days = -1;
+    int fuel = -1, fuelCount = 0;
+    bool autoRun = false;
+};
+
 struct BuildingDef {
     std::string name, texture;
     int srcX = 0, srcY = 0, srcW = 0, srcH = 0;
@@ -144,6 +177,11 @@ public:
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
     std::vector<NpcDef> npcs;
     std::unordered_map<int, FurnitureDef> furniture;
+    std::unordered_map<int, BigDef> bigs;
+    std::vector<Recipe> recipes;
+    std::vector<MachineRule> machineRules;
+    const BigDef* big(int id) const;
+    bool isMachine(int bigId) const;
     std::unordered_map<std::string, std::string> locationNames;   // from Data/Locations
     std::unordered_map<std::string, LocationForage> forage;
     std::vector<SpawnArea> spawnAreas;

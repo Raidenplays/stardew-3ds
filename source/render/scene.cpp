@@ -49,8 +49,20 @@ static void itemIcon(Canvas& c, const ObjectDef* o, float x, float y) {
     if (o) objectIcon(c, o->spriteIndex, x, y, o->texture);
 }
 
+// Big craftables: 16x32, 8 per row. srcY/h pick part of it (slots show the middle).
+static void bigSprite(Canvas& c, const Game& g, int id, int frame, float x, float y, int srcY = 0, int h = 32) {
+    const BigDef* b = g.data.big(id);
+    if (!b) return;
+    int idx = b->spriteIndex + frame;
+    int cols = std::max(1, c.texWidth(b->texture) / 16);
+    if (c.texWidth(b->texture) == 0) cols = 8;
+    c.image(b->texture, (idx % cols) * 16, (idx / cols) * 32 + srcY, 16, h, x, y);
+}
+
 static void slotIcon(Canvas& c, const Game& g, const Slot& s, float x, float y) {
-    if (s.type == SLOT_OBJECT) {
+    if (s.type == SLOT_BIG) {
+        bigSprite(c, g, s.id, 0, x, y, 10, 16);
+    } else if (s.type == SLOT_OBJECT) {
         itemIcon(c, g.data.object(s.id), x, y);
     } else if (s.type == SLOT_TOOL) {
         const ToolDef* td = g.data.tool(s.id);
@@ -62,15 +74,7 @@ static void slotIcon(Canvas& c, const Game& g, const Slot& s, float x, float y) 
 }
 
 static std::string slotName(const Game& g, const Slot& s) {
-    if (s.type == SLOT_OBJECT) {
-        const ObjectDef* o = g.data.object(s.id);
-        return o ? o->name : "?";
-    }
-    if (s.type == SLOT_TOOL) {
-        const ToolDef* t = g.data.tool(s.id);
-        return t ? t->name : "?";
-    }
-    return "";
+    return s.empty() ? "" : g.itemName(s);
 }
 
 std::string placeName(const std::string& id) {
@@ -265,6 +269,12 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         const WorldObject& o = g.location().objects[i];
         if (o.x >= x0 && o.x <= x1 && o.y >= y0 && o.y <= y1) items.push_back({(float)(o.y * TILE + 14), 7, (int)i, 0});
     }
+    {
+        const std::vector<Placed>& pl = g.placedHere();
+        for (size_t i = 0; i < pl.size(); i++)
+            if (pl[i].x >= x0 && pl[i].x <= x1 && pl[i].y >= y0 && pl[i].y <= y1)
+                items.push_back({(float)(pl[i].y * TILE + 15), 8, (int)i, 0});
+    }
     if (cs.active) {
         for (size_t i = 0; i < cs.actors.size(); i++)
             if (cs.actors[i].visible) items.push_back({cs.actors[i].y, 6, (int)i, 0});
@@ -363,6 +373,30 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 int sx = (fp.id % 32) * 16, sy = (fp.id / 32) * 16;
                 float bottom = (fp.y + fd->second.boxH) * TILE;
                 c.image("TileSheets_furniture", sx, sy, sw, sh, fp.x * TILE - camX, bottom - sh - camY);
+                break;
+            }
+            case 8: {
+                const Placed& p = g.placedHere()[it.a];
+                float x = p.x * TILE - camX, y = p.y * TILE - camY;
+                if (!p.big) {
+                    const ObjectDef* o = g.data.object(p.id);
+                    itemIcon(c, o, x, y);
+                    break;
+                }
+                bool working = p.rule >= 0 && !g.machineReady(p);
+                float wob = working && ((timeMs / 120) % 8 == 0) ? 1.0f : 0.0f;
+                bigSprite(c, g, p.id, 0, x + wob, y - 16);
+                if (g.machineReady(p)) {   // bubble with the finished item
+                    float bob = std::sin(timeMs / 250.0f) * 1.5f;
+                    float bx = x - 2 + c.shift(-1.0f), by = y - 34 + bob;
+                    c.rect(bx, by, 20, 20, RGBA(0xFF, 0xFF, 0xFF, 0xD0));
+                    c.rect(bx + 8, by + 20, 4, 3, RGBA(0xFF, 0xFF, 0xFF, 0xD0));
+                    slotIcon(c, g, p.held, bx + 2, by + 2);
+                } else if (working && !g.data.machineRules[p.rule].autoRun) {
+                    float f = g.machineProgress(p);
+                    c.rect(x + 1, y - 20, 14, 3, RGBA(0x30, 0x20, 0x10, 0xC0));
+                    c.rect(x + 2, y - 19, 12 * f, 1, RGBA(0x7C, 0xD0, 0x42));
+                }
                 break;
             }
             case 4: {
@@ -488,7 +522,7 @@ static void slotBox(Canvas& c, const Game& g, int i, float x, float y, bool pick
     const Slot& s = g.inv[i];
     if (s.empty()) return;
     slotIcon(c, g, s, x + 4, y + 4);
-    if (s.type == SLOT_OBJECT && s.count > 1)
+    if (s.type != SLOT_TOOL && s.count > 1)
         c.text(x + SLOT - 1, y + SLOT - 11, 0.35f, COL_TEXT, std::to_string(s.count), ALIGN_RIGHT);
 }
 
@@ -520,7 +554,7 @@ static void drawHotbarAndTabs(Canvas& c, Game& g, Ui& ui) {
         slotPos(i, x, y);
         slotBox(c, g, i, x, y, ui.picked == i);
     }
-    static const char* names[TAB_COUNT] = {"Items", "Social", "Map", "Options"};
+    static const char* names[TAB_COUNT] = {"Items", "Craft", "Social", "Map", "Options"};
     float tw = (BOT_W - 8 - 2 * (TAB_COUNT - 1)) / (float)TAB_COUNT;
     for (int i = 0; i < TAB_COUNT; i++) {
         float x = 4 + i * (tw + 2);
@@ -544,7 +578,7 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
     float iy = PANEL_Y + 72;
     box(c, 10, iy, 300, 36, COL_SLOT, COL_SLOT_EDGE, 1);
     std::string name = slotName(g, sel);
-    if (sel.type == SLOT_OBJECT && sel.count > 1) name += "  x" + std::to_string(sel.count);
+    if (sel.type != SLOT_TOOL && sel.count > 1) name += "  x" + std::to_string(sel.count);
     c.text(16, iy + 3, 0.5f, COL_TEXT, name.empty() ? "Empty slot" : name);
     std::string info;
     if (sel.type == SLOT_OBJECT) {
@@ -560,6 +594,8 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
         if (p > 0) info += (info.empty() ? "" : "  ") + std::string("Sells ") + std::to_string(p) + "g";
     } else if (sel.type == SLOT_TOOL) {
         info = "Press A to use. Hold A to keep going.";
+    } else if (sel.type == SLOT_BIG) {
+        info = "Press A to put it down. Pickaxe picks it back up.";
     }
     c.text(16, iy + 19, 0.38f, COL_TEXT_SOFT, info);
 
@@ -573,6 +609,11 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
     snprintf(buf, sizeof buf, "%s %d, Year %d   %dg   Energy %d/%d", seasonShort(g.season), g.day,
              g.year, g.money, g.energy, MAX_ENERGY);
     c.text(BOT_W / 2, iy + 76, 0.4f, COL_TEXT_SOFT, buf, ALIGN_CENTER);
+    static const char* sk[SK_COUNT] = {"Farm", "Fish", "Forage", "Mine", "Combat"};
+    std::string skills;
+    for (int i = 0; i < SK_COUNT; i++)
+        skills += std::string(i ? "   " : "") + sk[i] + " " + std::to_string(g.skillLevel(i));
+    c.text(BOT_W / 2, iy + 91, 0.38f, COL_TEXT_SOFT, skills, ALIGN_CENTER);
 }
 
 static void touchItemsTab(Game& g, Ui& ui, int tx, int ty) {
@@ -584,6 +625,169 @@ static void touchItemsTab(Game& g, Ui& ui, int tx, int ty) {
         if (g.eatSlot(target) && g.inv[target].empty()) ui.picked = -1;
     } else if (hit(tx, ty, 214, iy + 42, 96, 26)) {
         g.goToBed();
+    }
+}
+
+// ---------------------------------------------------------------- crafting
+static const int CR_COLS = 11, CR_ROWS = 3, CR_CELL = 26, CR_X = 17, CR_Y = PANEL_Y + 18;
+
+static void recipeIcon(Canvas& c, const Game& g, const Recipe& r, float x, float y) {
+    Slot s;
+    s.type = r.outBig ? SLOT_BIG : SLOT_OBJECT;
+    s.id = r.outId;
+    s.count = 1;
+    slotIcon(c, g, s, x, y);
+}
+
+static std::string categoryName(int cat) {
+    switch (cat) {
+        case -4: return "Any fish";
+        case -5: return "Any egg";
+        case -6: return "Any milk";
+        case -75: return "Any vegetable";
+        case -79: return "Any fruit";
+        case -80: return "Any flower";
+        case -81: return "Any forage";
+        default: return "Any item";
+    }
+}
+
+static void drawCraftTab(Canvas& c, Game& g, Ui& ui) {
+    const auto& rs = g.data.recipes;
+    int known = 0;
+    for (auto& r : rs) known += g.recipeKnown(r);
+    char buf[64];
+    snprintf(buf, sizeof buf, "%d of %d recipes", known, (int)rs.size());
+    c.text(HOT_X, PANEL_Y + 3, 0.45f, COL_TEXT, "Crafting");
+    c.text(BOT_W - HOT_X, PANEL_Y + 4, 0.38f, COL_TEXT_SOFT, buf, ALIGN_RIGHT);
+    if (rs.empty()) {
+        c.text(BOT_W / 2, PANEL_Y + 60, 0.42f, COL_TEXT_SOFT, "No recipes - re-run the converter", ALIGN_CENTER);
+        return;
+    }
+    int rows = ((int)rs.size() + CR_COLS - 1) / CR_COLS;
+    ui.craftScroll = std::max(0, std::min(ui.craftScroll, rows - CR_ROWS));
+    ui.craftSel = std::max(0, std::min(ui.craftSel, (int)rs.size() - 1));
+    for (int r = 0; r < CR_ROWS; r++)
+        for (int col = 0; col < CR_COLS; col++) {
+            int i = (ui.craftScroll + r) * CR_COLS + col;
+            if (i >= (int)rs.size()) break;
+            float x = CR_X + col * CR_CELL, y = CR_Y + r * CR_CELL;
+            bool k = g.recipeKnown(rs[i]);
+            bool can = k && g.canCraft(rs[i]);
+            box(c, x, y, CR_CELL - 2, CR_CELL - 2, i == ui.craftSel ? COL_SLOT_ON : COL_SLOT,
+                i == ui.craftSel ? COL_SEL : (can ? COL_GREEN : COL_SLOT_EDGE), i == ui.craftSel || can ? 2 : 1);
+            recipeIcon(c, g, rs[i], x + 4, y + 4);
+            if (!k) c.rect(x + 1, y + 1, CR_CELL - 4, CR_CELL - 4, RGBA(0x3B, 0x1F, 0x0E, 0xB0));
+        }
+    // scroll arrows
+    box(c, BOT_W - 15, CR_Y, 10, 36, COL_PANEL_DARK, COL_BORDER, 1);
+    box(c, BOT_W - 15, CR_Y + 40, 10, 36, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(BOT_W - 10, CR_Y + 10, 0.4f, COL_TEXT, "^", ALIGN_CENTER);
+    c.text(BOT_W - 10, CR_Y + 50, 0.4f, COL_TEXT, "v", ALIGN_CENTER);
+
+    const Recipe& r = rs[ui.craftSel];
+    bool k = g.recipeKnown(r);
+    float iy = CR_Y + CR_ROWS * CR_CELL + 2;
+    box(c, 10, iy, 300, 236 - iy - 4, COL_SLOT, COL_SLOT_EDGE, 1);
+    std::string title = k ? r.name : "???";
+    if (k && r.outCount > 1) title += "  x" + std::to_string(r.outCount);
+    c.text(16, iy + 3, 0.5f, COL_TEXT, title);
+    if (!k) {
+        std::string how = "Learn it later";
+        if (r.unlock.size() > 2 && r.unlock[0] == 's') how = "Reach " + r.unlock.substr(2) ;
+        else if (r.unlock.size() > 2 && r.unlock[0] == 'f') how = "Befriend " + r.unlock.substr(2) + " hearts";
+        else if (r.unlock.size() > 2 && r.unlock[0] == 'l') how = "Total skill level " + r.unlock.substr(2);
+        c.text(16, iy + 20, 0.4f, COL_TEXT_SOFT, how);
+        return;
+    }
+    float ix = 16, iy2 = iy + 20;
+    for (auto& in : r.ingredients) {
+        int have = g.countOf(in);
+        Slot s;
+        s.type = in.big ? SLOT_BIG : SLOT_OBJECT;
+        s.id = in.id;
+        s.count = 1;
+        std::string nm;
+        if (in.id >= 0 || in.big) slotIcon(c, g, s, ix, iy2);
+        nm = (in.id >= 0 || in.big) ? g.itemName(s) : categoryName(in.id);
+        snprintf(buf, sizeof buf, "%d/%d", std::min(have, 999), in.count);
+        c.text(ix + 18, iy2 + 2, 0.38f, have >= in.count ? COL_GREEN : COL_SEL, buf);
+        c.text(ix + 62, iy2 + 2, 0.36f, COL_TEXT_SOFT, nm.size() > 12 ? nm.substr(0, 11) + "." : nm);
+        ix += 120;
+        if (ix > 200) { ix = 16; iy2 += 18; }
+    }
+    bool can = g.canCraft(r);
+    box(c, 226, iy + 2, 80, 20, can ? RGBA(0x7C, 0xB3, 0x42) : COL_TAB_OFF, COL_BORDER, 2);
+    c.text(266, iy + 5, 0.48f, COL_TEXT, "Craft", ALIGN_CENTER);
+}
+
+static void touchCraftTab(Game& g, Ui& ui, int tx, int ty) {
+    const auto& rs = g.data.recipes;
+    if (rs.empty()) return;
+    int rows = ((int)rs.size() + CR_COLS - 1) / CR_COLS;
+    if (hit(tx, ty, BOT_W - 17, CR_Y, 14, 38)) { ui.craftScroll = std::max(0, ui.craftScroll - 1); return; }
+    if (hit(tx, ty, BOT_W - 17, CR_Y + 38, 14, 40)) {
+        ui.craftScroll = std::min(std::max(0, rows - CR_ROWS), ui.craftScroll + 1);
+        return;
+    }
+    for (int r = 0; r < CR_ROWS; r++)
+        for (int col = 0; col < CR_COLS; col++) {
+            int i = (ui.craftScroll + r) * CR_COLS + col;
+            if (i < (int)rs.size() && hit(tx, ty, CR_X + col * CR_CELL, CR_Y + r * CR_CELL, CR_CELL, CR_CELL)) {
+                if (i == ui.craftSel && g.recipeKnown(rs[i])) g.craft(rs[i]);   // tap again to craft
+                ui.craftSel = i;
+                return;
+            }
+        }
+    float iy = CR_Y + CR_ROWS * CR_CELL + 2;
+    if (hit(tx, ty, 226, iy + 2, 80, 20) && ui.craftSel < (int)rs.size()) g.craft(rs[ui.craftSel]);
+}
+
+// ---------------------------------------------------------------- chest
+static const float CH_Y = 30, INV_Y2 = 136;
+
+static void chestSlotPos(bool chest, int i, float& x, float& y) {
+    x = HOT_X + (i % 12) * (SLOT + 1);
+    y = (chest ? CH_Y : INV_Y2) + 14 + (i / 12) * (SLOT + 1);
+}
+
+static void drawChest(Canvas& c, Game& g) {
+    Placed* p = g.openChest();
+    c.rect(0, 0, BOT_W, BOT_H, COL_BG);
+    if (!p) return;
+    box(c, 4, 4, BOT_W - 8, 22, COL_PANEL_DARK, COL_BORDER);
+    const BigDef* b = g.data.big(p->id);
+    c.text(12, 7, 0.5f, COL_TEXT, b ? b->name : "Chest");
+    box(c, BOT_W - 64, 6, 56, 18, COL_PANEL, COL_BORDER, 1);
+    c.text(BOT_W - 36, 8, 0.42f, COL_TEXT, "Close", ALIGN_CENTER);
+    box(c, 4, CH_Y, BOT_W - 8, 102, COL_PANEL, COL_BORDER);
+    box(c, 4, INV_Y2, BOT_W - 8, 100, COL_PANEL, COL_BORDER);
+    c.text(HOT_X, CH_Y + 1, 0.38f, COL_TEXT_SOFT, "In the chest - tap to take");
+    c.text(HOT_X, INV_Y2 + 1, 0.38f, COL_TEXT_SOFT, "Backpack - tap to store");
+    for (int i = 0; i < (int)p->items.size() && i < 36; i++) {
+        float x, y;
+        chestSlotPos(true, i, x, y);
+        box(c, x, y, SLOT, SLOT, COL_SLOT, COL_SLOT_EDGE, 1);
+        const Slot& s = p->items[i];
+        if (s.empty()) continue;
+        slotIcon(c, g, s, x + 4, y + 4);
+        if (s.count > 1) c.text(x + SLOT - 1, y + SLOT - 11, 0.35f, COL_TEXT, std::to_string(s.count), ALIGN_RIGHT);
+    }
+    for (int i = 0; i < INV_SIZE; i++) {
+        float x, y;
+        chestSlotPos(false, i, x, y);
+        slotBox(c, g, i, x, y, false);
+    }
+}
+
+static void touchChest(Game& g, int tx, int ty) {
+    if (hit(tx, ty, BOT_W - 64, 6, 56, 18)) { g.closeChest(); return; }
+    for (int i = 0; i < 36; i++) {
+        float x, y;
+        chestSlotPos(true, i, x, y);
+        if (hit(tx, ty, x, y, SLOT, SLOT)) { g.chestTransfer(false, i); return; }
+        chestSlotPos(false, i, x, y);
+        if (hit(tx, ty, x, y, SLOT, SLOT)) { g.chestTransfer(true, i); return; }
     }
 }
 
@@ -963,9 +1167,11 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
         return;
     }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
+    if (g.chestOpen) { drawChest(c, g); return; }
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     drawHotbarAndTabs(c, g, ui);
     if (ui.tab == TAB_ITEMS) drawItemsTab(c, g, ui);
+    else if (ui.tab == TAB_CRAFT) drawCraftTab(c, g, ui);
     else if (ui.tab == TAB_SOCIAL) drawSocialTab(c, g, ui);
     else if (ui.tab == TAB_MAP) drawMapTab(c, g);
     else drawOptionsTab(c, g, ui);
@@ -976,6 +1182,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
+    if (g.chestOpen) { touchChest(g, tx, ty); return; }
     int s = slotAt(tx, ty, ui.tab == TAB_ITEMS);
     if (s >= 0) {
         if (ui.picked < 0) {
@@ -996,6 +1203,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
         return;
     }
     if (ui.tab == TAB_ITEMS) touchItemsTab(g, ui, tx, ty);
+    else if (ui.tab == TAB_CRAFT) touchCraftTab(g, ui, tx, ty);
     else if (ui.tab == TAB_SOCIAL) touchSocialTab(ui, tx, ty);
     else if (ui.tab == TAB_OPTIONS) touchOptionsTab(g, ui, tx, ty, savePath);
 }

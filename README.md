@@ -278,8 +278,10 @@ mkdir -p shots && tools/preview/preview out/3ds/stardew3ds/ shots
 3. **People**: done (schedules, pathfinding, dialogue, portraits, gifts,
    hearts, Social tab). Still to come: events, heart-level cutscenes,
    marriage
-4. **Systems**: tool upgrades, crafting, artisan machines, cooking, trees and
-   foraging, fishing minigame
+4. **Systems**: skills + crafting + machines + chests + sprinklers done
+   (Craft tab; recipes, machines and artisan pricing come from your own
+   Data/CraftingRecipes, BigCraftables and Machines). Still to come: tool
+   upgrades, cooking, trees, fishing minigame
 5. **Mines and combat**: floors, monsters, weapons, ore
 6. **Animals and buildings**: coops, barns, Robin's construction
 7. **Community Center**: bundles, Joja, festivals, events

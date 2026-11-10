@@ -64,6 +64,7 @@ EXTRA_TEXTURES = [
     ("Characters/Farmer/hairstyles", True),
     ("Characters/Farmer/pants", False),
     ("TileSheets/furniture", False),
+    ("TileSheets/Craftables", False),
     ("Characters/Farmer/shirts", False),
     ("Buildings/houses", False),
     ("Buildings/Shipping Bin", False),
@@ -589,6 +590,7 @@ def write_data(content, out_dir):
     write_spawns(content, out_dir, MODS_DIR[0])
     farmer_bob(content, out_dir)
     write_furniture(content, out_dir)
+    write_crafting(content, out_dir, objs)
 
     tools = _load_json(content, "Data/Tools.json")
     n = 0
@@ -746,6 +748,173 @@ def write_location_names(content, out_dir):
             f.write(f"{_clean(name)}\t{_clean(dn)}\n")
             n += 1
     print(f"  location_names.dat: {n} names")
+
+
+# ---------------------------------------------------------------- crafting / machines
+BIG_IDS = {}
+CATEGORY_TAGS = {
+    -2: "gem", -4: "fish", -5: "egg", -6: "milk", -7: "cooking", -8: "crafting",
+    -12: "minerals", -14: "meat", -15: "metal_resources", -16: "building_resources",
+    -17: "sell_at_pierres", -18: "sell_at_pierres_and_marnies", -19: "fertilizer",
+    -20: "junk", -21: "bait", -22: "tackle", -23: "sell_at_fish_shop", -25: "cooking",
+    -26: "artisan_goods", -27: "syrup", -28: "monster_loot", -74: "seeds",
+    -75: "vegetable", -79: "fruits", -80: "flowers", -81: "greens",
+}
+# FLAVORED_ITEM <type> -> the object it makes (looked up in your Data/Objects)
+FLAVOR_OUTPUT = {"Wine": "348", "Juice": "350", "Jelly": "344", "Pickle": "342",
+                 "AgedRoe": "447", "Roe": "812", "Honey": "340", "SmokedFish": "SmokedFish",
+                 "DriedFruit": "DriedFruit", "DriedMushroom": "DriedMushrooms", "Bait": "SpecificBait"}
+AUTO_TRIGGERS = {"DayUpdate", "MachinePutDown", "OutputCollected"}
+
+
+def _item_tags(oid, o):
+    tags = {str(t).lower() for t in (o.get("ContextTags") or [])}
+    cat = int(o.get("Category", 0) or 0)
+    if cat in CATEGORY_TAGS:
+        tags.add("category_" + CATEGORY_TAGS[cat])
+    tags.add("id_o_" + str(oid).lower())
+    return tags
+
+
+def _big_ref(ref):
+    r = str(ref).strip()
+    if r.startswith("(BC)"):
+        return BIG_IDS.get(r[4:])
+    return None
+
+
+def _ing_list(spec):
+    """'388 30 (BC)13 2 -5 1' -> [(id, count, isBig)]"""
+    parts = spec.split()
+    out = []
+    for i in range(0, len(parts) - 1, 2):
+        ref, cnt = parts[i], parts[i + 1]
+        b = _big_ref(ref)
+        if b is not None:
+            out.append((b, int(cnt), 1))
+            continue
+        iid = ITEM_IDS.get(ref)
+        if iid is None:
+            return None
+        out.append((iid, int(cnt), 0))
+    return out
+
+
+def write_crafting(content, out_dir, objs):
+    bigs = _load_json(content, "Data/BigCraftables.json")
+    BIG_IDS.clear()
+    texty = sorted(k for k in bigs if not str(k).isdigit())
+    for k in bigs:
+        if str(k).isdigit():
+            BIG_IDS[str(k)] = int(k)
+    for i, k in enumerate(texty):
+        BIG_IDS[k] = 200000 + i
+    with open(os.path.join(out_dir, "bigcraftables.dat"), "w", encoding="utf-8") as f:
+        for k, b in bigs.items():
+            tex = str(b.get("Texture") or "TileSheets/Craftables").replace("\\", "/")
+            TEXTURES_FROM_DATA.add(tex)
+            f.write("\t".join(_clean(x) for x in [
+                BIG_IDS[str(k)], b.get("Name", k), int(b.get("Price", 0) or 0),
+                int(b.get("SpriteIndex", 0) or 0), tex_name(tex), k]) + "\n")
+    print(f"  bigcraftables.dat: {len(bigs)}")
+
+    recipes = _load_json(content, "Data/CraftingRecipes.json")
+    n = 0
+    with open(os.path.join(out_dir, "crafting.dat"), "w", encoding="utf-8") as f:
+        for name, raw in recipes.items():
+            fs = str(raw).split("/")
+            if len(fs) < 5:
+                continue
+            ing = _ing_list(fs[0])
+            out = fs[2].split()
+            is_big = fs[3].strip().lower() == "true"
+            oid = (BIG_IDS.get(out[0].replace("(BC)", "")) if is_big else ITEM_IDS.get(out[0]))
+            if ing is None or oid is None:
+                continue
+            cnt = int(out[1]) if len(out) > 1 and out[1].isdigit() else 1
+            f.write("\t".join(_clean(x) for x in [
+                name, ",".join(f"{i}:{c}:{b}" for i, c, b in ing), 1 if is_big else 0, oid, cnt,
+                fs[4].strip() or "null"]) + "\n")
+            n += 1
+    print(f"  crafting.dat: {n} recipes")
+
+    # machines: flatten rules into explicit input lists
+    tags = {ITEM_IDS.get(k): _item_tags(k, o or {}) for k, o in objs.items()}
+    tags.pop(None, None)
+
+    def matches(req_id, req_tags):
+        if req_id:
+            iid = ITEM_IDS.get(req_id)
+            cand = [iid] if iid is not None else []
+        else:
+            cand = list(tags)
+        res = []
+        for c in cand:
+            t = tags.get(c, set())
+            ok = True
+            for rt in req_tags or []:
+                for alt in str(rt).split(","):
+                    alt = alt.strip().lower()
+                    neg = alt.startswith("!")
+                    has = alt.lstrip("!") in t
+                    if has == neg:
+                        ok = False
+            if ok:
+                res.append(c)
+        return res
+
+    machines = _load_json(content, "Data/Machines.json")
+    n = 0
+    with open(os.path.join(out_dir, "machines.dat"), "w", encoding="utf-8") as f:
+        for key, m in machines.items():
+            mid = _big_ref(key)
+            if mid is None or not m:
+                continue
+            fuel, fuel_n = -1, 0
+            for extra in m.get("AdditionalConsumedItems") or []:
+                fi = ITEM_IDS.get(extra.get("ItemId", ""))
+                if fi is not None:
+                    fuel, fuel_n = fi, int(extra.get("RequiredCount", 1))
+                break
+            for rule in m.get("OutputRules") or []:
+                outs = [o for o in (rule.get("OutputItem") or [])
+                        if not o.get("Condition") and not o.get("OutputMethod") and o.get("ItemId")]
+                if not outs:
+                    continue
+                o = outs[0]
+                item = str(o["ItemId"]).split()
+                flavor, copy = "", 0
+                if item[0] == "FLAVORED_ITEM" and len(item) > 1:
+                    flavor = item[1]
+                    out_id = ITEM_IDS.get(FLAVOR_OUTPUT.get(flavor, ""))
+                    if "DROP_IN_ID" not in item:
+                        flavor = ""
+                elif item[0] == "DROP_IN_ID":
+                    out_id, copy = 0, 1
+                else:
+                    out_id = ITEM_IDS.get(item[0])
+                if out_id is None:
+                    continue
+                count = max(1, int(o.get("MinStack", 1) or 1))
+                minutes = int(rule.get("MinutesUntilReady", -1) or -1)
+                days = int(rule.get("DaysUntilReady", -1) or -1)
+                for trig in rule.get("Triggers") or []:
+                    if trig.get("Condition"):
+                        continue
+                    kinds = {t.strip() for t in str(trig.get("Trigger", "")).split(",")}
+                    if kinds & AUTO_TRIGGERS and "ItemPlacedInMachine" not in kinds:
+                        ins, auto = [], 1
+                    elif "ItemPlacedInMachine" in kinds:
+                        ins, auto = matches(trig.get("RequiredItemId"), trig.get("RequiredTags")), 0
+                        if not ins:
+                            continue
+                    else:
+                        continue
+                    f.write("\t".join(_clean(x) for x in [
+                        mid, ",".join(str(i) for i in sorted(ins)), int(trig.get("RequiredCount", 1) or 1),
+                        out_id, count, flavor or "-", copy, minutes, days, fuel, fuel_n, auto]) + "\n")
+                    n += 1
+    print(f"  machines.dat: {n} rules")
 
 
 def write_shops(content, out_dir, season_bits):

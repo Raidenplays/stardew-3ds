@@ -406,6 +406,14 @@ def objects_sheet():
     x, y = at(771)   # fiber
     for k in range(3):
         d.line([x + 5 + k * 3, y + 14, x + 4 + k * 4, y + 2], fill=(94, 154, 58))
+    for i, col in ((378, (200, 120, 70)), (334, (220, 140, 80)), (382, (40, 40, 44)), (398, (120, 60, 160))):
+        x, y = at(i)
+        d.ellipse([x + 3, y + 4, x + 12, y + 13], fill=col, outline=(30, 30, 30))
+    x, y = at(344)   # jelly
+    d.rectangle([x + 4, y + 4, x + 11, y + 14], fill=(150, 60, 120), outline=(60, 30, 50))
+    x, y = at(599)   # sprinkler
+    d.ellipse([x + 3, y + 8, x + 12, y + 14], fill=(150, 150, 160), outline=(60, 60, 70))
+    d.line([x + 7, y + 8, x + 7, y + 3], fill=(60, 60, 70), width=2)
     for i in (674, 675):   # weeds
         x, y = at(i)
         for k in range(4):
@@ -418,6 +426,27 @@ def objects_sheet():
         x, y = at(i)
         d.line([x + 2, y + 12, x + 14, y + 6], fill=(110, 70, 36), width=2)
         d.line([x + 8, y + 9, x + 10, y + 4], fill=(110, 70, 36), width=1)
+    return img
+
+
+def craftables_sheet():
+    img = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # 0 chest
+    x = 0
+    d.rectangle([x + 1, 14, x + 14, 30], fill=(160, 104, 52), outline=(84, 50, 22))
+    d.rectangle([x + 1, 14, x + 14, 19], fill=(186, 128, 66), outline=(84, 50, 22))
+    d.rectangle([x + 7, 18, x + 8, 22], fill=(240, 200, 80))
+    # 1 furnace
+    x = 16
+    d.polygon([(x + 2, 31), (x + 3, 10), (x + 12, 10), (x + 13, 31)], fill=(120, 116, 112), outline=(60, 58, 56))
+    d.rectangle([x + 5, 20, x + 10, 28], fill=(40, 20, 12))
+    d.rectangle([x + 6, 23, x + 9, 27], fill=(240, 120, 40))
+    # 2 jar
+    x = 32
+    d.rectangle([x + 3, 12, x + 12, 30], fill=(200, 220, 230), outline=(90, 110, 120))
+    d.rectangle([x + 4, 9, x + 11, 12], fill=(170, 120, 70), outline=(90, 60, 30))
+    d.rectangle([x + 5, 18, x + 10, 28], fill=(150, 60, 120))
     return img
 
 
@@ -672,6 +701,9 @@ def data_files():
         "472": ("Parsnip Seeds", 10, 472, -74, -300), "473": ("Bean Starter", 30, 473, -74, -300),
         "474": ("Cauliflower Seeds", 40, 474, -74, -300), "475": ("Potato Seeds", 25, 475, -74, -300),
         "477": ("Kale Seeds", 35, 477, -74, -300),
+        "378": ("Copper Ore", 5, 378, -15, -300), "334": ("Copper Bar", 60, 334, -15, -300),
+        "382": ("Coal", 15, 382, -15, -300), "398": ("Test Berry", 50, 398, -79, 15),
+        "344": ("Jelly", 160, 344, -26, 20), "599": ("Sprinkler", 100, 599, -8, -300),
     }
     tools = {
         "Hoe": {"ClassName": "Hoe", "Name": "Hoe", "SpriteIndex": 0, "MenuSpriteIndex": -1, "UpgradeLevel": 0},
@@ -694,6 +726,26 @@ def data_files():
     json.dump({k: {"Name": v[0], "Price": v[1], "SpriteIndex": v[2], "Category": v[3], "Edibility": v[4]}
                for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
     json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
+    # crafting: placeholder recipes in the 1.6 formats
+    json.dump({k: {"Name": n, "Price": p, "SpriteIndex": i} for k, (n, p, i) in {
+        "130": ("Chest", 0, 0), "13": ("Furnace", 0, 1), "15": ("Preserves Jar", 0, 2)}.items()},
+        open(os.path.join(C, "Data/BigCraftables.json"), "w"), indent=1)
+    json.dump({
+        "Chest": "388 10/Home/130/true/default/",
+        "Furnace": "378 5 390 5/Home/13/true/default/",
+        "Preserves Jar": "388 5 390 5 382 1/Home/15/true/s Farming 1/",
+        "Sprinkler": "334 1 390 2/Home/599/false/default/",
+    }, open(os.path.join(C, "Data/CraftingRecipes.json"), "w"), indent=1)
+
+    def rule(rid, req, tags, count, out, minutes):
+        return {"Id": rid, "Triggers": [{"Trigger": "ItemPlacedInMachine", "RequiredItemId": req,
+                                          "RequiredTags": tags, "RequiredCount": count}],
+                "OutputItem": [{"ItemId": out}], "MinutesUntilReady": minutes, "DaysUntilReady": -1}
+    json.dump({
+        "(BC)13": {"AdditionalConsumedItems": [{"ItemId": "(O)382", "RequiredCount": 1}],
+                   "OutputRules": [rule("Bar", "(O)378", None, 5, "(O)334", 30)]},
+        "(BC)15": {"OutputRules": [rule("Jelly", None, ["category_fruits"], 1, "FLAVORED_ITEM Jelly DROP_IN_ID", 120)]},
+    }, open(os.path.join(C, "Data/Machines.json"), "w"), indent=1)
     json.dump(shops, open(os.path.join(C, "Data/Shops.json"), "w"), indent=1)
     json.dump({"Town": {"DisplayName": "Pelican Town (placeholder)", "MinDailyForageSpawn": 4, "MaxDailyForageSpawn": 4,
                         "MaxSpawnedForageAtOnce": 6,
@@ -782,6 +834,7 @@ def main():
     make_maps()
     save(objects_sheet(), "Maps/springobjects")
     save(crops_sheet(), "TileSheets/crops")
+    save(craftables_sheet(), "TileSheets/Craftables")
     save(tools_sheet(), "TileSheets/tools")
     save(hoe_dirt(), "TerrainFeatures/hoeDirt")
     base, hair = farmer_sheets()
