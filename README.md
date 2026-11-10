@@ -102,7 +102,14 @@ g++ -std=c++17 -Isource/core tests/core_test.cpp source/core/*.cpp -o core_test 
 5. **Mines and combat**: floors, monsters, weapons, ore
 6. **Animals and buildings**: coops, barns, Robin's construction
 7. **Community Center**: bundles, Joja, festivals, events
-8. **Save sync**: a small service on the homelab converts between the PC save
+8. **Stardew Valley Expanded, built in**: the converter merges your own
+   downloaded copy of SVE into the base content by default (`--vanilla` to
+   skip it). The 3DS has no idea it's a mod: SVE's maps, NPCs, events and
+   farms load like any other game data, and the Social tab, map and
+   calendar include them. Systems from milestone 2 on are written with this
+   in mind: everything comes from data, nothing is tied to the vanilla
+   cast or map list.
+9. **Save sync**: a small service on the homelab converts between the PC save
    and the 3DS save. The 3DS syncs over Wi-Fi, and Steam Cloud syncs the PC
    side as usual.
 
