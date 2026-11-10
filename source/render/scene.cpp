@@ -31,8 +31,64 @@ static const uint32_t COL_BG = RGBA(0x2A, 0x1A, 0x10);
 static const uint32_t COL_WHITE = RGBA(0xFF, 0xFF, 0xFF);
 static const uint32_t COL_CREAM = RGBA(0xFF, 0xE8, 0xB0);
 
+static const uint32_t COL_SLOT_TMP = RGBA(0xFC, 0xE6, 0xB4);   // == COL_SLOT
+static const uint32_t COL_SLOT_ON_TMP = RGBA(0xFF, 0xF1, 0xC9);
+
+// The game's own UI frames, from LooseSprites/Cursors in your converted files.
+// If that texture isn't there, boxes fall back to flat colours.
+static const char* UI_TEX = "LooseSprites_Cursors";
+struct Frame { int x, y, w, h, l, t, r, b; };
+static const Frame FRAME_MENU = {384, 373, 18, 18, 5, 6, 5, 5};   // riveted menu box
+static const Frame FRAME_SLOT = {293, 360, 24, 24, 4, 4, 4, 4};   // light inset box
+static const uint32_t UI_FILL = RGBA(0xFF, 0xD2, 0x84);
+
+static uint32_t mulColor(uint32_t a, uint32_t b) {
+    if (!b) return a;
+    auto ch = [&](int sh) { return (((a >> sh) & 0xFF) * ((b >> sh) & 0xFF) / 255) << sh; };
+    return ch(24) | ch(16) | ch(8) | (a & 0xFF);
+}
+
+// 9-slice: corners as they are, edges tiled, middle filled with the sheet's colour.
+static void frame9(Canvas& c, const Frame& f, float x, float y, float w, float h, uint32_t tint = 0) {
+    x = std::floor(x); y = std::floor(y); w = std::floor(w); h = std::floor(h);
+    int mw = f.w - f.l - f.r, mh = f.h - f.t - f.b;
+    c.rect(x + f.l, y + f.t, w - f.l - f.r, h - f.t - f.b, mulColor(UI_FILL, tint));
+    for (float ex = x + f.l; ex < x + w - f.r; ex += mw) {   // top + bottom edges
+        int seg = (int)std::min((float)mw, x + w - f.r - ex);
+        c.image(UI_TEX, f.x + f.l, f.y, seg, f.t, ex, y, false, tint);
+        c.image(UI_TEX, f.x + f.l, f.y + f.h - f.b, seg, f.b, ex, y + h - f.b, false, tint);
+    }
+    for (float ey = y + f.t; ey < y + h - f.b; ey += mh) {   // left + right edges
+        int seg = (int)std::min((float)mh, y + h - f.b - ey);
+        c.image(UI_TEX, f.x, f.y + f.t, f.l, seg, x, ey, false, tint);
+        c.image(UI_TEX, f.x + f.w - f.r, f.y + f.t, f.r, seg, x + w - f.r, ey, false, tint);
+    }
+    c.image(UI_TEX, f.x, f.y, f.l, f.t, x, y, false, tint);
+    c.image(UI_TEX, f.x + f.w - f.r, f.y, f.r, f.t, x + w - f.r, y, false, tint);
+    c.image(UI_TEX, f.x, f.y + f.h - f.b, f.l, f.b, x, y + h - f.b, false, tint);
+    c.image(UI_TEX, f.x + f.w - f.r, f.y + f.h - f.b, f.r, f.b, x + w - f.r, y + h - f.b, false, tint);
+}
+
+static bool gameUi(Canvas& c) { return c.texWidth(UI_TEX) >= 410; }
+
 static void box(Canvas& c, float x, float y, float w, float h, uint32_t fill, uint32_t border,
                 float bw = 2) {
+    static const uint32_t PANEL = RGBA(0xF9, 0xD8, 0x96), PANEL_DARK = RGBA(0xDC, 0xA4, 0x56),
+                          TAB_OFF = RGBA(0xC9, 0x8E, 0x4A);
+    if (gameUi(c) && w >= 12 && h >= 12) {
+        if (fill == PANEL) { frame9(c, FRAME_MENU, x, y, w, h); return; }
+        if (fill == PANEL_DARK) { frame9(c, FRAME_MENU, x, y, w, h, RGBA(0xE6, 0xC8, 0xA6)); return; }
+        if (fill == TAB_OFF) { frame9(c, FRAME_MENU, x, y, w, h, RGBA(0xC8, 0xA8, 0x88)); return; }
+        if (fill == COL_SLOT_TMP || fill == COL_SLOT_ON_TMP) {
+            frame9(c, FRAME_SLOT, x, y, w, h, fill == COL_SLOT_ON_TMP ? 0 : RGBA(0xF2, 0xE6, 0xD2));
+            uint32_t hl = RGBA(0xC8, 0x32, 0x1E), pick = RGBA(0x2F, 0x6F, 0xC0);
+            if (border == hl || border == pick) {   // selection outline on top
+                c.rect(x, y, w, 2, border); c.rect(x, y + h - 2, w, 2, border);
+                c.rect(x, y, 2, h, border); c.rect(x + w - 2, y, 2, h, border);
+            }
+            return;
+        }
+    }
     c.rect(x, y, w, h, border);
     c.rect(x + bw, y + bw, w - 2 * bw, h - 2 * bw, fill);
 }
@@ -510,16 +566,29 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
 
 static void drawHud(Canvas& c, Game& g) {
     float hs = c.shift(3.0f);
-    float x = TOP_W - 104 + hs, y = 4;
-    box(c, x, y, 100, 52, COL_PANEL, COL_BORDER);
     static const char* days[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     char buf[48];
-    snprintf(buf, sizeof buf, "%s %d", days[g.weekday()], g.day);
-    c.text(x + 50, y + 3, 0.5f, COL_TEXT, buf, ALIGN_CENTER);
-    c.text(x + 50, y + 18, 0.5f, COL_TEXT, g.timeString(), ALIGN_CENTER);
-    snprintf(buf, sizeof buf, "%dg", g.money);
-    c.text(x + 94, y + 34, 0.45f, COL_TEXT, buf, ALIGN_RIGHT);
-    c.text(x + 6, y + 34, 0.45f, COL_TEXT, seasonShort(g.season));
+    if (gameUi(c)) {
+        // the game's own clock dial and money box from your Cursors sheet
+        const float DW = 71, DH = 43;
+        float x = TOP_W - DW - 4 + hs, y = 3;
+        c.image(UI_TEX, 333, 431, (int)DW, (int)DH, x, y);
+        snprintf(buf, sizeof buf, "%s. %d", days[g.weekday()], g.day);
+        c.text(x + 47, y + 2, 0.4f, COL_TEXT, buf, ALIGN_CENTER);
+        c.text(x + 48, y + 27, 0.34f, COL_TEXT, g.timeString(), ALIGN_CENTER);
+        c.image(UI_TEX, 340, 472, 65, 17, x + 4, y + DH + 1);
+        snprintf(buf, sizeof buf, "%d", g.money);
+        c.text(x + 62, y + DH + 3, 0.4f, COL_TEXT, buf, ALIGN_RIGHT);
+    } else {
+        float x = TOP_W - 104 + hs, y = 4;
+        box(c, x, y, 100, 52, COL_PANEL, COL_BORDER);
+        snprintf(buf, sizeof buf, "%s %d", days[g.weekday()], g.day);
+        c.text(x + 50, y + 3, 0.5f, COL_TEXT, buf, ALIGN_CENTER);
+        c.text(x + 50, y + 18, 0.5f, COL_TEXT, g.timeString(), ALIGN_CENTER);
+        snprintf(buf, sizeof buf, "%dg", g.money);
+        c.text(x + 94, y + 34, 0.45f, COL_TEXT, buf, ALIGN_RIGHT);
+        c.text(x + 6, y + 34, 0.45f, COL_TEXT, seasonShort(g.season));
+    }
 
     float ex = TOP_W - 16 + hs, ey = TOP_H - 74;
     box(c, ex - 2, ey - 2, 14, 72, COL_PANEL, COL_BORDER);
@@ -826,8 +895,8 @@ static void drawChest(Canvas& c, Game& g) {
     c.text(BOT_W - 36, 8, 0.42f, COL_TEXT, "Close", ALIGN_CENTER);
     box(c, 4, CH_Y, BOT_W - 8, 102, COL_PANEL, COL_BORDER);
     box(c, 4, INV_Y2, BOT_W - 8, 100, COL_PANEL, COL_BORDER);
-    c.text(HOT_X, CH_Y + 1, 0.38f, COL_TEXT_SOFT, "In the chest - tap to take");
-    c.text(HOT_X, INV_Y2 + 1, 0.38f, COL_TEXT_SOFT, "Backpack - tap to store");
+    c.text(HOT_X, CH_Y + 3, 0.36f, COL_TEXT_SOFT, "In the chest - tap to take");
+    c.text(HOT_X, INV_Y2 + 3, 0.36f, COL_TEXT_SOFT, "Backpack - tap to store");
     for (int i = 0; i < (int)p->items.size() && i < 36; i++) {
         float x, y;
         chestSlotPos(true, i, x, y);
