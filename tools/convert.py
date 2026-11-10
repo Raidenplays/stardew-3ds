@@ -47,7 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     import numpy as np
-    from PIL import Image
+    from PIL import Image, ImageDraw
 except ImportError:
     sys.exit("Needs Pillow and numpy:  pip install pillow numpy")
 
@@ -1427,6 +1427,64 @@ def _write_bold_font(content, out_root):
         print(f"  font_bold.dat: {len(lines) - 1} glyphs")
 
 
+# ---------------------------------------------------------------- 3DS badge
+# An original "3DS" plank that hangs under the title logo (drawn here, not
+# taken from the game).
+OUT = (92, 50, 22)        # dark outline
+WOOD = (214, 148, 84)     # plank
+WOOD_D = (180, 112, 58)   # grain / shade
+WOOD_L = (238, 184, 120)  # highlight
+LET = (246, 222, 170)     # letter boards
+LET_D = (206, 166, 104)
+NAIL = (222, 222, 214)
+
+def plank_letter(d, ox, oy, rects):
+    """Each letter is a few little boards: outline, fill, a highlight line, a nail."""
+    for (x, y, w, h) in rects:
+        x, y = ox + x, oy + y
+        d.rectangle([x - 1, y - 1, x + w, y + h], fill=OUT)
+        d.rectangle([x, y, x + w - 1, y + h - 1], fill=LET)
+        if w >= h:
+            d.line([x, y + h - 1, x + w - 1, y + h - 1], fill=LET_D)
+        else:
+            d.line([x + w - 1, y, x + w - 1, y + h - 1], fill=LET_D)
+    for (x, y, w, h) in rects[:1]:
+        d.point((ox + x + 1, oy + y + 1), fill=NAIL)
+
+def make_badge():
+    W, H = 100, 40
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # two short ropes it hangs from
+    for rx in (22, 77):
+        d.line([rx, 0, rx, 6], fill=OUT, width=2)
+        d.line([rx, 0, rx, 6], fill=(170, 130, 80), width=1)
+    # the plank
+    d.rounded_rectangle([2, 6, W - 3, H - 2], radius=4, fill=WOOD, outline=OUT, width=2)
+    d.line([6, 9, W - 7, 9], fill=WOOD_L)
+    for gy in (17, 26, 33):
+        d.line([6, gy, W - 7, gy], fill=WOOD_D)
+    for nx, ny in ((7, 11), (W - 9, 11), (7, H - 7), (W - 9, H - 7)):
+        d.rectangle([nx, ny, nx + 1, ny + 1], fill=NAIL)
+    # "3" : top, middle, bottom bars + right post
+    plank_letter(d, 20, 12, [(0, 0, 14, 4), (14, 0, 4, 22), (4, 9, 11, 4), (0, 18, 14, 4)])
+    # "D" : left post, top, bottom, right post (set in a little)
+    plank_letter(d, 42, 12, [(0, 0, 4, 22), (4, 0, 11, 4), (4, 18, 11, 4), (14, 2, 4, 18)])
+    # "S" : top, left upper post, middle, right lower post, bottom
+    plank_letter(d, 64, 12, [(0, 0, 17, 4), (0, 3, 4, 8), (0, 9, 17, 4), (13, 12, 4, 8), (0, 18, 17, 4)])
+    return img
+
+
+
+def write_badge(out_root):
+    tex_dir = os.path.join(out_root, "tex")
+    os.makedirs(tex_dir, exist_ok=True)
+    tmp = os.path.join(tex_dir, "_badge.png")
+    make_badge().save(tmp)
+    convert_texture(tmp, os.path.join(tex_dir, "UiBadge_3ds.s3t"))
+    os.remove(tmp)
+
+
 # ---------------------------------------------------------------- parallel work
 # Python threads can't use more than one core for this kind of work, so the
 # heavy steps run in separate processes (--jobs=N, default: all cores).
@@ -1596,6 +1654,7 @@ def main():
     write_events(content, os.path.join(out_root, "data"))
     print("Fonts...")
     write_fonts(content, out_root)
+    write_badge(out_root)
     took("data, villagers, events")
 
     for t in sorted(TEXTURES_FROM_DATA):
