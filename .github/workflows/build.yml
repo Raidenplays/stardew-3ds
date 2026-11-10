@@ -1,10 +1,13 @@
-# Builds stardew3ds.3dsx with devkitPro's official image. The .3dsx is only
-# the engine; game files come from your own copy via tools/convert.py.
+# Builds stardew3ds.3dsx with devkitPro's official image and publishes it as a
+# release ("build-N"). The .3dsx is only the engine; game files come from your
+# own copy via tools/convert.py.
 name: build
 on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build-3dsx:
     runs-on: ubuntu-latest
@@ -19,3 +22,15 @@ jobs:
           path: |
             stardew3ds.3dsx
             stardew3ds.smdh
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: stardew3ds build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          body: |
+            Engine build from ${{ github.sha }}. Copy stardew3ds.3dsx to sdmc:/3ds/ and your
+            converted files to sdmc:/3ds/stardew3ds/ (see the README).
+          files: |
+            stardew3ds.3dsx
