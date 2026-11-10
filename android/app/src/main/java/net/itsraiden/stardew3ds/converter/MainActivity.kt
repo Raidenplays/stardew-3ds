@@ -280,18 +280,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Gets the newest build's converter code and stardew3ds.3dsx (skips what it already has). */
+    /** Downloads the newest build's converter code and stardew3ds.3dsx - only when
+     *  the app doesn't have them yet. */
     private fun updateFromRepo() {
-        progress(2, "Checking GitHub for the newest build...")
+        if (File(toolsDir, "convert.py").isFile && File(gameDir, "stardew3ds.3dsx").isFile) {
+            val have = prefs.getString("build", "") ?: ""
+            say("Using your converter and game" + if (have.isNotEmpty()) " ($have)" else "")
+            progress(18, "Using what you have" + if (have.isNotEmpty()) " ($have)" else "")
+            return
+        }
+        progress(2, "Getting the converter and game from GitHub...")
         try {
             val rel = JSONArray(fetch("https://api.github.com/repos/$repo/releases?per_page=1")!!).getJSONObject(0)
             val tag = rel.getString("tag_name")
-            val have = prefs.getString("build", "")
-            if (tag == have && File(toolsDir, "convert.py").isFile && File(gameDir, "stardew3ds.3dsx").isFile) {
-                say("Up to date ($tag)")
-                progress(18, "Up to date ($tag)")
-                return
-            }
             say("Getting $tag from GitHub...")
             toolsDir.mkdirs()
             gameDir.mkdirs()
