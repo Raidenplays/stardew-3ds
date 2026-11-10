@@ -117,7 +117,7 @@ static int hoeDirtIndex(int sum) {
 // ================================================================ top screen
 struct DrawItem {
     float sortY;
-    int kind;   // 0 debris, 1 crop, 2 building, 3 player
+    int kind;   // 0 debris, 1 crop, 2 building, 3 player, 4 villager, 5 furniture
     int a, b;
 };
 
@@ -198,6 +198,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     items.push_back({g.py, 3, 0, 0});
     for (size_t i = 0; i < g.npcs.size(); i++)
         if (g.npcs[i].loc == g.location().name) items.push_back({g.npcs[i].y, 4, (int)i, 0});
+    for (size_t i = 0; i < g.data.layout.furniture.size(); i++) {
+        const FurniturePlacement& fp = g.data.layout.furniture[i];
+        if (fp.map != g.location().name) continue;
+        auto fd = g.data.furniture.find(fp.id);
+        int bh = fd != g.data.furniture.end() ? fd->second.boxH : 1;
+        items.push_back({(float)((fp.y + bh) * TILE) - 1, 5, (int)i, 0});
+    }
     std::stable_sort(items.begin(), items.end(),
                      [](const DrawItem& a, const DrawItem& b) { return a.sortY < b.sortY; });
 
@@ -231,7 +238,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
             case 3: {
                 float dx = std::floor(g.px - 8 - camX), dy = std::floor(g.py - 30 - camY);
-                static const int dirRow[4] = {0, 1, 2, 1};
+                static const int dirRow[4] = {0, 1, 2, 1};   // down, right, up, left(=right flipped)
                 bool flip = g.facing == FACE_LEFT;
                 int step = 0;
                 if (g.moving) {
@@ -239,16 +246,45 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     step = cycle[(int)(g.walkTime * 8) & 3];
                 }
                 int frame = dirRow[g.facing] * 6 + step;
-                c.image("Characters_Farmer_farmer_base", (frame % 6) * 16, (frame / 6) * 32, 16, 32, dx, dy, flip);
-                int style = 0;
-                c.image("Characters_Farmer_hairstyles", (style % 8) * 16,
-                        (style / 8) * 96 + dirRow[g.facing] * 32, 16, 32, dx, dy + (step ? 1 : 0), flip,
-                        RGBA(0x8A, 0x4E, 0x26));
+                int fx = (frame % 6) * 16, fy = (frame / 6) * 32;
+                int bob = g.data.bob(frame);
+                const Outfit& o = g.data.layout.outfit;
+                const std::string base = "Characters_Farmer_farmer_base";
+                // 1. body
+                c.image(base, fx, fy, 16, 32, dx, dy, flip);
+                // 2. pants: per-style blocks of 192x688, laid out like the body frames
+                if (c.texWidth("Characters_Farmer_pants") > 0) {
+                    int px0 = (o.pants % 10) * 192, py0 = (o.pants / 10) * 688;
+                    c.image("Characters_Farmer_pants", px0 + fx, py0 + fy, 16, 32, dx, dy, flip,
+                            RGBA(o.pantsR, o.pantsG, o.pantsB));
+                }
+                // 3. shirt: 8x8 panels, one column per shirt (down, right, left, up)
+                if (c.texWidth("Characters_Farmer_shirts") > 0) {
+                    static const int shirtRow[4] = {0, 1, 3, 2};   // by facing: down right up left
+                    int sx = (o.shirt % 16) * 8, sy = (o.shirt / 16) * 32 + shirtRow[g.facing] * 8;
+                    c.image("Characters_Farmer_shirts", sx, sy, 8, 8, dx + 4, dy + 15 + bob);
+                }
+                // 4. arms: same frame, one block to the right of the body
+                if (c.texWidth(base) >= 192) c.image(base, fx + 96, fy, 16, 32, dx, dy, flip);
+                // 5. hair
+                int hs = o.hair;
+                c.image("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[g.facing] * 32, 16,
+                        32, dx, dy + bob, flip, RGBA(o.hairR, o.hairG, o.hairB));
                 if (g.toolTimer > 0 && g.inv[g.selected].type == SLOT_TOOL) {
                     int tx, ty;
                     g.targetTile(tx, ty);
                     slotIcon(c, g, g.inv[g.selected], tx * TILE - camX, ty * TILE - camY - 6);
                 }
+                break;
+            }
+            case 5: {
+                const FurniturePlacement& fp = g.data.layout.furniture[it.a];
+                auto fd = g.data.furniture.find(fp.id);
+                if (fd == g.data.furniture.end()) break;
+                int sw = fd->second.spriteW * 16, sh = fd->second.spriteH * 16;
+                int sx = (fp.id % 32) * 16, sy = (fp.id / 32) * 16;
+                float bottom = (fp.y + fd->second.boxH) * TILE;
+                c.image("TileSheets_furniture", sx, sy, sw, sh, fp.x * TILE - camX, bottom - sh - camY);
                 break;
             }
             case 4: {

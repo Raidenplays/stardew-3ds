@@ -69,6 +69,26 @@ struct GraphEdge {
     int tx, ty;          // arrival tile
 };
 
+struct FurnitureDef {
+    int id = 0;
+    std::string name, type;
+    int spriteW = 1, spriteH = 2;     // tiles
+    int boxW = 1, boxH = 1;           // footprint, tiles
+};
+
+struct FurniturePlacement {
+    std::string map;
+    int id = 0;
+    int x = 0, y = 0;                 // top-left of footprint
+};
+
+struct Outfit {
+    int shirt = 0, pants = 0;
+    uint8_t pantsR = 46, pantsG = 85, pantsB = 183;
+    int hair = 0;
+    uint8_t hairR = 138, hairG = 78, hairB = 38;
+};
+
 struct ShopItem {
     int itemId = -1;
     int price = 0;
@@ -86,6 +106,8 @@ struct Layout {
     std::string wakeMap = "FarmHouse";
     int wakeX = 9, wakeY = 8;
     std::string farmerName = "Farmer";
+    Outfit outfit;
+    std::vector<FurniturePlacement> furniture;
 };
 
 class GameData {
@@ -103,6 +125,9 @@ public:
     std::vector<ToolDef> tools;
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
     std::vector<NpcDef> npcs;
+    std::unordered_map<int, FurnitureDef> furniture;
+    std::vector<int> farmerBob;    // per body frame: pixels the body drops
+    int bob(int frame) const { return frame >= 0 && frame < (int)farmerBob.size() ? farmerBob[frame] : 0; }
     std::vector<int> universalTastes[TASTE_COUNT];
     std::unordered_map<std::string, std::vector<GraphEdge>> graph;   // by source map
     const NpcDef* npc(const std::string& name) const;

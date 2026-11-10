@@ -305,6 +305,13 @@ std::string Game::timeString(int minutes) {
 std::string Game::timeString() const { return timeString(timeOfDay); }
 
 bool Game::buildingAt(int x, int y) const {
+    for (auto& fp : data.layout.furniture) {
+        if (fp.map != cur->name) continue;
+        auto it = data.furniture.find(fp.id);
+        int bw = it != data.furniture.end() ? it->second.boxW : 1;
+        int bh = it != data.furniture.end() ? it->second.boxH : 1;
+        if (x >= fp.x && x < fp.x + bw && y >= fp.y && y < fp.y + bh) return true;
+    }
     if (!cur->isFarm) return false;
     for (auto& b : data.layout.buildings)
         if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY && y < b.tileY + b.footH)

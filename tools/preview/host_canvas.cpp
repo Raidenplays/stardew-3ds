@@ -39,17 +39,25 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
     if (!f) return false;
     char magic[4];
     uint16_t hdr[4];
-    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "S3T1", 4) || fread(hdr, 2, 4, f) != 4) {
+    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) && memcmp(magic, "S3T2", 4)) ||
+        fread(hdr, 2, 4, f) != 4) {
         fclose(f);
         return false;
     }
+    bool v2 = magic[3] == '2';
     out.w = hdr[0];
     out.h = hdr[1];
     out.px.assign((size_t)out.w * out.h, 0);
     for (int p = 0; p < hdr[2]; p++) {
-        uint16_t ph[4];
-        if (fread(ph, 2, 4, f) != 4) break;
-        int y0 = ph[0], hh = ph[1], pw = ph[2], pgh = ph[3];
+        uint16_t ph[6] = {0, 0, 0, 0, 0, 0};
+        int x0 = 0, y0, ww, hh, pw, pgh;
+        if (v2) {
+            if (fread(ph, 2, 6, f) != 6) break;
+            x0 = ph[0]; y0 = ph[1]; ww = ph[2]; hh = ph[3]; pw = ph[4]; pgh = ph[5];
+        } else {
+            if (fread(ph, 2, 4, f) != 4) break;
+            y0 = ph[0]; hh = ph[1]; pw = ph[2]; pgh = ph[3]; ww = out.w;
+        }
         std::vector<uint8_t> data((size_t)pw * pgh * 4);
         if (fread(data.data(), 1, data.size(), f) != data.size()) break;
         for (int gy = 0; gy < pgh; gy++)
@@ -60,9 +68,9 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
                              ((xx & 4) << 2) | ((yy & 4) << 3);
                 size_t i = ((size_t)tile * 64 + morton) * 4;
                 int imgY = pgh - 1 - gy;   // GPU row 0 = image bottom
-                if (imgY >= hh || x >= out.w) continue;
+                if (imgY >= hh || x >= ww) continue;
                 uint8_t a = data[i], b = data[i + 1], g = data[i + 2], r = data[i + 3];
-                out.px[(size_t)(y0 + imgY) * out.w + x] =
+                out.px[(size_t)(y0 + imgY) * out.w + x0 + x] =
                     ((uint32_t)r << 24) | ((uint32_t)g << 16) | ((uint32_t)b << 8) | a;
             }
     }
