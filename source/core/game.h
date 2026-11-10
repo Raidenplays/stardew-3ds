@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -87,6 +88,52 @@ struct DialogueBox {
     std::string npc;          // internal name ("" for plain messages)
     std::vector<DialoguePage> pages;
     size_t page = 0;
+};
+
+// One character in a cutscene ("farmer" or a villager's internal name).
+struct EventActor {
+    std::string name;
+    float x = 0, y = 0;          // feet, map pixels
+    int facing = 0;              // ours: 0 down 1 right 2 up 3 left
+    bool visible = true;
+    int frame = -1;              // showFrame override, -1 = normal
+    std::vector<int> anim;       // animate frames
+    int animMs = 100;
+    bool animLoop = false;
+    float animT = 0;
+    float tx = 0, ty = 0;        // move target
+    bool moving = false;
+    int endFacing = 0;
+    float walkTime = 0;
+    float jumpT = -1;            // >= 0 while jumping
+    float offX = 0, offY = 0;    // positionOffset
+    int emote = -1;
+    float emoteT = 0;
+    std::string bubble;          // textAboveHead
+    float bubbleT = 0;
+    float speed = 40;            // px/s
+};
+
+struct Cutscene {
+    bool active = false;
+    std::string id, location;
+    std::vector<std::string> cmds;   // the script, split on '/'
+    size_t ip = 0;                   // next command
+    float wait = 0;                  // pause timer
+    bool waitMoves = false;          // a non-continue move is running
+    std::vector<EventActor> actors;
+    float camX = 0, camY = 0;        // camera centre, map pixels
+    float panVX = 0, panVY = 0, panT = 0;
+    float fade = 0;                  // 0 clear .. 1 black
+    float fadeTarget = 0, fadeSpeed = 1.5f;
+    bool skippable = false;
+    bool forkFlag = false;
+    int forkWant = -1;               // question forkN: which answer arms the fork
+    bool questionPending = false;
+    std::string retLoc;              // where to put the player afterwards
+    float retX = 0, retY = 0;
+    int retFacing = 0;
+    std::string after;               // "newDay", "warpOut" ...
 };
 
 struct Input {
@@ -190,8 +237,21 @@ public:
 
     std::vector<NpcState> npcs;
     DialogueBox dialogue;
+    Cutscene cutscene;
+    std::set<std::string> eventsSeen;
+    std::set<std::string> mailReceived;
+
+    // Cutscenes
+    bool startEvent(const std::string& location, const std::string& key, const std::string& script);
+    bool checkEvents();                 // run the first eligible event here, if any
+    bool eventConditionsMet(const std::string& key) const;
+    void skipEvent();
+    EventActor* eventActor(const std::string& name);
 
 private:
+    void eventUpdate(float dt);
+    bool eventStep(const std::string& cmd);   // false = wait before the next command
+    void endEvent();
     void npcsStartDay();
     void npcsUpdate(float dt);
     void npcPlan(NpcState& n, const SchedEntry& e);

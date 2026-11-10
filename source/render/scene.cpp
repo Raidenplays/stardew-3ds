@@ -114,17 +114,60 @@ static int hoeDirtIndex(int sum) {
     return 0;
 }
 
+
+// The player: body, pants, shirt, arms, hair. (x, y) = feet on screen.
+static void drawFarmer(Canvas& c, const Game& g, float sx, float sy, int facing, bool moving, float walkTime,
+                       int frameOverride) {
+    float dx = std::floor(sx - 8), dy = std::floor(sy - 30);
+    static const int dirRow[4] = {0, 1, 2, 1};   // down, right, up, left(=right flipped)
+    bool flip = facing == FACE_LEFT;
+    int step = 0;
+    if (moving) {
+        static const int cycle[4] = {0, 1, 0, 2};
+        step = cycle[(int)(walkTime * 8) & 3];
+    }
+    int frame = frameOverride >= 0 ? frameOverride : dirRow[facing & 3] * 6 + step;
+    int fx = (frame % 6) * 16, fy = (frame / 6) * 32;
+    int bob = g.data.bob(frame);
+    const Outfit& o = g.data.layout.outfit;
+    const std::string base = "Characters_Farmer_farmer_base";
+    c.image(base, fx, fy, 16, 32, dx, dy, flip);
+    if (c.texWidth("Characters_Farmer_pants") > 0) {
+        int px0 = (o.pants % 10) * 192, py0 = (o.pants / 10) * 688;
+        c.image("Characters_Farmer_pants", px0 + fx, py0 + fy, 16, 32, dx, dy, flip,
+                RGBA(o.pantsR, o.pantsG, o.pantsB));
+    }
+    if (c.texWidth("Characters_Farmer_shirts") > 0) {
+        static const int shirtRow[4] = {0, 1, 3, 2};
+        int shx = (o.shirt % 16) * 8, shy = (o.shirt / 16) * 32 + shirtRow[facing & 3] * 8;
+        c.image("Characters_Farmer_shirts", shx, shy, 8, 8, dx + 4, dy + 15 + bob);
+    }
+    if (c.texWidth(base) >= 192) c.image(base, fx + 96, fy, 16, 32, dx, dy, flip);
+    int hs = o.hair;
+    c.image("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[facing & 3] * 32, 16, 32,
+            dx, dy + bob, flip, RGBA(o.hairR, o.hairG, o.hairB));
+}
+
 // ================================================================ top screen
 struct DrawItem {
     float sortY;
-    int kind;   // 0 debris, 1 crop, 2 building, 3 player, 4 villager, 5 furniture
+    int kind;   // 0 debris, 1 crop, 2 building, 3 player, 4 villager, 5 furniture, 6 cutscene actor
     int a, b;
 };
 
 static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     const TileMap& m = g.map();
     int mapW = m.width() * TILE, mapH = m.height() * TILE;
+    const Cutscene& cs = g.cutscene;
     float camX = g.px - TOP_W / 2.0f, camY = g.py - 16 - TOP_H / 2.0f;
+    if (cs.active) {
+        // events park the camera far off the map to show a black screen
+        if (cs.camX < -20 * TILE || cs.camY < -20 * TILE || cs.camX > mapW + 20 * TILE ||
+            cs.camY > mapH + 20 * TILE)
+            return;
+        camX = cs.camX - TOP_W / 2.0f;
+        camY = cs.camY - TOP_H / 2.0f;
+    }
     camX = std::max(0.0f, std::min(camX, (float)(mapW - TOP_W)));
     camY = std::max(0.0f, std::min(camY, (float)(mapH - TOP_H)));
     if (mapW < TOP_W) camX = (mapW - TOP_W) / 2.0f;
@@ -195,9 +238,14 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             auto& b = g.data.layout.buildings[i];
             items.push_back({(float)((b.tileY + b.footH) * TILE), 2, (int)i, 0});
         }
-    items.push_back({g.py, 3, 0, 0});
-    for (size_t i = 0; i < g.npcs.size(); i++)
-        if (g.npcs[i].loc == g.location().name) items.push_back({g.npcs[i].y, 4, (int)i, 0});
+    if (cs.active) {
+        for (size_t i = 0; i < cs.actors.size(); i++)
+            if (cs.actors[i].visible) items.push_back({cs.actors[i].y, 6, (int)i, 0});
+    } else {
+        items.push_back({g.py, 3, 0, 0});
+        for (size_t i = 0; i < g.npcs.size(); i++)
+            if (g.npcs[i].loc == g.location().name) items.push_back({g.npcs[i].y, 4, (int)i, 0});
+    }
     for (size_t i = 0; i < g.data.layout.furniture.size(); i++) {
         const FurniturePlacement& fp = g.data.layout.furniture[i];
         if (fp.map != g.location().name) continue;
@@ -237,43 +285,39 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 break;
             }
             case 3: {
-                float dx = std::floor(g.px - 8 - camX), dy = std::floor(g.py - 30 - camY);
-                static const int dirRow[4] = {0, 1, 2, 1};   // down, right, up, left(=right flipped)
-                bool flip = g.facing == FACE_LEFT;
-                int step = 0;
-                if (g.moving) {
-                    static const int cycle[4] = {0, 1, 0, 2};
-                    step = cycle[(int)(g.walkTime * 8) & 3];
-                }
-                int frame = dirRow[g.facing] * 6 + step;
-                int fx = (frame % 6) * 16, fy = (frame / 6) * 32;
-                int bob = g.data.bob(frame);
-                const Outfit& o = g.data.layout.outfit;
-                const std::string base = "Characters_Farmer_farmer_base";
-                // 1. body
-                c.image(base, fx, fy, 16, 32, dx, dy, flip);
-                // 2. pants: per-style blocks of 192x688, laid out like the body frames
-                if (c.texWidth("Characters_Farmer_pants") > 0) {
-                    int px0 = (o.pants % 10) * 192, py0 = (o.pants / 10) * 688;
-                    c.image("Characters_Farmer_pants", px0 + fx, py0 + fy, 16, 32, dx, dy, flip,
-                            RGBA(o.pantsR, o.pantsG, o.pantsB));
-                }
-                // 3. shirt: 8x8 panels, one column per shirt (down, right, left, up)
-                if (c.texWidth("Characters_Farmer_shirts") > 0) {
-                    static const int shirtRow[4] = {0, 1, 3, 2};   // by facing: down right up left
-                    int sx = (o.shirt % 16) * 8, sy = (o.shirt / 16) * 32 + shirtRow[g.facing] * 8;
-                    c.image("Characters_Farmer_shirts", sx, sy, 8, 8, dx + 4, dy + 15 + bob);
-                }
-                // 4. arms: same frame, one block to the right of the body
-                if (c.texWidth(base) >= 192) c.image(base, fx + 96, fy, 16, 32, dx, dy, flip);
-                // 5. hair
-                int hs = o.hair;
-                c.image("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[g.facing] * 32, 16,
-                        32, dx, dy + bob, flip, RGBA(o.hairR, o.hairG, o.hairB));
+                drawFarmer(c, g, g.px - camX, g.py - camY, g.facing, g.moving, g.walkTime, -1);
                 if (g.toolTimer > 0 && g.inv[g.selected].type == SLOT_TOOL) {
                     int tx, ty;
                     g.targetTile(tx, ty);
                     slotIcon(c, g, g.inv[g.selected], tx * TILE - camX, ty * TILE - camY - 6);
+                }
+                break;
+            }
+            case 6: {
+                const EventActor& a = cs.actors[it.a];
+                float jump = a.jumpT >= 0 ? -std::sin(a.jumpT / 0.45f * 3.14159f) * 8 : 0;
+                float ax = a.x + a.offX - camX, ay = a.y + a.offY - camY + jump;
+                int frame = a.frame;
+                if (!a.anim.empty()) {
+                    size_t k = (size_t)(a.animT * 1000 / a.animMs);
+                    frame = a.animLoop ? a.anim[k % a.anim.size()] : a.anim[std::min(k, a.anim.size() - 1)];
+                }
+                if (a.name == "farmer") {
+                    drawFarmer(c, g, ax, ay, a.facing, a.moving, a.walkTime, frame);
+                } else {
+                    int f = frame >= 0 ? frame : (a.facing & 3) * 4 + (a.moving ? ((int)(a.walkTime * 6)) & 3 : 0);
+                    c.image("Characters_" + a.name, (f % 4) * 16, (f / 4) * 32, 16, 32, std::floor(ax - 8),
+                            std::floor(ay - 30));
+                }
+                if (a.emoteT > 0 && a.emote >= 0) {
+                    int ef = a.emote + ((int)((1.0f - a.emoteT) * 8) & 3);
+                    c.image("LooseSprites_emotes", (ef % 4) * 16, (ef / 4) * 16, 16, 16, std::floor(ax - 8),
+                            std::floor(ay - 50));
+                }
+                if (a.bubbleT > 0 && !a.bubble.empty()) {
+                    float tw = c.textWidth(a.bubble, 0.42f) + 10;
+                    box(c, ax - tw / 2, ay - 52, tw, 18, RGBA(0xFF, 0xFF, 0xFF), RGBA(0x60, 0x40, 0x30), 1);
+                    c.text(ax, ay - 50, 0.42f, COL_TEXT, a.bubble, ALIGN_CENTER);
                 }
                 break;
             }
@@ -302,7 +346,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     drawLayer(L_ALWAYSFRONT, 1.5f);
 
     const Slot& sel = g.inv[g.selected];
-    if (!sel.empty() && g.toolTimer <= 0) {
+    if (!sel.empty() && g.toolTimer <= 0 && !cs.active) {
         int tx, ty;
         g.targetTile(tx, ty);
         float cx = tx * TILE - camX + c.shift(-1.0f), cy = ty * TILE - camY;
@@ -383,6 +427,14 @@ void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
     c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));
     drawWorld(c, g, timeMs);
     drawWeatherAndLight(c, g, timeMs);
+    if (g.cutscene.active) {
+        if (g.cutscene.fade > 0)
+            c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(std::min(1.0f, g.cutscene.fade) * 255)));
+        // letterbox bars, so it reads as a cutscene
+        c.rect(0, 0, TOP_W, 12, RGBA(0, 0, 0));
+        c.rect(0, TOP_H - 12, TOP_W, 12, RGBA(0, 0, 0));
+        return;
+    }
     drawHud(c, g);
     if (g.fade > 0) c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(g.fade * 255)));
 }
@@ -665,20 +717,21 @@ static void drawDialogue(Canvas& c, Game& g, Ui& ui) {
     const DialoguePage& p = d.pages[d.page];
     const NpcDef* def = g.data.npc(d.npc);
 
-    box(c, 4, 4, 210, 132, COL_PANEL, COL_BORDER, 3);
-    auto lines = wrapText(c, p.text, 0.5f, 192);
+    float boxW = def ? 210 : 312;
+    box(c, 4, 4, boxW, 132, COL_PANEL, COL_BORDER, 3);
+    auto lines = wrapText(c, p.text, 0.5f, boxW - 18);
     ui.dlgLines = (int)lines.size();
     for (int i = 0; i < DLG_LINES && ui.dlgLine + i < (int)lines.size(); i++)
         c.text(12, 10 + i * 16, 0.5f, COL_TEXT, lines[ui.dlgLine + i]);
     bool lastPart = ui.dlgLine + DLG_LINES >= (int)lines.size();
 
-    box(c, 218, 4, 98, 98, RGBA(0xE7, 0xC3, 0x83), COL_BORDER, 3);
     if (def) {
+        box(c, 218, 4, 98, 98, RGBA(0xE7, 0xC3, 0x83), COL_BORDER, 3);
         int idx = std::max(0, p.portrait);
         c.image("Portraits_" + def->name, (idx % 2) * 64, (idx / 2) * 64, 64, 64, 235, 21);
+        box(c, 218, 106, 98, 30, COL_PANEL_DARK, COL_BORDER, 3);
+        c.text(267, 112, 0.5f, COL_TEXT, def->display, ALIGN_CENTER);
     }
-    box(c, 218, 106, 98, 30, COL_PANEL_DARK, COL_BORDER, 3);
-    c.text(267, 112, 0.5f, COL_TEXT, def ? def->display : "", ALIGN_CENTER);
 
     if (lastPart && !p.choices.empty()) {
         for (size_t i = 0; i < p.choices.size() && i < 3; i++) {
@@ -687,7 +740,7 @@ static void drawDialogue(Canvas& c, Game& g, Ui& ui) {
             c.text(14, y + 6, 0.48f, COL_TEXT, p.choices[i].label);
         }
     } else {
-        c.text(206, 118, 0.42f, COL_TEXT_SOFT, lastPart ? "A  next" : "A  more", ALIGN_RIGHT);
+        c.text(boxW - 8, 118, 0.42f, COL_TEXT_SOFT, lastPart ? "A  next" : "A  more", ALIGN_RIGHT);
         c.text(BOT_W / 2, 200, 0.42f, COL_CREAM, "Tap anywhere or press A", ALIGN_CENTER);
     }
 }
@@ -868,6 +921,13 @@ static void drawSummary(Canvas& c, Game& g) {
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
     if (ui.showSummary) { drawSummary(c, g); return; }
     if (g.dialogue.active) { drawDialogue(c, g, ui); return; }
+    if (g.cutscene.active) {
+        c.rect(0, 0, BOT_W, BOT_H, COL_BG);
+        box(c, 40, 80, 240, 70, COL_PANEL, COL_BORDER, 3);
+        c.text(160, 92, 0.6f, COL_TEXT, placeName(g.location().name), ALIGN_CENTER);
+        c.text(160, 120, 0.42f, COL_TEXT_SOFT, g.cutscene.skippable ? "START to skip" : "...", ALIGN_CENTER);
+        return;
+    }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     drawHotbarAndTabs(c, g, ui);
@@ -880,6 +940,7 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
 void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (ui.showSummary) { ui.showSummary = false; return; }
     if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
+    if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
     int s = slotAt(tx, ty, ui.tab == TAB_ITEMS);
     if (s >= 0) {

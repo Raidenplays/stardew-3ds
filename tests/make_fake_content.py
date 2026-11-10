@@ -634,6 +634,21 @@ def villager_data():
         json.dump(sch, open(os.path.join(C, "Characters", "schedules", n + ".json"), "w"), indent=1)
     for n, dia in dialogue.items():
         json.dump(dia, open(os.path.join(C, "Characters", "Dialogue", n + ".json"), "w"), indent=1)
+    # an original placeholder cutscene: needs the "juniperInvite" mail, so it
+    # only fires when a test asks for it
+    os.makedirs(os.path.join(C, "Data", "Events"), exist_ok=True)
+    events = {
+        "900/n juniperInvite/t 600 2600":
+            'none/20 30/farmer 17 30 1 Juniper 22 30 3/skippable/pause 300/'
+            'speak Juniper "Oh! You startled me.$s"/emote farmer 16/move Juniper -2 0 3/'
+            'faceDirection farmer 1/'
+            'speak Juniper "I paint the river most mornings.#$b#This one might be my best yet.$h"/'
+            'question fork1 "What do you think?#It\'s beautiful.#Needs more ducks."/fork juniper_ducks/'
+            'friendship Juniper 50/speak Juniper "You\'re sweet.$l"/end',
+        "juniper_ducks": 'jump Juniper/speak Juniper "Ducks?! ...okay, maybe a few.$h"/friendship Juniper 20/end',
+    }
+    json.dump(events, open(os.path.join(C, "Data", "Events", "Town.json"), "w"), indent=1)
+
     for n, (shirt, hair, skin) in VILLAGERS.items():
         save(villager_sprites(shirt, hair, skin), f"Characters/{n}")
         save(villager_portraits(shirt, hair, skin), f"Portraits/{n}")

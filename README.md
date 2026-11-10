@@ -6,6 +6,31 @@ art, maps or data from the game. You convert your own Steam install's content
 on your PC, and the 3DS reads the result from the SD card. This is the same
 model as ScummVM or OpenMW. Personal use only.
 
+## Cutscenes
+
+- **Events from your files:** the converter exports `Data/Events/<map>.json`
+  (base language). That's about 260 events in 45 maps on real 1.6 files.
+  Walking into a map runs the first event whose conditions pass and that
+  you haven't seen yet. Seen events and mail flags are saved.
+- **Conditions:** `f t w d e k z y u n l p o O D H Hn Hl *n j M a i r`, plus
+  `!` negation. Anything else is treated as "not yet", so nothing fires
+  early.
+- **Commands:** `move` (several actors, `continue`), `speak`, `message`,
+  `question` + `fork` / `switchEvent`, `quickQuestion`, `faceDirection`,
+  `pause`, `warp`, `showFrame`, `animate`, `stopAnimation`, `jump`,
+  `emote`, `textAboveHead`, `positionOffset`, `speed`, `viewport` (incl.
+  `move`), `globalFade` / `ToClear` / `fade`, `friendship`, `mail` /
+  `addMailReceived`, `changeLocation`, `addTemporaryActor`, `skippable`,
+  and `end` (plain, `newDay`, `warpOut`, `position`, `dialogue`). Sounds,
+  music, screen effects, temporary sprites and minigames are skipped for
+  now; the scene carries on.
+- **On screen:** letterbox bars, the event camera, actors (the farmer in
+  their outfit, villagers with frames and animations), emotes, speech
+  above heads, and fades. The clock stops. START skips skippable scenes,
+  and skipping still applies the scene's friendship and mail changes.
+- `tools/preview/preview <root> <out> --event=SeedShop:16` records any
+  event to PNGs.
+
 ## Milestone 3: villagers (this build)
 
 - **Everyone from your files:** the converter reads `Data/Characters.json`

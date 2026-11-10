@@ -177,13 +177,62 @@ int main(int argc, char** argv) {
     auto rs = resolveSchedule(*g.data.npc("Juniper"), ctx);
     assert(rs.size() == 2 && rs[0].time == 9 * 60 && rs[0].x == 30);
 
+    // ---- cutscenes
+    assert(!g.cutscene.active);
+    g.mailReceived.insert("juniperInvite");
+    int fBefore = g.npcByName("Juniper")->friendship;
+    g.timeOfDay = 9 * 60;
+    g.teleport("Town", 20, 31);                  // entering Town checks its events
+    assert(g.cutscene.active && g.cutscene.id == "900");
+    g.update(1.0f / 60, none);
+    assert(g.cutscene.skippable);
+    assert(g.cutscene.actors.size() == 2);
+    int clockBefore = g.timeOfDay;
+    int guard = 0;
+    bool sawQuestion = false;
+    while (g.cutscene.active && guard++ < 20000) {
+        if (g.dialogue.active) {
+            const DialogueBox& d = g.dialogue;
+            if (d.page < d.pages.size() && !d.pages[d.page].choices.empty()) {
+                sawQuestion = true;
+                g.dialogueChoose(1);                 // "Needs more ducks." -> fork
+            } else {
+                g.dialogueNext();
+            }
+        }
+        g.update(1.0f / 60, none);
+    }
+    while (g.dialogue.active) g.dialogueNext();
+    assert(sawQuestion && !g.cutscene.active);
+    assert(g.eventsSeen.count("900"));
+    assert(g.npcByName("Juniper")->friendship == fBefore + 20);   // fork branch, not the +50 one
+    assert(g.timeOfDay == clockBefore);                            // clock stopped during the scene
+    assert(g.location().name == "Town");
+    g.teleport("BusStop", 15, 22);
+    g.teleport("Town", 20, 31);
+    assert(!g.cutscene.active);                                    // only once
+    // skipping applies the rest of the script
+    assert(g.startEvent("Town", "901", "none/20 30/farmer 17 30 1/skippable/pause 9000/friendship Rowan 30/end"));
+    int rowanBefore = g.npcByName("Rowan")->friendship;
+    g.update(1.0f / 60, none);                   // runs "skippable", then waits on the pause
+    g.skipEvent();
+    assert(!g.cutscene.active && g.npcByName("Rowan")->friendship == rowanBefore + 30);
+    // preconditions
+    assert(g.eventConditionsMet("1/t 600 2600"));
+    assert(!g.eventConditionsMet("1/e 12345"));
+    assert(g.eventConditionsMet("1/k 12345"));
+    assert(g.eventConditionsMet("1/z winter") && !g.eventConditionsMet("1/z spring"));
+    assert(!g.eventConditionsMet("1/SomeUnknownThing 3"));
+
     // save / load round trip
     assert(g.save("/tmp/sv_test.sav"));
     Game g2(d);
     assert(g2.load("/tmp/sv_test.sav"));
     assert(g2.day == g.day && g2.money == g.money);
     assert(g2.farmLocation().soils[ty * g2.farmLocation().map.width() + tx].seed == 472);
-    assert(g2.npcByName("Juniper")->friendship == 100 && g2.npcByName("Juniper")->introduced);
+    assert(g2.npcByName("Juniper")->introduced);
+    assert(g2.npcByName("Juniper")->friendship == g.npcByName("Juniper")->friendship);
+    assert(g2.eventsSeen.count("900") && g2.mailReceived.count("juniperInvite"));
     printf("all core tests passed\n");
     return 0;
 }
