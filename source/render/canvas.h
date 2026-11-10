@@ -144,6 +144,9 @@ public:
     // (dx, dy), and the image is turned by `radians` around it (clockwise).
     virtual void imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
                               float dx, float dy, float radians, uint32_t tint = 0) = 0;
+    // Whole-number scaling (2x, 3x) stays sharp: used for the farmer preview.
+    virtual void imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+                             float scale, bool flipX = false, uint32_t tint = 0) = 0;
     virtual void rect(float x, float y, float w, float h, uint32_t color) = 0;
     virtual void line(float x1, float y1, float x2, float y2, uint32_t color, float width) = 0;
     // scale 0.5 is roughly a 15px-tall line, like the 3DS system font

@@ -375,6 +375,27 @@ int main(int argc, char** argv) {
         Game gp2(d);
         assert(gp2.load("/tmp/prof_test.sav") && gp2.has(PR_TILLER));
     }
+    // ---- character creation + the arrival cutscene
+    {
+        Game go(d);
+        Game::Character who;
+        who.name = "Sam";
+        who.farm = "Willow";
+        who.outfit.hair = 5;
+        who.farmType = 0;
+        assert(go.newGame(21, who, &err) && go.farmerName() == "Sam");
+        assert(go.startOpening() && go.cutscene.active && go.location().name == "BusStop");
+        Input none;
+        for (int i = 0; i < 60 * 120 && go.cutscene.active; i++) {
+            while (go.dialogue.active) go.dialogueNext();
+            go.update(1.0f / 60, none);
+        }
+        assert(!go.cutscene.active && go.location().name == "FarmHouse" && go.day == 1);
+        assert(go.save("/tmp/char_test.sav"));
+        Game go2(d);
+        assert(go2.load("/tmp/char_test.sav") && go2.me.name == "Sam" && go2.me.farm == "Willow" &&
+               go2.me.outfit.hair == 5);
+    }
     printf("all crafting tests passed\n");
     return 0;
 }

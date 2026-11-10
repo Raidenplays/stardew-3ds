@@ -281,7 +281,9 @@ mkdir -p shots && tools/preview/preview out/3ds/stardew3ds/ shots
 4. **Systems**: skills + crafting + machines + chests + sprinklers done
    (Craft tab; recipes, machines and artisan pricing come from your own
    Data/CraftingRecipes, BigCraftables and Machines). Still to come: tool
-   cooking, professions. Quests + journal + level-up screen done.
+   cooking. Quests + journal + level-up screen + professions + mailbox done.
+   Title screen, character creation (name, farm, look, farm type) and the
+   arrival cutscene from your own Data/Events done.
    Fishing done (cast, bite, reel meter; fish and spots from your
    Data/Fish + Data/Locations). Trees done (from the maps; chop, plant, grow).
    Tool upgrades at the blacksmith done

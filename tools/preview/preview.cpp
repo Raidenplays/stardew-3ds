@@ -12,6 +12,7 @@
 #include "host_canvas.h"
 #include "render/fonts.h"
 #include "render/modscreen.h"
+#include "render/title.h"
 #include "render/scene.h"
 
 using namespace sv;
@@ -77,7 +78,8 @@ int main(int argc, char** argv) {
     bool modScreenShot = false;
     bool craftDemo = false;
     bool fishDemo = false;
-    bool mailDemo = false;    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    bool mailDemo = false;
+    bool titleDemo = false;   // title screen + character creation    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
@@ -87,6 +89,7 @@ int main(int argc, char** argv) {
         else if (a == "--craft") craftDemo = true;
         else if (a == "--fish") fishDemo = true;
         else if (a == "--mail") mailDemo = true;
+        else if (a == "--title") titleDemo = true;
         else font = a;
     }
 
@@ -132,6 +135,44 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (titleDemo) {
+        TitleUi t;
+        titleInit(t, data, false);
+        t.keyboard = [](const std::string& hint, const std::string&, int) {
+            return std::string(hint == "Your name" ? "Raiden" : hint == "Farm name" ? "Truro" : "Pizza");
+        };
+        auto shoot = [&](const char* name) {
+            c.resize(400, 480);
+            c.rect(0, 0, 400, 480, RGBA(0x18, 0x18, 0x1C));
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 240);
+            drawTitleTop(c, g, t);
+            c.setOrigin(40, 240);
+            c.setClip(40, 240, 320, 240);
+            drawTitleBottom(c, g, t);
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 480);
+            std::string path = g_out + "/" + name + ".png";
+            c.writePng(path.c_str(), 2);
+            printf("  %s\n", path.c_str());
+        };
+        shoot("title");
+        titleKey(t, data, TK_A);              // New farm
+        titleKey(t, data, TK_A);              // type a name
+        titleKey(t, data, TK_DOWN);
+        titleKey(t, data, TK_A);              // farm name
+        titleKey(t, data, TK_DOWN);
+        titleKey(t, data, TK_A);              // favourite
+        titleKey(t, data, TK_DOWN);
+        for (int i = 0; i < 3; i++) titleKey(t, data, TK_RIGHT);   // hair
+        titleKey(t, data, TK_DOWN);
+        for (int i = 0; i < 2; i++) titleKey(t, data, TK_RIGHT);   // hair colour
+        titleKey(t, data, TK_DOWN);
+        t.t = 1.6f;
+        shoot("create");
+        return 0;
+    }
 
     if (mailDemo) {
         g.passedOut = true;

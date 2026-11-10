@@ -153,6 +153,29 @@ void HostCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, in
         }
 }
 
+void HostCanvas::imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+                             float scale, bool flipX, uint32_t tint) {
+    const HostTexture* t = get(tex);
+    if (!t || scale <= 0) return;
+    int bx = (int)std::floor(dx), by = (int)std::floor(dy);
+    int W = (int)(sw * scale), H = (int)(sh * scale);
+    for (int y = 0; y < H; y++) {
+        int ty = sy + (int)(y / scale);
+        if (ty < 0 || ty >= t->h) continue;
+        for (int x = 0; x < W; x++) {
+            int lx = (int)(x / scale);
+            int tx = sx + (flipX ? sw - 1 - lx : lx);
+            if (tx < 0 || tx >= t->w) continue;
+            uint32_t c = t->px[(size_t)ty * t->w + tx];
+            if (tint) {
+                auto m = [&](int s) { return ((((c >> s) & 0xFF) * ((tint >> s) & 0xFF)) / 255) << s; };
+                c = m(24) | m(16) | m(8) | (c & 0xFF);
+            }
+            blend(bx + x, by + y, c);
+        }
+    }
+}
+
 void HostCanvas::rect(float x, float y, float w, float h, uint32_t color) {
     int x0 = (int)std::floor(x), y0 = (int)std::floor(y);
     int x1 = (int)std::floor(x + w), y1 = (int)std::floor(y + h);

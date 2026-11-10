@@ -199,9 +199,11 @@ static int hoeDirtIndex(int sum) {
 
 
 // The player: body, pants, shirt, arms, hair. (x, y) = feet on screen.
-static void drawFarmer(Canvas& c, const Game& g, float sx, float sy, int facing, bool moving, float walkTime,
-                       int frameOverride) {
-    float dx = std::floor(sx - 8), dy = std::floor(sy - 30);
+// The farmer is layered: body, pants (tinted), shirt, arms, hair (tinted).
+// (sx, sy) is the feet; scale > 1 draws it bigger, pixel-sharp.
+static void drawFarmerAs(Canvas& c, const Game& g, const Outfit& o, float sx, float sy, int facing, bool moving,
+                         float walkTime, int frameOverride, float k = 1.0f) {
+    float dx = std::floor(sx - 8 * k), dy = std::floor(sy - 30 * k);
     static const int dirRow[4] = {0, 1, 2, 1};   // down, right, up, left(=right flipped)
     bool flip = facing == FACE_LEFT;
     int step = 0;
@@ -212,23 +214,43 @@ static void drawFarmer(Canvas& c, const Game& g, float sx, float sy, int facing,
     int frame = frameOverride >= 0 ? frameOverride : dirRow[facing & 3] * 6 + step;
     int fx = (frame % 6) * 16, fy = (frame / 6) * 32;
     int bob = g.data.bob(frame);
-    const Outfit& o = g.data.layout.outfit;
     const std::string base = "Characters_Farmer_farmer_base";
-    c.image(base, fx, fy, 16, 32, dx, dy, flip);
+    auto img = [&](const std::string& t, int x, int y, int w, int h, float ox, float oy, bool fl, uint32_t tint) {
+        if (k == 1.0f) c.image(t, x, y, w, h, dx + ox, dy + oy, fl, tint);
+        else c.imageScaled(t, x, y, w, h, dx + ox * k, dy + oy * k, k, fl, tint);
+    };
+    img(base, fx, fy, 16, 32, 0, 0, flip, 0);
     if (c.texWidth("Characters_Farmer_pants") > 0) {
         int px0 = (o.pants % 10) * 192, py0 = (o.pants / 10) * 688;
-        c.image("Characters_Farmer_pants", px0 + fx, py0 + fy, 16, 32, dx, dy, flip,
-                RGBA(o.pantsR, o.pantsG, o.pantsB));
+        img("Characters_Farmer_pants", px0 + fx, py0 + fy, 16, 32, 0, 0, flip, RGBA(o.pantsR, o.pantsG, o.pantsB));
     }
     if (c.texWidth("Characters_Farmer_shirts") > 0) {
         static const int shirtRow[4] = {0, 1, 3, 2};
         int shx = (o.shirt % 16) * 8, shy = (o.shirt / 16) * 32 + shirtRow[facing & 3] * 8;
-        c.image("Characters_Farmer_shirts", shx, shy, 8, 8, dx + 4, dy + 15 + bob);
+        img("Characters_Farmer_shirts", shx, shy, 8, 8, 4, 15 + bob, false, 0);
     }
-    if (c.texWidth(base) >= 192) c.image(base, fx + 96, fy, 16, 32, dx, dy, flip);
+    if (c.texWidth(base) >= 192) img(base, fx + 96, fy, 16, 32, 0, 0, flip, 0);
     int hs = o.hair;
-    c.image("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[facing & 3] * 32, 16, 32,
-            dx, dy + bob, flip, RGBA(o.hairR, o.hairG, o.hairB));
+    img("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[facing & 3] * 32, 16, 32, 0, bob, flip,
+        RGBA(o.hairR, o.hairG, o.hairB));
+}
+
+void drawFarmerPreview(Canvas& c, const Game& g, const Outfit& o, float feetX, float feetY, int facing,
+                       float walkTime, float scale) {
+    drawFarmerAs(c, g, o, feetX, feetY, facing, walkTime > 0, walkTime, -1, scale);
+}
+
+void uiFrame(Canvas& c, float x, float y, float w, float h, bool dark) {
+    box(c, x, y, w, h, dark ? COL_PANEL_DARK : COL_PANEL, COL_BORDER, 2);
+}
+
+void uiSlot(Canvas& c, float x, float y, float w, float h, bool selected) {
+    box(c, x, y, w, h, selected ? COL_SLOT_ON : COL_SLOT, selected ? COL_SEL : COL_SLOT_EDGE, selected ? 2 : 1);
+}
+
+static void drawFarmer(Canvas& c, const Game& g, float sx, float sy, int facing, bool moving, float walkTime,
+                       int frameOverride) {
+    drawFarmerAs(c, g, g.me.outfit, sx, sy, facing, moving, walkTime, frameOverride);
 }
 
 // ================================================================ top screen

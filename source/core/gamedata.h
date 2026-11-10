@@ -131,6 +131,8 @@ enum Profession : int {
     PR_MINER = 18, PR_BLACKSMITH = 20, PR_GEMOLOGIST = 23,
 };
 
+struct FarmType { std::string key, name, map; };
+
 struct MailTrigger {
     std::string id, when;            // "DayStarted" / "DayEnding"
     std::string condition;           // game query, "-" = always
@@ -244,6 +246,7 @@ public:
     std::unordered_map<std::string, std::string> mail;   // key -> letter text
     std::vector<MailTrigger> mailTriggers;
     std::vector<ProfessionDef> professions;   // 30, by id
+    std::vector<FarmType> farmTypes;          // Standard first
     const ProfessionDef* profession(int id) const {
         return id >= 0 && id < (int)professions.size() ? &professions[id] : nullptr;
     }

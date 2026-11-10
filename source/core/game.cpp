@@ -29,7 +29,10 @@ void Location::initState() {
     debrisVar.assign(cells, 0);
 }
 
-Game::Game(const GameData& d) : data(d) {}
+Game::Game(const GameData& d) : data(d) {
+    me.name = d.layout.farmerName;   // until character creation says otherwise
+    me.outfit = d.layout.outfit;
+}
 
 uint32_t Game::rand32() {
     uint32_t x = rngState ? rngState : 0x9E3779B9u;
@@ -64,6 +67,13 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
 }
 
 std::string Game::mapFileFor(const std::string& name) const {
+    // your farm type decides which map "Farm" is
+    if (name == "Farm" && me.farmType > 0 && me.farmType < (int)data.farmTypes.size()) {
+        const std::string& m = data.farmTypes[me.farmType].map;
+        std::string v = "maps/" + m + "@" + seasonName(season) + ".smap";
+        if (data.vfs.exists(v)) return data.vfs.path(v);
+        if (data.vfs.exists("maps/" + m + ".smap")) return data.vfs.path("maps/" + m + ".smap");
+    }
     std::string variant = "maps/" + name + "@" + seasonName(season) + ".smap";
     if (data.vfs.exists(variant)) return data.vfs.path(variant);
     return data.vfs.path("maps/" + name + ".smap");
@@ -220,6 +230,12 @@ uint8_t Game::debrisVariant(int x, int y) const {
 }
 
 // ------------------------------------------------------------ new game / days
+
+bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
+    me = who;
+    if (me.farmType < 0 || me.farmType >= (int)data.farmTypes.size()) me.farmType = 0;
+    return newGame(seed, err);
+}
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
@@ -938,7 +954,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 10;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 11;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -946,6 +962,7 @@ static const uint32_t SAVE_VERSION = 10;   // 2: villager friendships, 3: events
                                           // 8: skill levels (applied at night)
                                           // 9: mailbox
                                           // 10: professions
+                                          // 11: your character + farm type
 
 namespace {
 struct W {
@@ -986,6 +1003,7 @@ bool Game::save(const std::string& path) const {
     const TileMap& m = farm->map;
     w.u32(SAVE_MAGIC);
     w.u32(SAVE_VERSION);
+    w.i32(me.farmType);   // v11: needed before the farm map loads
     w.i32(m.width());
     w.i32(m.height());
     w.i32(day); w.i32(season); w.i32(year);
@@ -1053,6 +1071,11 @@ bool Game::save(const std::string& path) const {
     w.i32((int32_t)(totalEarned >> 32));
     w.u32((uint32_t)professions.size());
     for (int p : professions) w.i32(p);
+    w.str(me.name); w.str(me.farm); w.str(me.favorite);
+    w.i32(me.farmType);
+    const Outfit& o = me.outfit;
+    w.i32(o.shirt); w.i32(o.pants); w.i32(o.hair);
+    w.u8(o.pantsR); w.u8(o.pantsG); w.u8(o.pantsB); w.u8(o.hairR); w.u8(o.hairG); w.u8(o.hairB);
     w.u32((uint32_t)quests.size());
     for (auto& q : quests) { w.str(q.id); w.i32(q.progress); w.u8(q.done); }
     w.u32((uint32_t)questsFinished.size());
@@ -1070,17 +1093,25 @@ bool Game::save(const std::string& path) const {
 }
 
 bool Game::load(const std::string& path, std::string* err) {
-    locations.clear();
-    farm = loadLocation("Farm", err);
-    if (!farm) return false;
-    cur = farm;
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return false;
     R r{f};
-    const TileMap& m = farm->map;
     uint32_t version = 0;
-    if (r.u32() != SAVE_MAGIC || (version = r.u32()) < 1 || version > SAVE_VERSION ||
-        r.i32() != m.width() || r.i32() != m.height()) {
+    if (r.u32() != SAVE_MAGIC || (version = r.u32()) < 1 || version > SAVE_VERSION) {
+        fclose(f);
+        return false;
+    }
+    me = Character();
+    me.name = data.layout.farmerName;
+    me.outfit = data.layout.outfit;
+    if (version >= 11) me.farmType = r.i32();
+    if (me.farmType < 0 || me.farmType >= (int)data.farmTypes.size()) me.farmType = 0;
+    locations.clear();
+    farm = loadLocation("Farm", err);
+    if (!farm) { fclose(f); return false; }
+    cur = farm;
+    const TileMap& m = farm->map;
+    if (r.i32() != m.width() || r.i32() != m.height()) {
         fclose(f);
         return false;
     }
@@ -1201,6 +1232,14 @@ bool Game::load(const std::string& path, std::string* err) {
     if (version >= 10 && r.ok) {
         uint32_t n = r.u32();
         for (uint32_t i = 0; i < n && r.ok && i < 30; i++) professions.insert(r.i32());
+    }
+    if (version >= 11 && r.ok) {
+        me.name = r.str(); me.farm = r.str(); me.favorite = r.str();
+        int ft = r.i32();
+        (void)ft;   // already read from the header
+        Outfit& o = me.outfit;
+        o.shirt = r.i32(); o.pants = r.i32(); o.hair = r.i32();
+        o.pantsR = r.u8(); o.pantsG = r.u8(); o.pantsB = r.u8(); o.hairR = r.u8(); o.hairG = r.u8(); o.hairB = r.u8();
     }
     if (version >= 7 && r.ok) {
         uint32_t nq = r.u32();

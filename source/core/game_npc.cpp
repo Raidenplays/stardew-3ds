@@ -222,7 +222,7 @@ void Game::talkTo(NpcState& n) {
 
     std::string key = pickDialogueKey(*n.def, scheduleContext(n), n.introduced);
     std::vector<DialoguePage> pages;
-    if (!key.empty()) pages = parseDialogue(n.def->dialogue.at(key), data.layout.farmerName);
+    if (!key.empty()) pages = parseDialogue(n.def->dialogue.at(key), me.name);
     if (isBirthday(*n.def) && !n.talkedToday) {
         DialoguePage p;
         p.text = "It's my birthday today!";
@@ -231,7 +231,7 @@ void Game::talkTo(NpcState& n) {
     }
     if (pages.empty()) {
         DialoguePage p;
-        p.text = "Hi, " + data.layout.farmerName + ".";
+        p.text = "Hi, " + me.name + ".";
         pages.push_back(p);
     }
     if (!n.talkedToday) n.friendship = std::min(2500, n.friendship + 20);
@@ -276,7 +276,7 @@ void Game::giveGift(NpcState& n, int slot) {
     DialoguePage p;
     std::string own = n.def->tasteText[t];
     std::vector<DialoguePage> pages;
-    if (!own.empty()) pages = parseDialogue(own, data.layout.farmerName);
+    if (!own.empty()) pages = parseDialogue(own, me.name);
     if (pages.empty()) {
         p.text = generic[t];
         p.portrait = faces[t];
@@ -309,10 +309,10 @@ void Game::dialogueChoose(int i) {
             n.friendship = std::max(0, std::min(2500, n.friendship + ch.points));
             if (!ch.responseKey.empty()) {
                 auto it = n.def->dialogue.find(ch.responseKey);
-                if (it != n.def->dialogue.end()) reply = parseDialogue(it->second, data.layout.farmerName);
+                if (it != n.def->dialogue.end()) reply = parseDialogue(it->second, me.name);
             }
         }
-    if (reply.empty() && !ch.inlineReply.empty()) reply = parseDialogue(ch.inlineReply, data.layout.farmerName);
+    if (reply.empty() && !ch.inlineReply.empty()) reply = parseDialogue(ch.inlineReply, me.name);
     p.choices.clear();
     dialogue.pages.insert(dialogue.pages.begin() + dialogue.page + 1, reply.begin(), reply.end());
     dialogueNext();

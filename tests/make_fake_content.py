@@ -710,6 +710,16 @@ def villager_data():
         "juniper_ducks": 'jump Juniper/speak Juniper "Ducks?! ...okay, maybe a few.$h"/friendship Juniper 20/end',
     }
     json.dump(events, open(os.path.join(C, "Data", "Events", "Town.json"), "w"), indent=1)
+    # placeholder arrival (own wording): the bus stop event for "day 0"
+    arrival = {
+        "900001/u 0":
+            'none/10 10/farmer 10 12 0 Rowan 12 10 2/skippable/pause 200/'
+            'speak Rowan "Welcome! The farm is just down this road."/shake Rowan 300/'
+            'advancedMove Rowan false 0 2 2 0/proceedPosition Rowan/halt/'
+            'changeLocation Farm/warp farmer 64 18/pause 200/'
+            'speak Rowan "Make yourself at home."/end beginGame',
+    }
+    json.dump(arrival, open(os.path.join(C, "Data", "Events", "BusStop.json"), "w"), indent=1)
 
     for n, (shirt, hair, skin) in VILLAGERS.items():
         save(villager_sprites(shirt, hair, skin), f"Characters/{n}")
