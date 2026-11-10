@@ -67,7 +67,8 @@ static void applyColors(TitleUi& t) {
 }
 
 void titleInit(TitleUi& t, const GameData& data, bool hasSave) {
-    t.screen = TS_TITLE;
+    t.screen = TS_SPLASH;
+    t.splashT = 0;
     t.hasSave = hasSave;
     t.cursor = hasSave ? 1 : 0;
     t.field = CF_NAME;
@@ -81,9 +82,56 @@ void titleInit(TitleUi& t, const GameData& data, bool hasSave) {
     t.note.clear();
 }
 
+// ---------------------------------------------------------------- opening credits
+// 0-3.5s: "Original game by" + the developer's logo (from your title sheet)
+// 3.5-7s: "Ported by ItsRaiden" + your logo (converter --logo=...)
+static const char* DEV_LOGO_TEX = "Minigames_TitleButtons";
+static const int DEV_LOGO_X = 1, DEV_LOGO_Y = 307, DEV_LOGO_W = 83, DEV_LOGO_H = 67;
+static const char* MY_LOGO = "UiLogo_user";
+
+void titleTick(TitleUi& t, float dt) {
+    if (t.screen != TS_SPLASH) return;
+    t.splashT += dt;
+    if (t.splashT >= SPLASH_SECONDS) t.screen = TS_TITLE;
+}
+
+static float fadeFor(float local, float len) {   // in over 0.6s, hold, out over 0.6s
+    if (local < 0.6f) return local / 0.6f;
+    if (local > len - 0.6f) return std::max(0.0f, (len - local) / 0.6f);
+    return 1.0f;
+}
+
+static void drawSplash(Canvas& c, TitleUi& t) {
+    c.rect(0, 0, 400, 240, RGBA(0, 0, 0));
+    const float half = SPLASH_SECONDS / 2;
+    bool second = t.splashT >= half;
+    float local = second ? t.splashT - half : t.splashT;
+    float a = fadeFor(local, half);
+    if (!second) {
+        c.text(200, 52, 0.55f, RGBA(0xF0, 0xE6, 0xD2), "Original game by", ALIGN_CENTER);
+        if (c.texWidth(DEV_LOGO_TEX) >= 400)
+            c.imageScaled(DEV_LOGO_TEX, DEV_LOGO_X, DEV_LOGO_Y, DEV_LOGO_W, DEV_LOGO_H, 200 - DEV_LOGO_W, 82, 2.0f);
+        else
+            c.text(200, 120, 0.7f, RGBA(0xF0, 0xE6, 0xD2), "ConcernedApe", ALIGN_CENTER);
+    } else {
+        c.text(200, 52, 0.55f, RGBA(0xF0, 0xE6, 0xD2), "Ported by", ALIGN_CENTER);
+        int lw = c.texWidth(MY_LOGO), lh = c.texHeight(MY_LOGO);
+        if (lw > 0 && lh > 0) {
+            // your logo, fitted into a 200x104 box (whole-number steps when it's small, so it stays sharp)
+            float k = std::min(200.0f / lw, 104.0f / lh);
+            if (k >= 1.0f) k = std::floor(k);
+            c.imageScaled(MY_LOGO, 0, 0, lw, lh, 200 - lw * k / 2, 132 - lh * k / 2, k);
+        }
+        c.text(200, lw > 0 ? 190 : 112, 0.7f, RGBA(0xF0, 0xE6, 0xD2), "ItsRaiden", ALIGN_CENTER);
+    }
+    // fade: draw black over everything by (1 - a)
+    if (a < 1.0f) c.rect(0, 0, 400, 240, RGBA(0, 0, 0, (uint8_t)(255 * (1.0f - a))));
+}
+
 // ---------------------------------------------------------------- drawing
 
 void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
+    if (t.screen == TS_SPLASH) { drawSplash(c, t); return; }
     c.rect(0, 0, 400, 240, RGBA(0x7C, 0xB8, 0xE8));   // sky
     c.rect(0, 170, 400, 70, RGBA(0x5C, 0x9C, 0x3C));  // hill
     c.rect(0, 168, 400, 4, RGBA(0x4A, 0x82, 0x30));
@@ -125,6 +173,7 @@ static void arrows(Canvas& c, float y, bool on) {
 
 void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 320, 240, BG);
+    if (t.screen == TS_SPLASH) { c.rect(0, 0, 320, 240, RGBA(0, 0, 0)); return; }
     if (t.screen == TS_TITLE && officialTitle(c)) {
         titleSky(c, 320, 240, t.t, true);
         // New, then Load (dimmed when there's no farm to load); the lit row when picked
@@ -229,6 +278,10 @@ static void confirm(TitleUi& t) {
 }
 
 void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
+    if (t.screen == TS_SPLASH) {   // any of A / START skips the credits
+        if (k == TK_A || k == TK_START || k == TK_B) t.screen = TS_TITLE;
+        return;
+    }
     if (t.screen == TS_TITLE) {
         if (k == TK_UP || k == TK_DOWN || k == TK_LEFT || k == TK_RIGHT) t.cursor = t.cursor ? 0 : (t.hasSave ? 1 : 0);
         if (k == TK_A || k == TK_START) {
@@ -254,6 +307,7 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
 }
 
 void titleTouch(TitleUi& t, const GameData& data, int x, int y) {
+    if (t.screen == TS_SPLASH) { t.screen = TS_TITLE; return; }
     if (t.screen == TS_TITLE) {
         // works for both layouts: the official buttons side by side, or the plain ones stacked
         for (int i = 0; i < 2; i++) {

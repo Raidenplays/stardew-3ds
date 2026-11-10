@@ -154,6 +154,7 @@ public:
                       int align = ALIGN_LEFT) = 0;
     virtual float textWidth(const std::string& s, float scale) = 0;
     virtual int texWidth(const std::string& tex) = 0;   // 0 if missing
+    virtual int texHeight(const std::string& tex) = 0;  // 0 if missing
     virtual void dropTextures() = 0;                    // free everything (map/season change)
 
     // Game fonts (set by loadUiFonts); backends use them when loaded.

@@ -38,6 +38,7 @@ public:
         return textWidthPx(s, 30.0f * scale);
     }
     int texWidth(const std::string& tex) override;
+    int texHeight(const std::string& tex) override;
     void dropTextures() override { cache.clear(); }
 
     bool writePng(const std::string& path, int scale) const;
