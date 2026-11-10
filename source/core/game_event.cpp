@@ -477,7 +477,12 @@ bool Game::eventStep(const std::string& raw) {
             if (n.def->name == arg(1)) n.friendship = std::max(0, std::min(2500, n.friendship + iarg(2)));
         return true;
     }
-    if (c == "mail" || c == "addMailReceived") {
+    if (c == "mail") {              // a letter for tomorrow morning
+        if (data.mail.count(arg(1))) mailTomorrow.insert(arg(1));
+        else mailReceived.insert(arg(1));
+        return true;
+    }
+    if (c == "addMailReceived") {   // just a flag
         mailReceived.insert(arg(1));
         return true;
     }

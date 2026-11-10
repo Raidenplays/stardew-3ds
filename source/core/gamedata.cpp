@@ -242,6 +242,31 @@ bool GameData::load(const std::string& root, std::string* err) {
     }
 
     lines.clear();
+    readLines(root + "data/mail.dat", lines);
+    for (auto& l : lines) {
+        size_t t = l.find('\t');
+        if (t != std::string::npos) mail[l.substr(0, t)] = l.substr(t + 1);
+    }
+    lines.clear();
+    readLines(root + "data/mailtriggers.dat", lines);
+    for (auto& l : lines) {
+        auto f = splitTabs(l);
+        if (f.size() < 4) continue;
+        MailTrigger m;
+        m.id = f[0];
+        m.when = f[1];
+        m.condition = f[2];
+        size_t p = 0;
+        while (p <= f[3].size()) {
+            size_t e = f[3].find('|', p);
+            m.actions.push_back(f[3].substr(p, e == std::string::npos ? std::string::npos : e - p));
+            if (e == std::string::npos) break;
+            p = e + 1;
+        }
+        mailTriggers.push_back(m);
+    }
+
+    lines.clear();
     readLines(root + "data/machines.dat", lines);
     for (auto& l : lines) {
         auto f = splitTabs(l);

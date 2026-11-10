@@ -330,6 +330,34 @@ int main(int argc, char** argv) {
         assert(gq2.load("/tmp/quest_test.sav"));
         assert(gq2.quests.size() == gq.quests.size() && gq2.questsFinished.count("6"));
     }
+    // ---- mail: dated letter on day 2, trigger letter on day 3
+    {
+        Game gm(d);
+        assert(gm.newGame(5, &err));
+        assert(gm.mailbox.empty());
+        gm.passedOut = true;
+        gm.goToBed();
+        assert(gm.day == 2 && gm.mailbox.size() == 1 && gm.mailbox[0] == "spring_2_1");
+        int wood = count(gm, 388);
+        assert(gm.openMail() && gm.letterOpen && gm.letter.items.size() == 1 && gm.letter.title == "Welcome Wood");
+        assert(gm.letter.text.find("Farmer") != std::string::npos);   // @ = farmer name
+        gm.closeLetter();
+        assert(count(gm, 388) == wood + 10 && gm.mailbox.empty() && gm.mailReceived.count("spring_2_1"));
+        gm.passedOut = true;
+        gm.goToBed();
+        assert(gm.mailbox.size() == 1 && gm.mailbox[0] == "testQuestLetter");
+        assert(gm.save("/tmp/mail_test.sav"));
+        Game gm2(d);
+        assert(gm2.load("/tmp/mail_test.sav") && gm2.mailbox.size() == 1);
+        gm2.openMail();
+        gm2.closeLetter();
+        bool hasWalk = false;
+        for (auto& q : gm2.quests) hasWalk |= q.id == "7";
+        assert(hasWalk);
+        gm2.passedOut = true;
+        gm2.goToBed();
+        assert(gm2.mailbox.empty());   // triggers fire once
+    }
     printf("all crafting tests passed\n");
     return 0;
 }

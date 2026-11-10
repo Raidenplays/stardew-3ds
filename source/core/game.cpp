@@ -191,6 +191,10 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         if (openShop == "Blacksmith") collectUpgrade();
         return true;
     }
+    if (verb == "Mailbox") {
+        if (!openMail()) say("No new mail");
+        return true;
+    }
     if (verb == "Buy") {        // older maps: "Buy General"
         openShop = "SeedShop";
         return true;
@@ -223,6 +227,11 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     questsFinished.clear();
     levelUps.clear();
     for (int i = 0; i < SK_COUNT; i++) { skillXp[i] = 0; skillLevels[i] = 0; }
+    mailbox.clear();
+    mailTomorrow.clear();
+    triggersApplied.clear();
+    totalEarned = 0;
+    letterOpen = false;
     eventsSeen.clear();
     mailReceived.clear();
     cutscene = Cutscene();
@@ -270,6 +279,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     addQuest("9");
     addQuest("6");
     hasUnseenQuest = true;
+    deliverMorningMail();
     startDay();
     wakeUp();
     return true;
@@ -860,6 +870,8 @@ bool Game::goToBed() {
     for (auto& s : shipped) earned += itemPrice(s) * s.count;
     shipped.clear();
     money += earned;
+    totalEarned += earned;
+    runTriggers("DayEnding");
     lastEarnings = earned;
 
     int oldSeason = season;
@@ -911,6 +923,7 @@ bool Game::goToBed() {
 
     water = canCapacity();
     dayEnded = true;
+    deliverMorningMail();
     startDay();
     wakeUp();
     if (passedOut) energy = MAX_ENERGY / 2;
@@ -920,12 +933,13 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 8;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 9;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
                                           // 7: quests
                                           // 8: skill levels (applied at night)
+                                          // 9: mailbox
 
 namespace {
 struct W {
@@ -1023,6 +1037,14 @@ bool Game::save(const std::string& path) const {
     w.i32(upgradeTool);
     w.i32(upgradeReadyDay);
     for (int i = 0; i < SK_COUNT; i++) w.i32(skillLevels[i]);
+    w.u32((uint32_t)mailbox.size());
+    for (auto& k : mailbox) w.str(k);
+    w.u32((uint32_t)mailTomorrow.size());
+    for (auto& k : mailTomorrow) w.str(k);
+    w.u32((uint32_t)triggersApplied.size());
+    for (auto& k : triggersApplied) w.str(k);
+    w.u32((uint32_t)(totalEarned & 0xFFFFFFFF));
+    w.i32((int32_t)(totalEarned >> 32));
     w.u32((uint32_t)quests.size());
     for (auto& q : quests) { w.str(q.id); w.i32(q.progress); w.u8(q.done); }
     w.u32((uint32_t)questsFinished.size());
@@ -1151,6 +1173,22 @@ bool Game::load(const std::string& path, std::string* err) {
     for (int i = 0; i < SK_COUNT; i++) skillLevels[i] = xpLevel(i);   // older saves
     if (version >= 8 && r.ok)
         for (int i = 0; i < SK_COUNT; i++) skillLevels[i] = std::max(0, std::min<int>(10, r.i32()));
+    mailbox.clear();
+    mailTomorrow.clear();
+    triggersApplied.clear();
+    totalEarned = 0;
+    letterOpen = false;
+    if (version >= 9 && r.ok) {
+        uint32_t n = r.u32();
+        for (uint32_t i = 0; i < n && r.ok && i < 1000; i++) mailbox.push_back(r.str());
+        n = r.u32();
+        for (uint32_t i = 0; i < n && r.ok && i < 1000; i++) mailTomorrow.insert(r.str());
+        n = r.u32();
+        for (uint32_t i = 0; i < n && r.ok && i < 10000; i++) triggersApplied.insert(r.str());
+        uint32_t lo = r.u32();
+        int32_t hi = r.i32();
+        totalEarned = ((long long)hi << 32) | lo;
+    }
     if (version >= 7 && r.ok) {
         uint32_t nq = r.u32();
         for (uint32_t i = 0; i < nq && r.ok && i < 1000; i++) {
