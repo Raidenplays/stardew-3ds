@@ -126,6 +126,7 @@ public:
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
     std::vector<NpcDef> npcs;
     std::unordered_map<int, FurnitureDef> furniture;
+    std::unordered_map<std::string, std::string> locationNames;   // from Data/Locations
     std::vector<int> farmerBob;    // per body frame: pixels the body drops
     int bob(int frame) const { return frame >= 0 && frame < (int)farmerBob.size() ? farmerBob[frame] : 0; }
     std::vector<int> universalTastes[TASTE_COUNT];

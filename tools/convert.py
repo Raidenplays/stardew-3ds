@@ -41,6 +41,8 @@ import zlib
 import gzip
 import xml.etree.ElementTree as ET
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 try:
     import numpy as np
     from PIL import Image
@@ -282,8 +284,8 @@ def _image_content_path(content, image_src, image_dir):
     return rel[:-4]
 
 
-def convert_map(content, name, out_dir, textures_needed):
-    tmx = os.path.join(content, "Maps", name + ".tmx")
+def convert_map(content, name, out_dir, textures_needed, tmx=None):
+    tmx = tmx or os.path.join(content, "Maps", name + ".tmx")
     if not os.path.isfile(tmx):
         print(f"  ! map {name}.tmx not found, skipped")
         return None
@@ -518,6 +520,7 @@ def write_data(content, out_dir):
     print(f"  objects.dat: {n} objects")
 
     write_shops(content, out_dir, season_bits)
+    write_location_names(content, out_dir)
     farmer_bob(content, out_dir)
     write_furniture(content, out_dir)
 
@@ -565,6 +568,26 @@ def _parse_condition(cond, season_bits):
         else:
             return False, 0, 1
     return True, mask, min_year
+
+
+def write_location_names(content, out_dir):
+    """Data/Locations DisplayName -> data/location_names.dat (mod places get real names)."""
+    p = os.path.join(content, "Data", "Locations.json")
+    if not os.path.isfile(p):
+        return
+    try:
+        data = json.load(open(p, encoding="utf-8-sig"))
+    except ValueError:
+        return
+    n = 0
+    with open(os.path.join(out_dir, "location_names.dat"), "w", encoding="utf-8") as f:
+        for name, d in data.items():
+            dn = str((d or {}).get("DisplayName") or "")
+            if not dn or dn.startswith("["):
+                continue
+            f.write(f"{_clean(name)}\t{_clean(dn)}\n")
+            n += 1
+    print(f"  location_names.dat: {n} names")
 
 
 def write_shops(content, out_dir, season_bits):
@@ -766,20 +789,51 @@ outfit 0 0 46 85 183 0 138 78 38
 """
 
 
+def location_maps(content):
+    """Location name -> .tmx path. Base maps by file name, plus locations that
+    Data/Locations creates from another map asset (how 1.6 mods add places)."""
+    maps_dir = os.path.join(content, "Maps")
+    out = {f[:-4]: os.path.join(maps_dir, f) for f in os.listdir(maps_dir) if f.lower().endswith(".tmx")}
+    locs = os.path.join(content, "Data", "Locations.json")
+    if os.path.isfile(locs):
+        try:
+            data = json.load(open(locs, encoding="utf-8-sig"))
+        except ValueError:
+            data = {}
+        for name, d in data.items():
+            col = (d or {}).get("CreateOnLoad") or {}
+            mp = col.get("MapPath")
+            if not mp:
+                continue
+            p = os.path.join(content, *str(mp).replace("\\", "/").split("/")) + ".tmx"
+            if os.path.isfile(p):
+                out[name] = p
+    return out
+
+
 def main():
-    if len(sys.argv) < 3:
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    opts = {a.split("=")[0]: (a.split("=", 1)[1] if "=" in a else True) for a in sys.argv[1:] if a.startswith("--")}
+    if len(args) < 2:
         print(__doc__)
+        print("Options: --mods=<folder with Content Patcher packs, e.g. SVE / Ridgeside>")
         sys.exit(1)
-    content = sys.argv[1]
-    out_root = os.path.join(sys.argv[2], "3ds", "stardew3ds")
+    content = args[0]
+    out_root = os.path.join(args[1], "3ds", "stardew3ds")
+    if opts.get("--mods") and opts["--mods"] is not True:
+        import cp
+        merged = os.path.join(args[1], "_merged_content")
+        print("Mods...")
+        cp.apply_all(content, opts["--mods"], merged)
+        content = merged
     if not os.path.isdir(os.path.join(content, "Maps")):
         sys.exit(f"'{content}' doesn't look like an unpacked Content folder "
                  "(no Maps/ inside). Run StardewXnbHack first.")
 
     print("Maps...")
     textures = set()
-    maps_dir = os.path.join(content, "Maps")
-    names = sorted(f[:-4] for f in os.listdir(maps_dir) if f.lower().endswith(".tmx"))
+    locs = location_maps(content)
+    names = sorted(locs)
     for m in REQUIRED_MAPS:
         if m not in names:
             sys.exit(f"Maps/{m}.tmx missing -- is this really an unpacked Content folder?")
@@ -787,7 +841,7 @@ def main():
     graph = {}
     for m in names:
         try:
-            info = convert_map(content, m, os.path.join(out_root, "maps"), textures)
+            info = convert_map(content, m, os.path.join(out_root, "maps"), textures, locs[m])
             if info:
                 ok += 1
                 graph[m] = info

@@ -69,9 +69,11 @@ int main(int argc, char** argv) {
     g_out = argv[2];
     std::string font = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
     std::string eventArg;   // "Location:eventId" -> record that cutscene instead of the walk
+    std::string tourArg;    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
+        else if (a.rfind("--tour=", 0) == 0) tourArg = a.substr(7);
         else font = a;
     }
 
@@ -84,6 +86,33 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (!tourArg.empty()) {
+        size_t pos = 0;
+        while (pos <= tourArg.size()) {
+            size_t comma = tourArg.find(',', pos);
+            std::string item = tourArg.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+            pos = comma == std::string::npos ? tourArg.size() + 1 : comma + 1;
+            if (item.empty()) continue;
+            std::string loc = item;
+            int tx = -1, ty = -1;
+            size_t at = item.find('@');
+            if (at != std::string::npos) {
+                loc = item.substr(0, at);
+                sscanf(item.c_str() + at + 1, "%d;%d", &tx, &ty);
+            }
+            g.timeOfDay = 11 * 60;
+            if (!g.teleport(loc, 0, 0)) { printf("  ! %s not found\n", loc.c_str()); continue; }
+            if (tx < 0) { tx = g.map().width() / 2; ty = g.map().height() / 2; }
+            g.teleport(loc, tx, ty);
+            if (g.cutscene.active) g.skipEvent();
+            while (g.dialogue.active) g.dialogueNext();
+            step(g, ui, none, 30);
+            ui.tab = TAB_MAP;
+            shot(c, g, ui, loc);
+        }
+        return 0;
+    }
 
     if (!eventArg.empty()) {
         std::string loc = eventArg.substr(0, eventArg.find(':')), id = eventArg.substr(eventArg.find(':') + 1);

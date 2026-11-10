@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 using namespace sv;
@@ -77,7 +78,23 @@ std::string placeName(const std::string& id) {
     };
     for (auto& n : names)
         if (id == n[0]) return n[1];
-    return id;
+    // mod locations: "Custom_Ridgeside_RidgesideVillage" -> "Ridgeside Village"
+    std::string s = id;
+    for (const char* pre : {"Custom_Ridgeside_", "Custom_", "RSV_"})
+        if (s.rfind(pre, 0) == 0) { s = s.substr(strlen(pre)); break; }
+    std::string out;
+    for (size_t i = 0; i < s.size(); i++) {
+        char ch = s[i];
+        if (ch == '_') { out += ' '; continue; }
+        if (i > 0 && isupper((unsigned char)ch) && islower((unsigned char)s[i - 1])) out += ' ';
+        out += ch;
+    }
+    return out;
+}
+
+static std::string placeName(const Game& g, const std::string& id) {
+    auto it = g.data.locationNames.find(id);
+    return it != g.data.locationNames.end() ? it->second : placeName(id);
 }
 
 std::string shopTitle(const std::string& id) {
@@ -592,12 +609,12 @@ static void drawMapTab(Canvas& c, Game& g) {
     c.rect(dx - 3, dy - 3, 6, 6, COL_WHITE);
     c.rect(dx - 2, dy - 2, 4, 4, COL_SEL);
 
-    c.text(10, PANEL_Y + 4, 0.5f, COL_TEXT, placeName(g.location().name));
+    c.text(10, PANEL_Y + 4, 0.5f, COL_TEXT, placeName(g, g.location().name));
     c.text(BOT_W - 10, PANEL_Y + 5, 0.42f, COL_TEXT_SOFT, g.timeString(), ALIGN_RIGHT);
     std::string exits;
     for (auto& w : m.warps)
-        if (exits.find(placeName(w.target)) == std::string::npos)
-            exits += (exits.empty() ? "" : ", ") + placeName(w.target);
+        if (exits.find(placeName(g, w.target)) == std::string::npos)
+            exits += (exits.empty() ? "" : ", ") + placeName(g, w.target);
     c.text(10, ay + ah + 6, 0.38f, COL_TEXT_SOFT, exits.empty() ? "No exits found" : "Exits: " + exits);
     if (!here.empty()) c.text(10, ay + ah + 19, 0.38f, COL_PICK, "Here: " + here);
 }
@@ -924,7 +941,7 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
     if (g.cutscene.active) {
         c.rect(0, 0, BOT_W, BOT_H, COL_BG);
         box(c, 40, 80, 240, 70, COL_PANEL, COL_BORDER, 3);
-        c.text(160, 92, 0.6f, COL_TEXT, placeName(g.location().name), ALIGN_CENTER);
+        c.text(160, 92, 0.6f, COL_TEXT, placeName(g, g.location().name), ALIGN_CENTER);
         c.text(160, 120, 0.42f, COL_TEXT_SOFT, g.cutscene.skippable ? "START to skip" : "...", ALIGN_CENTER);
         return;
     }

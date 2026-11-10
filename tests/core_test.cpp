@@ -224,6 +224,23 @@ int main(int argc, char** argv) {
     assert(g.eventConditionsMet("1/z winter") && !g.eventConditionsMet("1/z spring"));
     assert(!g.eventConditionsMet("1/SomeUnknownThing 3"));
 
+    // ---- mods (only when converted with --mods=fake/mods)
+    if (d.object(9001)) {
+        assert(d.object(9001)->name == "Meadow Tea" && d.object(9001)->price == 50);
+        assert(d.object(24)->price == 99);                          // Fields edit
+        assert(d.locationNames.count("Custom_TestMeadow") &&
+               d.locationNames.at("Custom_TestMeadow") == "Quiet Meadow");   // i18n token
+        g.teleport("Town", 58, 30);
+        assert(walkUntil(g, 1, 0, "Custom_TestMeadow"));            // warp appended by the mod
+        assert(g.map().width() == 20);
+        g.teleport("Town", 51, 37);
+        bool water = false;
+        for (int y = 36; y < 39; y++)
+            for (int x = 50; x < 53; x++) water |= (g.map().flags(x, y) & CF_WATER) != 0;
+        assert(water);                                              // map patch from the pack
+        printf("mod pack checks passed\n");
+    }
+
     // save / load round trip
     assert(g.save("/tmp/sv_test.sav"));
     Game g2(d);
