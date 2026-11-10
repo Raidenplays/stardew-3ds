@@ -6,7 +6,28 @@ art, maps or data from the game. You convert your own Steam install's content
 on your PC, and the 3DS reads the result from the SD card. This is the same
 model as ScummVM or OpenMW. Personal use only.
 
-## Milestone 1: the farm loop (this build)
+## Milestone 2: the world (this build)
+
+- **Every map gets converted**, along with its warps, door actions and
+  indoor/outdoor flag. Walk off the edge of the farm to the Bus Stop and
+  on into Pelican Town. That means any map from your files (or SVE later)
+  just works.
+- **You wake up in the farmhouse.** Walk out the door and in again. You can
+  only sleep at home: walk into the bed, or use Sleep. Pass out at 2 am
+  anywhere and you still wake up at home.
+- **Doors** open by walking into them or pressing A. Locked doors keep their
+  real opening hours ("Closed. Open 9:00 am to ...").
+- **Pierre's shop** opens from the counter and uses your `Data/Shops.json`
+  (season stock, prices). It's a bottom-screen takeover with Buy (+/- cart)
+  and Sell tabs. This replaces milestone 1's seed stall.
+- **New bottom screen layout:** the hotbar is pinned on top, with Items, Map
+  and Options tabs. The Map tab shows a live mini-map of where you are, plus
+  the exits.
+- **Screenshots on PC:** `tools/preview` runs the real game code through a
+  scripted walk and writes 3DS-shaped PNGs, using the same drawing code as
+  the console.
+
+## Milestone 1: the farm loop
 
 - The real Farm map with your tilesheets, seasonal swaps and animated water
 - Tilling, watering (refill at the pond), planting, overnight growth and
@@ -72,6 +93,14 @@ me what looks off:
    tint. Shirts, pants, arms and tool-swing animations are still to come.
 4. **Crop frames.** Seeds, growth stages and the ready frame come from
    `crops.png`. If a crop shows the wrong stage, tell me which crop and day.
+5. **Bed and wake-up spot** (`bed` / `wake` in `layout.txt`). The 1.6
+   farmhouse bed is furniture rather than map tiles, so these are guesses.
+   The game picks the nearest open tile if the wake spot is blocked.
+6. **Pierre's counter.** The shop opens from any tile whose Action is
+   `OpenShop <id>` (or the older `Buy General`). If the counter does nothing
+   on your files, tell me and I'll look at what action your map uses.
+   Pierre's Wednesday closing isn't handled yet; it comes with villager
+   schedules.
 
 ## Verified so far (without hardware)
 
@@ -86,15 +115,21 @@ me what looks off:
   wasn't reachable from the build machine.
 
 ```bash
-python3 tests/make_fake_content.py && python3 tools/convert.py "fake/Content (unpacked)" out
-g++ -std=c++17 -Isource/core tests/core_test.cpp source/core/*.cpp -o core_test && ./core_test out/3ds/stardew3ds/
+# placeholder world (my own simple art, not the game's) + host tests
+python3 tests/make_fake_content.py fake
+python3 tools/convert.py "fake/Content (unpacked)" out
+g++ -std=c++17 -Isource -Isource/core tests/core_test.cpp source/core/*.cpp -o core_test
+./core_test out/3ds/stardew3ds/
+
+# screenshots (works on your real converted files too)
+make -C tools/preview
+mkdir -p shots && tools/preview/preview out/3ds/stardew3ds/ shots
 ```
 
 ## Roadmap
 
 1. **Farm loop**: done
-2. **World**: warps, farmhouse interior with bed, Pelican Town, Pierre's
-   shop (replaces the seed stall), bus stop, more maps through the converter
+2. **World**: done (warps, farmhouse, town, Pierre's, mini-map)
 3. **People**: villagers with schedules and pathfinding, dialogue from your
    `Characters/Dialogue`, portraits, gifts and friendship, birthdays
 4. **Systems**: tool upgrades, crafting, artisan machines, cooking, trees and
@@ -116,9 +151,11 @@ g++ -std=c++17 -Isource/core tests/core_test.cpp source/core/*.cpp -o core_test 
 ## Layout
 
 ```
-source/core/      game rules, map, data (pure C++17, host-testable)
-source/platform/  3DS texture loading
-source/main.cpp   rendering, stereo 3D, touch UI, main loop
+source/core/      game rules, maps, warps, shops, data (pure C++17, host-testable)
+source/render/    all drawing + touch UI, through a Canvas interface
+source/platform/  3DS: textures and the citro2d Canvas
+source/main.cpp   3DS main loop, input, stereo 3D
+tools/preview/    PC Canvas (PNG) + scripted screenshot run
 tools/convert.py  PC asset converter
 tests/            host tests + fake content generator
 ```

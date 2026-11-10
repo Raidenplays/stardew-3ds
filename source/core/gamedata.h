@@ -48,11 +48,22 @@ struct BuildingDef {
     int tileX = 0, tileY = 0, footW = 0, footH = 0;
 };
 
+struct ShopItem {
+    int itemId = -1;
+    int price = 0;
+    uint8_t seasonMask = 0;   // 0 = all year
+    int minYear = 1;
+};
+
 struct Layout {
-    std::vector<BuildingDef> buildings;
-    int doorX = 64, doorY = 17;
-    int spawnX = 64, spawnY = 18;
+    std::vector<BuildingDef> buildings;   // drawn on the Farm
+    int doorX = 64, doorY = 17;           // farmhouse door on the Farm
+    int spawnX = 64, spawnY = 18;         // Farm wake-up spot if there's no house map
     std::vector<std::pair<int, int>> bins;
+    std::string bedMap = "FarmHouse";
+    int bedX = 9, bedY = 4, bedW = 2, bedH = 3;
+    std::string wakeMap = "FarmHouse";
+    int wakeX = 9, wakeY = 8;
 };
 
 class GameData {
@@ -68,7 +79,9 @@ public:
     std::unordered_map<int, CropDef> crops;      // keyed by seed id
     std::unordered_map<int, ObjectDef> objects;
     std::vector<ToolDef> tools;
+    std::unordered_map<std::string, std::vector<ShopItem>> shops;
     Layout layout;
+    std::string root;   // SD folder the data came from
 };
 
 } // namespace sv

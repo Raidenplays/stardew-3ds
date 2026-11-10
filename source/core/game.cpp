@@ -1,9 +1,12 @@
 #include "game.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <sstream>
 
 namespace sv {
 
@@ -19,10 +22,16 @@ static const float WALK_SPEED = 40.0f;   // px/s at native scale
 static const float RUN_SPEED = 75.0f;
 static const float TOOL_TIME = 0.30f;
 
-Game::Game(const GameData& d, const TileMap& m) : data(d), map(m) {}
+void Location::initState() {
+    size_t cells = (size_t)map.width() * map.height();
+    soils.assign(cells, Soil());
+    debris.assign(cells, DEB_NONE);
+    debrisVar.assign(cells, 0);
+}
+
+Game::Game(const GameData& d) : data(d) {}
 
 uint32_t Game::rand32() {
-    // xorshift32
     uint32_t x = rngState ? rngState : 0x9E3779B9u;
     x ^= x << 13;
     x ^= x >> 17;
@@ -36,12 +45,149 @@ void Game::say(const std::string& s) {
     toastTime = 2.5f;
 }
 
-void Game::newGame(uint32_t seed) {
+// ------------------------------------------------------------ locations
+
+Location* Game::loadLocation(const std::string& name, std::string* err) {
+    auto it = locations.find(name);
+    if (it != locations.end()) return it->second.get();
+    std::unique_ptr<Location> loc(new Location());
+    loc->name = name;
+    if (!loc->map.load(data.root + "maps/" + name + ".smap", err)) return nullptr;
+    loc->map.name = name;
+    loc->isFarm = (name == "Farm");
+    loc->initState();
+    Location* out = loc.get();
+    locations[name] = std::move(loc);
+    return out;
+}
+
+bool Game::hasMap(const std::string& name) const {
+    if (locations.count(name)) return true;
+    FILE* f = fopen((data.root + "maps/" + name + ".smap").c_str(), "rb");
+    if (f) fclose(f);
+    return f != nullptr;
+}
+
+bool Game::warpTo(const std::string& name, int tx, int ty) {
+    Location* dest = loadLocation(name);
+    if (!dest) {
+        say("Can't go there yet (" + name + " not converted)");
+        return false;
+    }
+    Location* prev = cur;
+    cur = dest;
+    // Only the farm and where you are stay in memory.
+    if (prev && prev != farm && prev != cur) {
+        std::string old = prev->name;   // copy: erase destroys the key's owner
+        locations.erase(old);
+    }
+
+    const TileMap& m = cur->map;
+    tx = std::max(0, std::min(tx, m.width() - 1));
+    ty = std::max(0, std::min(ty, m.height() - 1));
+    // If the arrival tile is solid, step to the nearest open one.
+    if (tileSolid(tx, ty)) {
+        bool found = false;
+        for (int r = 1; r <= 3 && !found; r++)
+            for (int dy = -r; dy <= r && !found; dy++)
+                for (int dx = -r; dx <= r && !found; dx++)
+                    if (!tileSolid(tx + dx, ty + dy)) {
+                        tx += dx;
+                        ty += dy;
+                        found = true;
+                    }
+    }
+    px = tx * TILE + TILE / 2.0f;
+    py = ty * TILE + TILE - 2.0f;
+    fade = 1.0f;
+    warpCooldown = 0.35f;
+    toolTimer = 0;
+    return true;
+}
+
+bool Game::enterFrom(const std::string& name) {
+    std::string from = cur ? cur->name : "";
+    Location* dest = loadLocation(name);
+    if (!dest) return warpTo(name, 0, 0);
+    // Arrive just inside the warp that leads back where we came from.
+    const Warp* back = dest->map.warpTo(from);
+    if (back) {
+        int tx = back->x, ty = back->y;
+        if (ty >= dest->map.height() - 1) ty = dest->map.height() - 2;
+        else ty -= 1;
+        if (tx < 0) tx = 0;
+        if (tx >= dest->map.width()) tx = dest->map.width() - 1;
+        if (ty < 0) ty = 0;
+        facing = FACE_UP;
+        return warpTo(name, tx, ty);
+    }
+    return warpTo(name, dest->map.width() / 2, dest->map.height() / 2);
+}
+
+// Parses tile Action strings from the maps.
+bool Game::runMapAction(const std::string& action, bool bumped) {
+    if (action.empty()) return false;
+    std::istringstream ss(action);
+    std::string verb;
+    ss >> verb;
+    if (verb == "Warp" || verb == "LockedDoorWarp" || verb == "MagicWarp") {
+        int x = 0, y = 0;
+        std::string target;
+        ss >> x >> y >> target;
+        if (target.empty()) return false;
+        if (verb == "LockedDoorWarp") {
+            int open = 0, close = 2600;
+            ss >> open >> close;
+            int now = (timeOfDay / 60) * 100 + timeOfDay % 60;
+            if (now < open || now >= close) {
+                if (!bumped || toastTime <= 0)
+                    say("Closed. Open " + timeString((open / 100) * 60 + open % 100) + " to " +
+                        timeString((close / 100) * 60 + close % 100));
+                return true;
+            }
+        }
+        warpTo(target, x, y);
+        return true;
+    }
+    if (bumped) return false;   // everything else needs a button press
+    if (verb == "OpenShop") {
+        std::string id;
+        ss >> id;
+        openShop = id.empty() ? "SeedShop" : id;
+        return true;
+    }
+    if (verb == "Buy") {        // older maps: "Buy General"
+        openShop = "SeedShop";
+        return true;
+    }
+    return false;
+}
+
+// ------------------------------------------------------------ state access
+
+static const Soil kNoSoil;
+
+const Soil& Game::soil(int x, int y) const {
+    if (!cur->map.inBounds(x, y)) return kNoSoil;
+    return cur->soils[(size_t)y * cur->map.width() + x];
+}
+DebrisType Game::debris(int x, int y) const {
+    if (!cur->map.inBounds(x, y)) return DEB_NONE;
+    return (DebrisType)cur->debris[(size_t)y * cur->map.width() + x];
+}
+uint8_t Game::debrisVariant(int x, int y) const {
+    if (!cur->map.inBounds(x, y)) return 0;
+    return cur->debrisVar[(size_t)y * cur->map.width() + x];
+}
+
+// ------------------------------------------------------------ new game / days
+
+bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
-    size_t cells = (size_t)map.width() * map.height();
-    soils.assign(cells, Soil());
-    debrisMap.assign(cells, DEB_NONE);
-    debrisVar.assign(cells, 0);
+    locations.clear();
+    farm = loadLocation("Farm", err);
+    if (!farm) return false;
+    cur = farm;
     for (auto& s : inv) s = Slot();
     shipped.clear();
     day = 1;
@@ -49,6 +195,7 @@ void Game::newGame(uint32_t seed) {
     year = 1;
     money = 500;
     selected = 0;
+    raining = false;
 
     int slot = 0;
     const ToolKind order[] = {TOOL_AXE, TOOL_HOE, TOOL_CAN, TOOL_PICKAXE, TOOL_SCYTHE};
@@ -69,31 +216,40 @@ void Game::newGame(uint32_t seed) {
     // A new farm is overgrown.
     uint32_t r = rngState;
     int diggable = 0;
-    for (int y = 0; y < map.height(); y++)
-        for (int x = 0; x < map.width(); x++)
-            if ((map.flags(x, y) & (CF_DIGGABLE | CF_NOSPAWN)) == CF_DIGGABLE) diggable++;
+    const TileMap& m = farm->map;
+    for (int y = 0; y < m.height(); y++)
+        for (int x = 0; x < m.width(); x++)
+            if ((m.flags(x, y) & (CF_DIGGABLE | CF_NOSPAWN)) == CF_DIGGABLE) diggable++;
     spawnDebris(diggable / 6, r);
     rngState = r;
     startDay();
+    wakeUp();
+    return true;
 }
 
 void Game::spawnDebris(int count, uint32_t& r) {
-    int w = map.width(), h = map.height();
+    const TileMap& m = farm->map;
+    int w = m.width(), h = m.height();
     if (w == 0 || h == 0) return;
     for (int i = 0, tries = 0; i < count && tries < count * 20; tries++) {
         r ^= r << 13; r ^= r >> 17; r ^= r << 5;
         int x = (int)(r % (uint32_t)w);
         int y = (int)((r >> 8) % (uint32_t)h);
-        uint8_t f = map.flags(x, y);
+        uint8_t f = m.flags(x, y);
         if ((f & (CF_DIGGABLE | CF_NOSPAWN | CF_BLOCKED)) != CF_DIGGABLE) continue;
         size_t idx = (size_t)y * w + x;
-        if (debrisMap[idx] || soils[idx].tilled || buildingAt(x, y)) continue;
-        int doorDx = x - data.layout.spawnX, doorDy = y - data.layout.spawnY;
-        if (doorDx * doorDx + doorDy * doorDy < 9) continue;   // keep the porch clear
+        if (farm->debris[idx] || farm->soils[idx].tilled) continue;
+        bool onBuilding = false;
+        for (auto& b : data.layout.buildings)
+            if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY - 1 && y < b.tileY + b.footH + 1)
+                onBuilding = true;
+        if (onBuilding) continue;
+        int doorDx = x - data.layout.doorX, doorDy = y - data.layout.doorY;
+        if (doorDx * doorDx + doorDy * doorDy < 12) continue;   // keep the porch clear
         int k = (int)((r >> 20) % 10);
-        if (season == WINTER && k < 5) k = 5;                  // no weeds in winter
-        debrisMap[idx] = k < 5 ? DEB_WEED : (k < 8 ? DEB_STONE : DEB_TWIG);
-        debrisVar[idx] = (uint8_t)((r >> 4) & 1);
+        if (season == WINTER && k < 5) k = 5;
+        farm->debris[idx] = k < 5 ? DEB_WEED : (k < 8 ? DEB_STONE : DEB_TWIG);
+        farm->debrisVar[idx] = (uint8_t)((r >> 4) & 1);
         i++;
     }
 }
@@ -102,9 +258,6 @@ void Game::startDay() {
     timeOfDay = DAY_START;
     clockAcc = 0;
     energy = MAX_ENERGY;
-    px = data.layout.spawnX * TILE + TILE / 2.0f;
-    py = data.layout.spawnY * TILE + TILE - 2.0f;
-    facing = FACE_DOWN;
     toolTimer = 0;
     char buf[64];
     snprintf(buf, sizeof buf, "%s %d, Year %d%s", seasonName(season), day, year,
@@ -114,8 +267,20 @@ void Game::startDay() {
     say(s);
 }
 
-std::string Game::timeString() const {
-    int t = timeOfDay % (24 * 60);
+void Game::wakeUp() {
+    const Layout& L = data.layout;
+    if (hasMap(L.wakeMap)) {
+        facing = FACE_DOWN;
+        warpTo(L.wakeMap, L.wakeX, L.wakeY);
+    } else {
+        cur = farm;
+        facing = FACE_DOWN;
+        warpTo("Farm", L.spawnX, L.spawnY);
+    }
+}
+
+std::string Game::timeString(int minutes) {
+    int t = minutes % (24 * 60);
     int h = t / 60, m = t % 60;
     bool pm = h >= 12;
     int h12 = h % 12;
@@ -124,8 +289,10 @@ std::string Game::timeString() const {
     snprintf(buf, sizeof buf, "%d:%02d %s", h12, m, pm ? "pm" : "am");
     return buf;
 }
+std::string Game::timeString() const { return timeString(timeOfDay); }
 
 bool Game::buildingAt(int x, int y) const {
+    if (!cur->isFarm) return false;
     for (auto& b : data.layout.buildings)
         if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY && y < b.tileY + b.footH)
             return true;
@@ -133,22 +300,22 @@ bool Game::buildingAt(int x, int y) const {
 }
 
 bool Game::tileSolid(int tx, int ty) const {
-    if (!map.inBounds(tx, ty)) return true;
-    uint8_t f = map.flags(tx, ty);
+    const TileMap& m = cur->map;
+    if (!m.inBounds(tx, ty)) return true;
+    uint8_t f = m.flags(tx, ty);
     if ((f & CF_BLOCKED) && !(f & CF_PASSABLE)) return true;
     if (buildingAt(tx, ty)) return true;
-    size_t i = (size_t)ty * map.width() + tx;
-    if (debrisMap[i] != DEB_NONE) return true;
-    const Soil& s = soils[i];
+    size_t i = (size_t)ty * m.width() + tx;
+    if (cur->debris[i] != DEB_NONE) return true;
+    const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
-        if (c && c->raised && s.phase > 0) return true;   // trellis crops block
+        if (c && c->raised && s.phase > 0) return true;
     }
     return false;
 }
 
 bool Game::blockedPx(float x, float y) const {
-    // small box around the feet
     const float hw = 5, top = 6, bot = 1;
     float xs[2] = {x - hw, x + hw};
     float ys[2] = {y - top, y - bot};
@@ -170,7 +337,7 @@ void Game::targetTile(int& tx, int& ty) const {
 }
 
 bool Game::cropReady(int x, int y) const {
-    if (!map.inBounds(x, y)) return false;
+    if (!cur->map.inBounds(x, y)) return false;
     const Soil& s = soil(x, y);
     if (s.seed < 0 || s.dead || s.regrowWait > 0) return false;
     const CropDef* c = data.cropForSeed(s.seed);
@@ -181,15 +348,17 @@ int Game::cropFrame(int x, int y) const {
     const Soil& s = soil(x, y);
     const CropDef* c = data.cropForSeed(s.seed);
     if (!c) return 0;
-    if (s.regrown) return s.regrowWait > 0 ? 7 : 6;        // bush without / with produce
-    if (s.phase == 0) return s.variant & 1;                // two seed looks
+    if (s.regrown) return s.regrowWait > 0 ? 7 : 6;
+    if (s.phase == 0) return s.variant & 1;
     return std::min(s.phase + 1, 7);
 }
+
+// ------------------------------------------------------------ inventory
 
 bool Game::addItem(int objId, int count) {
     for (auto& s : inv)
         if (s.type == SLOT_OBJECT && s.id == objId && s.count < 999) {
-            int room = 999 - s.count, n = std::min(room, count);
+            int n = std::min(999 - s.count, count);
             s.count += n;
             count -= n;
             if (!count) return true;
@@ -229,8 +398,38 @@ bool Game::trashSlot(int i) {
     return true;
 }
 
-std::vector<ShopEntry> Game::shopStock() const {
+bool Game::eatSlot(int i) {
+    if (i < 0 || i >= INV_SIZE) return false;
+    Slot& sl = inv[i];
+    const ObjectDef* o = sl.type == SLOT_OBJECT ? data.object(sl.id) : nullptr;
+    if (!o || o->edibility <= 0 || o->edibility == -300) return false;
+    int gain = (int)std::ceil(o->edibility * 2.5f);
+    energy = std::min(MAX_ENERGY, energy + gain);
+    say("Ate " + o->name + " (+" + std::to_string(gain) + ")");
+    if (--sl.count <= 0) sl = Slot();
+    return true;
+}
+
+// ------------------------------------------------------------ shops
+
+std::vector<ShopEntry> Game::shopStock(const std::string& shop) const {
     std::vector<ShopEntry> out;
+    auto it = data.shops.find(shop);
+    if (it != data.shops.end()) {
+        for (auto& si : it->second) {
+            if (si.seasonMask && !(si.seasonMask & (1 << season))) continue;
+            if (year < si.minYear) continue;
+            const ObjectDef* o = data.object(si.itemId);
+            if (!o) continue;
+            int price = si.price > 0 ? si.price : o->price * 2;
+            if (price <= 0) continue;
+            bool dup = false;
+            for (auto& e : out) dup |= e.itemId == si.itemId;
+            if (!dup) out.push_back({si.itemId, price});
+        }
+        return out;
+    }
+    // No shop data converted: seeds for this season, Pierre-style pricing.
     for (auto& kv : data.crops) {
         const CropDef& c = kv.second;
         if (!(c.seasonMask & (1 << season))) continue;
@@ -243,69 +442,97 @@ std::vector<ShopEntry> Game::shopStock() const {
     return out;
 }
 
-bool Game::buy(int seedId, int qty) {
-    for (auto& e : shopStock())
-        if (e.seedId == seedId) {
+bool Game::buy(const std::string& shop, int itemId, int qty) {
+    if (qty <= 0) return false;
+    for (auto& e : shopStock(shop))
+        if (e.itemId == itemId) {
             int cost = e.price * qty;
             if (cost > money) {
                 say("Not enough money");
                 return false;
             }
-            if (!addItem(seedId, qty)) return false;
+            if (!addItem(itemId, qty)) return false;
             money -= cost;
             return true;
         }
     return false;
 }
 
+int Game::sellPrice(const Slot& s) const {
+    if (s.type != SLOT_OBJECT) return 0;
+    const ObjectDef* o = data.object(s.id);
+    return o ? std::max(0, o->price) : 0;
+}
+
+bool Game::sellSlot(int i) {
+    if (i < 0 || i >= INV_SIZE) return false;
+    int p = sellPrice(inv[i]);
+    if (p <= 0) return false;
+    money += p * inv[i].count;
+    say("Sold for " + std::to_string(p * inv[i].count) + "g");
+    inv[i] = Slot();
+    return true;
+}
+
+// ------------------------------------------------------------ actions
+
+bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap; }
+
 bool Game::tryInteract(int tx, int ty) {
-    // Harvest
-    if (cropReady(tx, ty)) {
-        Soil& s = soils[ty * map.width() + tx];
-        const CropDef* c = data.cropForSeed(s.seed);
-        int n = c->harvestMin;
-        if (!addItem(c->harvestId, n)) return true;
-        const ObjectDef* o = data.object(c->harvestId);
-        if (o) say("+" + std::to_string(n) + " " + o->name);
-        if (c->regrowDays > 0) {
-            s.regrowWait = (int8_t)c->regrowDays;
-            s.regrown = true;
-        } else {
-            s.seed = -1;
-            s.phase = 0;
-            s.dayInPhase = 0;
-        }
-        return true;
-    }
-    // Shipping bin
-    for (auto& b : data.layout.bins)
-        if (b.first == tx && b.second == ty) {
-            Slot& sl = inv[selected];
-            if (sl.type == SLOT_OBJECT) {
-                const ObjectDef* o = data.object(sl.id);
-                if (o && o->price > 0) {
-                    shipped.push_back(sl);
-                    say("Shipped " + std::to_string(sl.count) + " " + o->name);
-                    sl = Slot();
-                    return true;
-                }
+    if (cur->isFarm) {
+        if (cropReady(tx, ty)) {
+            Soil& s = cur->soils[(size_t)ty * cur->map.width() + tx];
+            const CropDef* c = data.cropForSeed(s.seed);
+            int n = c->harvestMin;
+            if (!addItem(c->harvestId, n)) return true;
+            const ObjectDef* o = data.object(c->harvestId);
+            if (o) say("+" + std::to_string(n) + " " + o->name);
+            if (c->regrowDays > 0) {
+                s.regrowWait = (int8_t)c->regrowDays;
+                s.regrown = true;
+            } else {
+                s.seed = -1;
+                s.phase = 0;
+                s.dayInPhase = 0;
             }
-            say("Hold something to ship");
             return true;
         }
-    // Farmhouse door
-    if (tx == data.layout.doorX && ty == data.layout.doorY) {
+        for (auto& b : data.layout.bins)
+            if (b.first == tx && b.second == ty) {
+                Slot& sl = inv[selected];
+                if (sl.type == SLOT_OBJECT) {
+                    const ObjectDef* o = data.object(sl.id);
+                    if (o && o->price > 0) {
+                        shipped.push_back(sl);
+                        say("Shipped " + std::to_string(sl.count) + " " + o->name);
+                        sl = Slot();
+                        return true;
+                    }
+                }
+                say("Hold something to ship");
+                return true;
+            }
+        if (tx == data.layout.doorX && ty == data.layout.doorY) {
+            if (hasMap("FarmHouse")) enterFrom("FarmHouse");
+            else goToBed();
+            return true;
+        }
+    }
+    const Layout& L = data.layout;
+    if (cur->name == L.bedMap && tx >= L.bedX && tx < L.bedX + L.bedW && ty >= L.bedY &&
+        ty < L.bedY + L.bedH) {
         goToBed();
         return true;
     }
-    return false;
+    return runMapAction(cur->map.action(tx, ty), false);
 }
 
 void Game::useSelected(int tx, int ty) {
     Slot& sl = inv[selected];
     if (sl.empty()) return;
-    bool inMap = map.inBounds(tx, ty);
-    size_t idx = inMap ? (size_t)ty * map.width() + tx : 0;
+    const TileMap& m = cur->map;
+    bool inMap = m.inBounds(tx, ty);
+    size_t idx = inMap ? (size_t)ty * m.width() + tx : 0;
 
     if (sl.type == SLOT_TOOL) {
         const ToolDef* t = data.tool(sl.id);
@@ -318,12 +545,13 @@ void Game::useSelected(int tx, int ty) {
         toolKindAnim = t->kind;
         if (t->kind != TOOL_SCYTHE) energy = std::max(0, energy - ENERGY_PER_SWING);
         if (!inMap) return;
-        Soil& s = soils[idx];
-        uint8_t f = map.flags(tx, ty);
+        Soil& s = cur->soils[idx];
+        uint8_t& deb = cur->debris[idx];
+        uint8_t f = m.flags(tx, ty);
         switch (t->kind) {
             case TOOL_HOE:
-                if ((f & CF_DIGGABLE) && !(f & CF_WATER) && !s.tilled && !debrisMap[idx] &&
-                    !buildingAt(tx, ty) && map.tile(L_BUILDINGS, tx, ty) == NO_TILE) {
+                if (cur->isFarm && (f & CF_DIGGABLE) && !(f & CF_WATER) && !s.tilled && !deb &&
+                    !buildingAt(tx, ty) && m.tile(L_BUILDINGS, tx, ty) == NO_TILE) {
                     s = Soil();
                     s.tilled = true;
                     s.watered = raining;
@@ -343,24 +571,22 @@ void Game::useSelected(int tx, int ty) {
                 }
                 break;
             case TOOL_AXE:
-                if (debrisMap[idx] == DEB_TWIG) {
-                    debrisMap[idx] = DEB_NONE;
+                if (deb == DEB_TWIG) {
+                    deb = DEB_NONE;
                     addItem(OBJ_WOOD, 1);
                 }
                 break;
             case TOOL_PICKAXE:
-                if (debrisMap[idx] == DEB_STONE) {
-                    debrisMap[idx] = DEB_NONE;
+                if (deb == DEB_STONE) {
+                    deb = DEB_NONE;
                     addItem(OBJ_STONE, 1);
-                } else if (s.tilled && s.seed < 0) {
-                    s = Soil();
-                } else if (s.dead) {
+                } else if ((s.tilled && s.seed < 0) || s.dead) {
                     s = Soil();
                 }
                 break;
             case TOOL_SCYTHE:
-                if (debrisMap[idx] == DEB_WEED) {
-                    debrisMap[idx] = DEB_NONE;
+                if (deb == DEB_WEED) {
+                    deb = DEB_NONE;
                     if (rand32() % 2) addItem(OBJ_FIBER, 1);
                 } else if (s.dead) {
                     s.seed = -1;
@@ -373,11 +599,10 @@ void Game::useSelected(int tx, int ty) {
         return;
     }
 
-    // Object in hand
     const CropDef* crop = data.cropForSeed(sl.id);
     if (crop) {
-        if (!inMap) return;
-        Soil& s = soils[idx];
+        if (!inMap || !cur->isFarm) return;
+        Soil& s = cur->soils[idx];
         if (!s.tilled || s.seed >= 0) return;
         if (!(crop->seasonMask & (1 << season))) {
             say("Can't plant this now");
@@ -393,19 +618,14 @@ void Game::useSelected(int tx, int ty) {
         if (--sl.count <= 0) sl = Slot();
         return;
     }
-    const ObjectDef* o = data.object(sl.id);
-    if (o && o->edibility > 0 && o->edibility != -300) {
-        int gain = (int)std::ceil(o->edibility * 2.5f);
-        energy = std::min(MAX_ENERGY, energy + gain);
-        say("Ate " + o->name + " (+" + std::to_string(gain) + ")");
-        if (--sl.count <= 0) sl = Slot();
-    }
+    eatSlot(selected);
 }
 
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
+    if (fade > 0) fade = std::max(0.0f, fade - dt * 3.0f);
+    if (warpCooldown > 0) warpCooldown -= dt;
 
-    // Clock
     clockAcc += dt;
     while (clockAcc >= SECONDS_PER_10MIN) {
         clockAcc -= SECONDS_PER_10MIN;
@@ -426,7 +646,6 @@ void Game::update(float dt, const Input& in) {
         return;
     }
 
-    // Movement
     float mx = in.mx, my = in.my;
     float len = std::sqrt(mx * mx + my * my);
     moving = len > 0.2f;
@@ -436,9 +655,34 @@ void Game::update(float dt, const Input& in) {
         else facing = my > 0 ? FACE_DOWN : FACE_UP;
         float sp = (in.walk ? WALK_SPEED : RUN_SPEED) * dt;
         float nx = px + mx * sp, ny = py + my * sp;
-        if (!blockedPx(nx, py)) px = nx;
-        if (!blockedPx(px, ny)) py = ny;
+
+        // Map-edge and path warps: stepping onto a warp tile, even off the edge.
+        if (warpCooldown <= 0) {
+            // test the leading edge of the feet box, since walls stop the centre short
+            float ex = nx + (mx > 0.3f ? 6.0f : mx < -0.3f ? -6.0f : 0.0f);
+            float ey = ny + (my > 0.3f ? 0.5f : my < -0.3f ? -7.0f : -3.0f);
+            int wx = (int)std::floor(ex / TILE), wy = (int)std::floor(ey / TILE);
+            if (const Warp* w = cur->map.warpAt(wx, wy)) {
+                Warp copy = *w;
+                warpTo(copy.target, copy.tx, copy.ty);
+                return;
+            }
+        }
+        bool movedX = false, movedY = false;
+        if (nx != px && !blockedPx(nx, py)) { px = nx; movedX = true; }
+        if (ny != py && !blockedPx(px, ny)) { py = ny; movedY = true; }
         walkTime += dt * (in.walk ? 1.0f : 1.6f);
+
+        // Walking into a door opens it.
+        if (!movedX && !movedY && warpCooldown <= 0) {
+            int tx, ty;
+            targetTile(tx, ty);
+            if (cur->isFarm && tx == data.layout.doorX && ty == data.layout.doorY) {
+                tryInteract(tx, ty);
+                return;
+            }
+            if (runMapAction(cur->map.action(tx, ty), true)) return;
+        }
     } else {
         walkTime = 0;
     }
@@ -450,8 +694,11 @@ void Game::update(float dt, const Input& in) {
     }
 }
 
-void Game::goToBed() {
-    // Shipping
+bool Game::goToBed() {
+    if (!passedOut && hasMap(data.layout.bedMap) && !canSleepHere()) {
+        say("Go home to sleep");
+        return false;
+    }
     int earned = 0;
     for (auto& s : shipped) {
         const ObjectDef* o = data.object(s.id);
@@ -461,7 +708,6 @@ void Game::goToBed() {
     money += earned;
     lastEarnings = earned;
 
-    // Calendar
     int oldSeason = season;
     day++;
     if (day > 28) {
@@ -471,9 +717,7 @@ void Game::goToBed() {
     }
     bool newSeason = season != oldSeason;
 
-    // Crops grow overnight if they were watered.
-    for (size_t i = 0; i < soils.size(); i++) {
-        Soil& s = soils[i];
+    for (auto& s : farm->soils) {
         if (s.seed >= 0 && !s.dead) {
             const CropDef* c = data.cropForSeed(s.seed);
             if (!c) {
@@ -494,23 +738,23 @@ void Game::goToBed() {
             }
         }
         s.watered = false;
-        // Bare tilled soil sometimes reverts, and always does in winter.
         if (s.tilled && s.seed < 0 && (season == WINTER || rand32() % 10 == 0)) s = Soil();
     }
 
-    // Weather for the new day
     raining = (day > 3 && season != WINTER && rand32() % 100 < 18);
     if (raining)
-        for (auto& s : soils)
+        for (auto& s : farm->soils)
             if (s.tilled) s.watered = true;
 
     uint32_t r = rand32();
     spawnDebris(6, r);
 
-    water = CAN_CAPACITY;   // you top it up at home -- small convenience
+    water = CAN_CAPACITY;
     dayEnded = true;
     startDay();
+    wakeUp();
     if (passedOut) energy = MAX_ENERGY / 2;
+    return true;
 }
 
 // ---------------------------------------------------------------- saving
@@ -523,7 +767,6 @@ struct W {
     FILE* f;
     void u32(uint32_t v) { fwrite(&v, 4, 1, f); }
     void i32(int32_t v) { fwrite(&v, 4, 1, f); }
-    void f32(float v) { fwrite(&v, 4, 1, f); }
     void u8(uint8_t v) { fwrite(&v, 1, 1, f); }
 };
 struct R {
@@ -531,20 +774,21 @@ struct R {
     bool ok = true;
     uint32_t u32() { uint32_t v = 0; ok &= fread(&v, 4, 1, f) == 1; return v; }
     int32_t i32() { int32_t v = 0; ok &= fread(&v, 4, 1, f) == 1; return v; }
-    float f32() { float v = 0; ok &= fread(&v, 4, 1, f) == 1; return v; }
     uint8_t u8() { uint8_t v = 0; ok &= fread(&v, 1, 1, f) == 1; return v; }
 };
 } // namespace
 
 bool Game::save(const std::string& path) const {
+    if (!farm) return false;
     std::string tmp = path + ".tmp";
     FILE* f = fopen(tmp.c_str(), "wb");
     if (!f) return false;
     W w{f};
+    const TileMap& m = farm->map;
     w.u32(SAVE_MAGIC);
     w.u32(SAVE_VERSION);
-    w.i32(map.width());
-    w.i32(map.height());
+    w.i32(m.width());
+    w.i32(m.height());
     w.i32(day); w.i32(season); w.i32(year);
     w.i32(money); w.i32(water); w.u8(raining);
     w.u32(rngState);
@@ -552,16 +796,16 @@ bool Game::save(const std::string& path) const {
     for (auto& s : inv) { w.u8(s.type); w.i32(s.id); w.i32(s.count); }
     w.u32((uint32_t)shipped.size());
     for (auto& s : shipped) { w.u8(s.type); w.i32(s.id); w.i32(s.count); }
-    for (size_t i = 0; i < soils.size(); i++) {
-        const Soil& s = soils[i];
+    for (size_t i = 0; i < farm->soils.size(); i++) {
+        const Soil& s = farm->soils[i];
         uint8_t bits = (s.tilled ? 1 : 0) | (s.watered ? 2 : 0) | (s.dead ? 4 : 0) | (s.regrown ? 8 : 0);
         w.u8(bits);
-        if (s.tilled) {   // crops only ever exist on tilled soil
+        if (s.tilled) {
             w.i32(s.seed); w.u8(s.phase); w.u8(s.dayInPhase);
             w.u8((uint8_t)s.regrowWait); w.u8(s.variant);
         }
-        w.u8(debrisMap[i]);
-        if (debrisMap[i]) w.u8(debrisVar[i]);
+        w.u8(farm->debris[i]);
+        if (farm->debris[i]) w.u8(farm->debrisVar[i]);
     }
     bool ok = ferror(f) == 0;
     fclose(f);
@@ -570,19 +814,20 @@ bool Game::save(const std::string& path) const {
     return rename(tmp.c_str(), path.c_str()) == 0;
 }
 
-bool Game::load(const std::string& path) {
+bool Game::load(const std::string& path, std::string* err) {
+    locations.clear();
+    farm = loadLocation("Farm", err);
+    if (!farm) return false;
+    cur = farm;
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return false;
     R r{f};
+    const TileMap& m = farm->map;
     if (r.u32() != SAVE_MAGIC || r.u32() != SAVE_VERSION ||
-        r.i32() != map.width() || r.i32() != map.height()) {
+        r.i32() != m.width() || r.i32() != m.height()) {
         fclose(f);
         return false;
     }
-    size_t cells = (size_t)map.width() * map.height();
-    soils.assign(cells, Soil());
-    debrisMap.assign(cells, 0);
-    debrisVar.assign(cells, 0);
     day = r.i32(); season = r.i32() & 3; year = r.i32();
     money = r.i32(); water = r.i32(); raining = r.u8() != 0;
     rngState = r.u32();
@@ -595,23 +840,21 @@ bool Game::load(const std::string& path) {
         Slot s; s.type = (SlotType)r.u8(); s.id = r.i32(); s.count = r.i32();
         shipped.push_back(s);
     }
-    for (size_t i = 0; i < cells && r.ok; i++) {
-        Soil& s = soils[i];
+    for (size_t i = 0; i < farm->soils.size() && r.ok; i++) {
+        Soil& s = farm->soils[i];
         uint8_t bits = r.u8();
         s.tilled = bits & 1; s.watered = bits & 2; s.dead = bits & 4; s.regrown = bits & 8;
-        bool hasCrop = false;
-        // crop block written if tilled or seed>=0; seed>=0 implies tilled in practice
-        if (s.tilled) hasCrop = true;
-        if (hasCrop) {
+        if (s.tilled) {
             s.seed = r.i32(); s.phase = r.u8(); s.dayInPhase = r.u8();
             s.regrowWait = (int8_t)r.u8(); s.variant = r.u8();
         }
-        debrisMap[i] = r.u8();
-        if (debrisMap[i]) debrisVar[i] = r.u8();
+        farm->debris[i] = r.u8();
+        if (farm->debris[i]) farm->debrisVar[i] = r.u8();
     }
     fclose(f);
     if (!r.ok) return false;
     startDay();
+    wakeUp();
     return true;
 }
 

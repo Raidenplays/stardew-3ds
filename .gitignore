@@ -5,3 +5,5 @@ build/
 out/
 fake/
 __pycache__/
+tools/preview/preview
+shots/
