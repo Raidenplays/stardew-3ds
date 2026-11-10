@@ -135,6 +135,22 @@ bool GameData::load(const std::string& root, std::string* err) {
         tools.push_back(t);
     }
 
+    // shops.dat is optional (older conversions don't have it)
+    lines.clear();
+    if (readLines(root + "data/shops.dat", lines)) {
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 5) continue;
+            ShopItem it;
+            it.itemId = atoi(f[1].c_str());
+            it.price = atoi(f[2].c_str());
+            it.seasonMask = (uint8_t)atoi(f[3].c_str());
+            it.minYear = atoi(f[4].c_str());
+            shops[f[0]].push_back(it);
+        }
+    }
+    this->root = root;
+
     // layout.txt is optional -- defaults live in Layout.
     lines.clear();
     if (readLines(root + "layout.txt", lines)) {
@@ -157,6 +173,15 @@ bool GameData::load(const std::string& root, std::string* err) {
                 sscanf(l.c_str(), "door %d %d", &layout.doorX, &layout.doorY);
             } else if (!strcmp(kw, "spawn")) {
                 sscanf(l.c_str(), "spawn %d %d", &layout.spawnX, &layout.spawnY);
+            } else if (!strcmp(kw, "bed")) {
+                char m[64];
+                if (sscanf(l.c_str(), "bed %63s %d %d %d %d", m, &layout.bedX, &layout.bedY,
+                           &layout.bedW, &layout.bedH) == 5)
+                    layout.bedMap = m;
+            } else if (!strcmp(kw, "wake")) {
+                char m[64];
+                if (sscanf(l.c_str(), "wake %63s %d %d", m, &layout.wakeX, &layout.wakeY) == 3)
+                    layout.wakeMap = m;
             } else if (!strcmp(kw, "bin")) {
                 int x, y;
                 if (sscanf(l.c_str(), "bin %d %d", &x, &y) == 2) layout.bins.push_back({x, y});

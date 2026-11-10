@@ -1,26 +1,600 @@
-import os, json, numpy as np
-from PIL import Image
-C="fake/Content (unpacked)"
-def png(p,w,h):
-    os.makedirs(os.path.dirname(f"{C}/{p}.png"),exist_ok=True)
-    a=np.random.randint(0,255,(h,w,4),dtype=np.uint8); Image.fromarray(a).save(f"{C}/{p}.png")
-for s in ["spring","summer","fall","winter"]: png(f"Maps/{s}_outdoorsTileSheet",400,1264)
-png("Maps/paths",64,64)
-for p,w,h in [("Maps/springobjects",384,624),("TileSheets/crops",256,800),("TileSheets/tools",336,384),("TerrainFeatures/hoeDirt",128,64),("Characters/Farmer/farmer_base",288,672),("Characters/Farmer/hairstyles",128,672),("Buildings/houses",272,432)]: png(p,w,h)
-W,H=6,4
-back=",".join(str(1+ (i%5)) for i in range(W*H)); bld=",".join("0" if i!=7 else "3" for i in range(W*H))
-tmx=f'''<?xml version="1.0"?><map version="1.0" orientation="orthogonal" width="{W}" height="{H}" tilewidth="16" tileheight="16">
-<tileset firstgid="1" name="untitled tile sheet" tilewidth="16" tileheight="16" tilecount="1975" columns="25"><image source="spring_outdoorsTileSheet.png" width="400" height="1264"/>
-<tile id="0"><properties><property name="Diggable" value="T"/></properties></tile>
-<tile id="1"><properties><property name="Water" value="T"/></properties><animation><frame tileid="1" duration="250"/><frame tileid="2" duration="250"/></animation></tile>
-</tileset>
-<tileset firstgid="1976" name="Paths" tilewidth="16" tileheight="16" tilecount="16" columns="4"><image source="paths.png" width="64" height="64"/></tileset>
-<layer name="Back" width="{W}" height="{H}"><data encoding="csv">{back}</data></layer>
-<layer name="Buildings" width="{W}" height="{H}"><data encoding="csv">{bld}</data></layer>
-<layer name="Paths" width="{W}" height="{H}"><data encoding="csv">{",".join("0" for _ in range(W*H))}</data></layer>
-</map>'''
-open(f"{C}/Maps/Farm.tmx","w").write(tmx)
-os.makedirs(f"{C}/Data",exist_ok=True)
-json.dump({"472":{"Seasons":["Spring"],"DaysInPhase":[1,1,1,1],"RegrowDays":-1,"IsRaised":False,"HarvestItemId":"24","Texture":"TileSheets\\crops","SpriteIndex":0},"(O)Bad":{}},open(f"{C}/Data/Crops.json","w"))
-json.dump({"24":{"Name":"Parsnip","Price":35,"SpriteIndex":24,"Category":-75,"Edibility":10,"Texture":None},"472":{"Name":"Parsnip Seeds","Price":10,"SpriteIndex":472,"Category":-74}},open(f"{C}/Data/Objects.json","w"))
-json.dump({"Hoe":{"ClassName":"Hoe","Name":"Hoe","SpriteIndex":21,"MenuSpriteIndex":-1,"Texture":"TileSheets\\tools","UpgradeLevel":0}},open(f"{C}/Data/Tools.json","w"))
+#!/usr/bin/env python3
+"""
+Builds a small PLACEHOLDER world shaped like an unpacked Content folder:
+Farm, FarmHouse, BusStop, Town, SeedShop, with simple original art.
+Used for tests and for engine screenshots when the real game files
+aren't around. It is not Stardew's art or maps.
+
+    python3 tests/make_fake_content.py fake
+    python3 tools/convert.py "fake/Content (unpacked)" out
+"""
+import json
+import os
+import random
+import sys
+
+from PIL import Image, ImageDraw
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else "fake"
+C = os.path.join(OUT, "Content (unpacked)")
+R = random.Random(7)
+
+
+def save(img, rel):
+    p = os.path.join(C, rel + ".png")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    img.save(p)
+
+
+def shade(c, k):
+    return tuple(max(0, min(255, int(v * k))) for v in c[:3]) + ((c[3],) if len(c) > 3 else (255,))
+
+
+# ------------------------------------------------------------------ outdoor sheet
+# tile ids (25 columns)
+GRASS, WATER, WATER2, PATH, GRASS2, FENCE, TRUNK, CANOPY, ROOF, WALL, DOOR, WINDOW, FLOWERS, \
+    PLAZA, SIGN, BUSH, ROOF_EDGE, CLIFF = range(18)
+
+SEASON_GRASS = {"spring": (96, 168, 72), "summer": (78, 150, 60), "fall": (176, 140, 66), "winter": (226, 232, 240)}
+SEASON_LEAF = {"spring": (54, 120, 52), "summer": (40, 104, 44), "fall": (190, 96, 40), "winter": (200, 210, 220)}
+
+
+def outdoor_sheet(season):
+    img = Image.new("RGBA", (400, 1264), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    g = SEASON_GRASS[season]
+    leaf = SEASON_LEAF[season]
+
+    def cell(i):
+        return (i % 25) * 16, (i // 25) * 16
+
+    def grass(i, base, specks=True):
+        x, y = cell(i)
+        d.rectangle([x, y, x + 15, y + 15], fill=base)
+        if specks:
+            for _ in range(10):
+                px, py = R.randrange(16), R.randrange(15)
+                d.line([x + px, y + py, x + px, y + py + 1], fill=shade(base, 0.82))
+            for _ in range(4):
+                px, py = R.randrange(16), R.randrange(16)
+                d.point((x + px, y + py), fill=shade(base, 1.15))
+
+    grass(GRASS, g)
+    grass(GRASS2, shade(g, 0.9))
+    for i, off in ((WATER, 0), (WATER2, 4)):
+        x, y = cell(i)
+        d.rectangle([x, y, x + 15, y + 15], fill=(62, 128, 196))
+        for k in range(3):
+            yy = y + 3 + k * 5
+            d.line([x + (off + k * 3) % 12, yy, x + (off + k * 3) % 12 + 4, yy], fill=(150, 200, 240))
+    x, y = cell(PATH)
+    d.rectangle([x, y, x + 15, y + 15], fill=(196, 160, 110))
+    for _ in range(6):
+        px, py = R.randrange(15), R.randrange(15)
+        d.rectangle([x + px, y + py, x + px + 1, y + py], fill=(160, 126, 84))
+    x, y = cell(FENCE)
+    d.rectangle([x + 2, y + 2, x + 4, y + 15], fill=(140, 92, 50))
+    d.rectangle([x + 11, y + 2, x + 13, y + 15], fill=(140, 92, 50))
+    d.rectangle([x, y + 5, x + 15, y + 7], fill=(170, 116, 64))
+    d.rectangle([x, y + 10, x + 15, y + 12], fill=(170, 116, 64))
+    x, y = cell(TRUNK)
+    grass(TRUNK, g)
+    d.rectangle([x + 6, y, x + 9, y + 13], fill=(110, 72, 40))
+    d.ellipse([x + 3, y + 11, x + 12, y + 15], fill=shade(g, 0.7))
+    x, y = cell(CANOPY)
+    d.ellipse([x - 1, y + 1, x + 16, y + 17], fill=leaf, outline=shade(leaf, 0.7))
+    d.ellipse([x + 3, y + 3, x + 8, y + 8], fill=shade(leaf, 1.2))
+    x, y = cell(ROOF)
+    d.rectangle([x, y, x + 15, y + 15], fill=(176, 64, 52))
+    for k in range(0, 16, 4):
+        d.line([x, y + k, x + 15, y + k], fill=(132, 44, 36))
+    x, y = cell(ROOF_EDGE)
+    d.rectangle([x, y, x + 15, y + 15], fill=(176, 64, 52))
+    d.rectangle([x, y + 12, x + 15, y + 15], fill=(110, 40, 32))
+    x, y = cell(WALL)
+    d.rectangle([x, y, x + 15, y + 15], fill=(226, 196, 140))
+    for k in range(0, 16, 5):
+        d.line([x, y + k, x + 15, y + k], fill=(196, 160, 106))
+    x, y = cell(DOOR)
+    d.rectangle([x, y, x + 15, y + 15], fill=(226, 196, 140))
+    d.rectangle([x + 3, y + 1, x + 12, y + 15], fill=(120, 72, 36), outline=(80, 46, 22))
+    d.point((x + 10, y + 9), fill=(240, 210, 90))
+    x, y = cell(WINDOW)
+    d.rectangle([x, y, x + 15, y + 15], fill=(226, 196, 140))
+    d.rectangle([x + 3, y + 3, x + 12, y + 11], fill=(120, 180, 220), outline=(90, 60, 30))
+    d.line([x + 7, y + 3, x + 7, y + 11], fill=(90, 60, 30))
+    grass(FLOWERS, g)
+    x, y = cell(FLOWERS)
+    for (px, py, col) in ((3, 4, (240, 90, 120)), (10, 3, (250, 220, 80)), (6, 10, (180, 120, 240)), (12, 11, (250, 250, 250))):
+        d.rectangle([x + px, y + py, x + px + 1, y + py + 1], fill=col)
+    x, y = cell(PLAZA)
+    d.rectangle([x, y, x + 15, y + 15], fill=(176, 172, 160))
+    d.line([x, y + 7, x + 15, y + 7], fill=(150, 146, 136))
+    d.line([x + 7, y, x + 7, y + 7], fill=(150, 146, 136))
+    d.line([x + 3, y + 8, x + 3, y + 15], fill=(150, 146, 136))
+    d.line([x + 11, y + 8, x + 11, y + 15], fill=(150, 146, 136))
+    x, y = cell(SIGN)
+    d.rectangle([x + 2, y + 2, x + 13, y + 9], fill=(196, 150, 90), outline=(110, 72, 36))
+    d.rectangle([x + 7, y + 10, x + 8, y + 15], fill=(110, 72, 36))
+    x, y = cell(BUSH)
+    d.ellipse([x, y + 2, x + 15, y + 16], fill=shade(leaf, 0.95), outline=shade(leaf, 0.6))
+    d.ellipse([x + 3, y + 4, x + 7, y + 8], fill=shade(leaf, 1.25))
+    x, y = cell(CLIFF)
+    d.rectangle([x, y, x + 15, y + 15], fill=(130, 110, 90))
+    d.line([x, y + 5, x + 15, y + 5], fill=(100, 84, 68))
+    d.line([x, y + 11, x + 15, y + 11], fill=(100, 84, 68))
+    return img
+
+
+# ------------------------------------------------------------------ interior sheet
+FLOOR, IWALL, IWALL_TOP, COUNTER, SHELF, RUG, MAT, BED_T, BED_T2, BED_M, BED_M2, BED_B, BED_B2, ITABLE, IWINDOW = range(15)
+
+
+def interior_sheet():
+    img = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    def cell(i):
+        return (i % 16) * 16, (i // 16) * 16
+
+    x, y = cell(FLOOR)
+    d.rectangle([x, y, x + 15, y + 15], fill=(186, 128, 76))
+    for k in (0, 5, 10, 15):
+        d.line([x, y + k, x + 15, y + k], fill=(150, 98, 54))
+    d.line([x + 8, y, x + 8, y + 4], fill=(150, 98, 54))
+    d.line([x + 3, y + 6, x + 3, y + 9], fill=(150, 98, 54))
+    x, y = cell(IWALL)
+    d.rectangle([x, y, x + 15, y + 15], fill=(236, 214, 170))
+    d.rectangle([x, y + 13, x + 15, y + 15], fill=(150, 98, 54))
+    x, y = cell(IWALL_TOP)
+    d.rectangle([x, y, x + 15, y + 15], fill=(92, 60, 40))
+    x, y = cell(COUNTER)
+    d.rectangle([x, y, x + 15, y + 15], fill=(132, 84, 46))
+    d.rectangle([x, y, x + 15, y + 4], fill=(196, 140, 84))
+    x, y = cell(SHELF)
+    d.rectangle([x, y, x + 15, y + 15], fill=(120, 76, 42))
+    for k, col in enumerate(((220, 80, 60), (90, 160, 80), (240, 200, 80), (90, 120, 200))):
+        d.rectangle([x + 1 + k * 4, y + 3, x + 3 + k * 4, y + 6], fill=col)
+        d.rectangle([x + 1 + ((k + 2) % 4) * 4, y + 10, x + 3 + ((k + 2) % 4) * 4, y + 13], fill=col)
+    x, y = cell(RUG)
+    d.rectangle([x, y, x + 15, y + 15], fill=(176, 60, 56))
+    d.rectangle([x + 2, y + 2, x + 13, y + 13], outline=(230, 190, 110))
+    x, y = cell(MAT)
+    d.rectangle([x, y, x + 15, y + 15], fill=(186, 128, 76))
+    d.rectangle([x + 1, y + 4, x + 14, y + 12], fill=(110, 140, 80))
+    for i, (top, side) in enumerate(((BED_T, 0), (BED_T2, 1), (BED_M, 0), (BED_M2, 1), (BED_B, 0), (BED_B2, 1))):
+        x, y = cell(top)
+        row = i // 2
+        d.rectangle([x, y, x + 15, y + 15], fill=(110, 70, 40))
+        if row == 0:
+            d.rectangle([x + (2 if side == 0 else 0), y + 4, x + (15 if side == 0 else 13), y + 15], fill=(250, 250, 240))
+        else:
+            d.rectangle([x + (2 if side == 0 else 0), y, x + (15 if side == 0 else 13), y + (15 if row == 1 else 11)],
+                        fill=(70, 110, 190))
+    x, y = cell(ITABLE)
+    d.rectangle([x + 1, y + 3, x + 14, y + 10], fill=(160, 104, 60), outline=(110, 70, 40))
+    d.rectangle([x + 2, y + 10, x + 3, y + 15], fill=(110, 70, 40))
+    d.rectangle([x + 12, y + 10, x + 13, y + 15], fill=(110, 70, 40))
+    x, y = cell(IWINDOW)
+    d.rectangle([x, y, x + 15, y + 15], fill=(236, 214, 170))
+    d.rectangle([x + 3, y + 2, x + 12, y + 11], fill=(150, 200, 240), outline=(120, 80, 40))
+    return img
+
+
+# ------------------------------------------------------------------ TMX writer
+def write_tmx(name, w, h, tilesets, layers, props, objects):
+    """tilesets: list of (firstgid, image, cols, count, {tid: {prop: val}}, {tid: [(frame,ms)]})
+    layers: dict name -> list of gids; objects: list of (layer, x, y, w, h, {props})"""
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           f'<map version="1.10" orientation="orthogonal" renderorder="right-down" width="{w}" height="{h}" tilewidth="16" tileheight="16" infinite="0">']
+    if props:
+        out.append(" <properties>")
+        for k, v in props.items():
+            out.append(f'  <property name="{k}" value="{v}"/>')
+        out.append(" </properties>")
+    for (first, image, cols, count, tprops, anims) in tilesets:
+        rows = (count + cols - 1) // cols
+        out.append(f' <tileset firstgid="{first}" name="{image}" tilewidth="16" tileheight="16" tilecount="{count}" columns="{cols}">')
+        out.append(f'  <image source="{image}.png" width="{cols * 16}" height="{rows * 16}"/>')
+        for tid in sorted(set(tprops) | set(anims)):
+            out.append(f'  <tile id="{tid}">')
+            if tid in tprops:
+                out.append("   <properties>")
+                for k, v in tprops[tid].items():
+                    out.append(f'    <property name="{k}" value="{v}"/>')
+                out.append("   </properties>")
+            if tid in anims:
+                out.append("   <animation>")
+                for fr, ms in anims[tid]:
+                    out.append(f'    <frame tileid="{fr}" duration="{ms}"/>')
+                out.append("   </animation>")
+            out.append("  </tile>")
+        out.append(" </tileset>")
+    for lname in ("Back", "Buildings", "Paths", "Front", "AlwaysFront"):
+        data = layers.get(lname, [0] * (w * h))
+        rows = [",".join(str(v) for v in data[r * w:(r + 1) * w]) for r in range(h)]
+        out.append(f' <layer name="{lname}" width="{w}" height="{h}"><data encoding="csv">')
+        out.append(",\n".join(rows))
+        out.append(" </data></layer>")
+    groups = {}
+    for o in objects:
+        groups.setdefault(o[0], []).append(o)
+    oid = 1
+    for g, objs in groups.items():
+        out.append(f' <objectgroup name="{g}">')
+        for (_, x, y, ow, oh, pr) in objs:
+            out.append(f'  <object id="{oid}" name="TileData" x="{x * 16}" y="{y * 16}" width="{ow * 16}" height="{oh * 16}">')
+            out.append("   <properties>")
+            for k, v in pr.items():
+                out.append(f'    <property name="{k}" value="{v}"/>')
+            out.append("   </properties>")
+            out.append("  </object>")
+            oid += 1
+        out.append(" </objectgroup>")
+    out.append("</map>")
+    p = os.path.join(C, "Maps", name + ".tmx")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as f:
+        f.write("\n".join(out))
+
+
+OUT_TS = (1, "spring_outdoorsTileSheet", 25, 25 * 79,
+          {GRASS: {"Diggable": "T"}, GRASS2: {"Diggable": "T"}, FLOWERS: {"Diggable": "T"},
+           WATER: {"Water": "T"}, WATER2: {"Water": "T"}},
+          {WATER: [(WATER, 400), (WATER2, 400)]})
+IN_TS = (1, "townInterior", 16, 256, {}, {})
+
+
+class Grid:
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.L = {k: [0] * (w * h) for k in ("Back", "Buildings", "Paths", "Front", "AlwaysFront")}
+
+    def set(self, layer, x, y, tid):
+        if 0 <= x < self.w and 0 <= y < self.h:
+            self.L[layer][y * self.w + x] = tid + 1   # gid, firstgid 1
+
+    def fill(self, layer, x0, y0, x1, y1, tid):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                self.set(layer, x, y, tid)
+
+    def tree(self, x, y):
+        self.set("Buildings", x, y, TRUNK)
+        self.set("Front", x, y - 1, CANOPY)
+
+
+def make_maps():
+    # ---- Farm 80x65
+    f = Grid(80, 65)
+    for y in range(65):
+        for x in range(80):
+            f.set("Back", x, y, GRASS if R.random() > 0.12 else GRASS2)
+    for x in range(80):
+        if x % 2 == 0:
+            f.tree(x, 1)
+            f.tree(x, 64)
+    for y in range(2, 64):
+        if y % 2 == 0:
+            f.tree(0, y)
+            if not 13 <= y <= 19:
+                f.tree(79, y)
+        if not 13 <= y <= 19:
+            f.set("Buildings", 79, y, BUSH)
+    f.fill("Back", 20, 40, 28, 46, WATER)
+    f.fill("Back", 64, 18, 64, 24, PATH)
+    f.fill("Back", 64, 15, 79, 17, PATH)
+    for (x, y) in ((40, 10), (45, 30), (12, 20), (30, 55), (55, 50)):
+        f.set("Back", x, y, FLOWERS)
+    for x in range(50, 58):
+        f.set("Buildings", x, 27, FENCE)
+    warps = " ".join(f"80 {y} BusStop 1 {y + 6}" for y in range(14, 19))
+    write_tmx("Farm", 80, 65, [OUT_TS], f.L, {"Outdoors": "T", "Warp": warps}, [])
+
+    # ---- FarmHouse 12x12
+    h = Grid(12, 12)
+    h.fill("Back", 0, 0, 11, 11, FLOOR)
+    h.fill("Buildings", 0, 0, 11, 1, IWALL_TOP)
+    h.fill("Buildings", 0, 2, 11, 2, IWALL)
+    h.set("Buildings", 4, 2, IWINDOW)
+    h.fill("Buildings", 0, 0, 0, 11, IWALL_TOP)
+    h.fill("Buildings", 11, 0, 11, 11, IWALL_TOP)
+    for i, t in enumerate((BED_T, BED_T2, BED_M, BED_M2, BED_B, BED_B2)):
+        h.set("Buildings", 9 + i % 2, 4 + i // 2, t)
+    h.fill("Back", 4, 6, 7, 8, RUG)
+    h.set("Buildings", 6, 4, ITABLE)
+    h.set("Back", 3, 11, MAT)
+    write_tmx("FarmHouse", 12, 12, [IN_TS], h.L, {"Warp": "3 12 Farm 64 18"}, [])
+
+    # ---- BusStop 30x30
+    b = Grid(30, 30)
+    b.fill("Back", 0, 0, 29, 29, GRASS)
+    b.fill("Back", 0, 20, 29, 24, PATH)
+    for x in range(0, 30, 2):
+        b.tree(x, 2)
+        b.tree(x, 29)
+    b.fill("Buildings", 0, 3, 29, 17, CLIFF)
+    b.set("Buildings", 14, 18, SIGN)
+    warps = " ".join(f"-1 {y} Farm 78 {y - 6}" for y in range(20, 25)) + " " + \
+        " ".join(f"30 {y} Town 1 {y + 8}" for y in range(20, 25))
+    write_tmx("BusStop", 30, 30, [OUT_TS], b.L, {"Outdoors": "T", "Warp": warps}, [])
+
+    # ---- Town 60x45
+    t = Grid(60, 45)
+    t.fill("Back", 0, 0, 59, 44, GRASS)
+    t.fill("Back", 0, 28, 59, 32, PATH)
+    t.fill("Back", 20, 22, 44, 27, PLAZA)
+    t.fill("Back", 38, 33, 43, 38, WATER)
+    t.fill("Back", 28, 22, 28, 27, PATH)
+    for x in range(0, 60, 2):
+        t.tree(x, 2)
+    # Pierre's
+    t.fill("Buildings", 23, 12, 33, 15, ROOF)
+    t.fill("Buildings", 23, 16, 33, 16, ROOF_EDGE)
+    t.fill("Buildings", 23, 17, 33, 21, WALL)
+    for wx in (25, 31):
+        t.set("Buildings", wx, 19, WINDOW)
+    t.set("Buildings", 28, 21, DOOR)
+    t.set("Front", 28, 18, SIGN)
+    # a couple of houses
+    for hx in (5, 45):
+        t.fill("Buildings", hx, 15, hx + 6, 17, ROOF)
+        t.fill("Buildings", hx, 18, hx + 6, 18, ROOF_EDGE)
+        t.fill("Buildings", hx, 19, hx + 6, 21, WALL)
+        t.set("Buildings", hx + 3, 21, DOOR)
+        t.set("Buildings", hx + 1, 20, WINDOW)
+        t.set("Buildings", hx + 5, 20, WINDOW)
+    for (x, y) in ((12, 35), (18, 40), (50, 38), (34, 40)):
+        t.tree(x, y)
+    for (x, y) in ((21, 26), (44, 23), (10, 26)):
+        t.set("Back", x, y, FLOWERS)
+    warps = " ".join(f"-1 {y} BusStop 28 {y - 8}" for y in range(28, 33))
+    objs = [("Buildings", 28, 21, 1, 1, {"Action": "LockedDoorWarp 6 15 SeedShop 900 2100"})]
+    write_tmx("Town", 60, 45, [OUT_TS], t.L, {"Outdoors": "T", "Warp": warps}, objs)
+
+    # ---- SeedShop 14x17
+    s = Grid(14, 17)
+    s.fill("Back", 0, 0, 13, 16, FLOOR)
+    s.fill("Buildings", 0, 0, 13, 1, IWALL_TOP)
+    s.fill("Buildings", 0, 2, 13, 2, IWALL)
+    s.fill("Buildings", 0, 0, 0, 16, IWALL_TOP)
+    s.fill("Buildings", 13, 0, 13, 16, IWALL_TOP)
+    s.fill("Buildings", 1, 3, 12, 3, SHELF)
+    s.fill("Buildings", 2, 8, 7, 8, COUNTER)
+    s.fill("Buildings", 9, 11, 12, 11, SHELF)
+    s.fill("Back", 5, 12, 8, 14, RUG)
+    s.set("Back", 6, 16, MAT)
+    objs = [("Buildings", 4, 8, 1, 1, {"Action": "OpenShop SeedShop down"})]
+    write_tmx("SeedShop", 14, 17, [IN_TS], s.L, {"Warp": "6 17 Town 28 22 7 17 Town 28 22"}, objs)
+
+
+# ------------------------------------------------------------------ sprites
+def objects_sheet():
+    img = Image.new("RGBA", (384, 33 * 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    def at(i):
+        return (i % 24) * 16, (i // 24) * 16
+
+    def seedbag(i, col):
+        x, y = at(i)
+        d.polygon([(x + 3, y + 5), (x + 12, y + 5), (x + 14, y + 14), (x + 1, y + 14)], fill=(214, 182, 126), outline=(122, 85, 48))
+        d.rectangle([x + 5, y + 7, x + 10, y + 11], fill=col)
+        d.line([x + 4, y + 4, x + 11, y + 4], fill=(122, 85, 48))
+
+    for i, col in ((472, (240, 230, 190)), (473, (120, 190, 90)), (474, (240, 240, 230)), (475, (200, 160, 100)), (477, (80, 150, 70))):
+        seedbag(i, col)
+    x, y = at(24)   # parsnip
+    d.polygon([(x + 5, y + 6), (x + 10, y + 6), (x + 8, y + 15)], fill=(242, 230, 194), outline=(156, 133, 80))
+    d.line([x + 7, y + 6, x + 4, y + 1], fill=(78, 154, 58), width=2)
+    d.line([x + 8, y + 6, x + 11, y + 1], fill=(78, 154, 58), width=2)
+    x, y = at(190)   # cauliflower
+    d.ellipse([x + 2, y + 4, x + 13, y + 13], fill=(244, 240, 220), outline=(170, 160, 120))
+    d.arc([x, y + 6, x + 15, y + 15], 0, 180, fill=(80, 150, 70), width=2)
+    x, y = at(192)   # potato
+    d.ellipse([x + 3, y + 5, x + 13, y + 13], fill=(196, 150, 96), outline=(130, 90, 50))
+    x, y = at(250)   # kale
+    d.polygon([(x + 8, y + 1), (x + 14, y + 8), (x + 8, y + 15), (x + 2, y + 8)], fill=(70, 140, 70), outline=(40, 90, 40))
+    x, y = at(188)   # bean
+    d.arc([x + 2, y + 2, x + 14, y + 14], 200, 340, fill=(90, 170, 70), width=3)
+    x, y = at(388)   # wood
+    d.rectangle([x + 2, y + 6, x + 13, y + 11], fill=(154, 98, 52), outline=(92, 54, 24))
+    d.ellipse([x + 11, y + 5, x + 15, y + 12], fill=(217, 168, 106), outline=(92, 54, 24))
+    x, y = at(390)   # stone
+    d.polygon([(x + 2, y + 13), (x + 5, y + 5), (x + 11, y + 4), (x + 14, y + 13)], fill=(150, 152, 158), outline=(74, 79, 85))
+    x, y = at(771)   # fiber
+    for k in range(3):
+        d.line([x + 5 + k * 3, y + 14, x + 4 + k * 4, y + 2], fill=(94, 154, 58))
+    for i in (674, 675):   # weeds
+        x, y = at(i)
+        for k in range(4):
+            d.line([x + 3 + k * 3, y + 15, x + 2 + k * 3 + (i - 674) * 2, y + 4 + (k % 2) * 3], fill=(60, 130, 50), width=2)
+    for i in (343, 450):   # stones on the ground
+        x, y = at(i)
+        d.ellipse([x + 1, y + 5, x + 14, y + 15], fill=(140, 142, 148), outline=(70, 72, 78))
+        d.ellipse([x + 4, y + 7, x + 7, y + 9], fill=(180, 182, 188))
+    for i in (294, 295):   # twigs
+        x, y = at(i)
+        d.line([x + 2, y + 12, x + 14, y + 6], fill=(110, 70, 36), width=2)
+        d.line([x + 8, y + 9, x + 10, y + 4], fill=(110, 70, 36), width=1)
+    return img
+
+
+def crops_sheet():
+    img = Image.new("RGBA", (256, 3 * 32), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    produce = [(242, 230, 194), (244, 240, 220), (196, 150, 96), (70, 140, 70), (90, 170, 70)]
+    for idx, col in enumerate(produce):
+        bx, by = (idx % 2) * 128, (idx // 2) * 32
+        for f in range(8):
+            x, y = bx + f * 16, by
+            if f <= 1:
+                for k in range(3):
+                    d.point((x + 5 + k * 3, y + 27 - (k + f) % 2), fill=(110, 80, 50))
+                continue
+            hgt = min(f, 5) * 3
+            d.line([x + 8, y + 30, x + 8, y + 30 - hgt], fill=(70, 150, 60), width=2)
+            d.ellipse([x + 3, y + 30 - hgt, x + 8, y + 33 - hgt], fill=(80, 170, 70))
+            d.ellipse([x + 8, y + 28 - hgt, x + 13, y + 31 - hgt], fill=(80, 170, 70))
+            if f >= 5:
+                d.ellipse([x + 4, y + 22, x + 12, y + 30], fill=col, outline=shade(col, 0.6))
+    return img
+
+
+def tools_sheet():
+    img = Image.new("RGBA", (336, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    # hoe 0, can 1, axe 2, pickaxe 3, scythe 4
+    x = 0
+    d.line([x + 3, x + 14, x + 12, 4], fill=(139, 90, 43), width=2)
+    d.polygon([(x + 10, 1), (x + 15, 1), (x + 15, 5), (x + 12, 5)], fill=(154, 164, 174), outline=(74, 79, 85))
+    x = 16
+    d.rectangle([x + 3, 6, x + 11, 14], fill=(62, 143, 176), outline=(31, 78, 99))
+    d.line([x + 11, 9, x + 15, 5], fill=(31, 78, 99), width=2)
+    d.arc([x + 4, 2, x + 10, 10], 180, 360, fill=(31, 78, 99))
+    x = 32
+    d.line([x + 4, 15, x + 11, 2], fill=(139, 90, 43), width=2)
+    d.polygon([(x + 9, 1), (x + 15, 3), (x + 13, 8), (x + 9, 6)], fill=(154, 164, 174), outline=(74, 79, 85))
+    x = 48
+    d.line([x + 5, 15, x + 10, 4], fill=(139, 90, 43), width=2)
+    d.arc([x + 1, 1, x + 15, 12], 190, 350, fill=(110, 119, 129), width=2)
+    x = 64
+    d.line([x + 6, 15, x + 9, 3], fill=(139, 90, 43), width=2)
+    d.polygon([(x + 9, 3), (x + 15, 5), (x + 14, 8), (x + 9, 5)], fill=(185, 194, 202), outline=(74, 79, 85))
+    return img
+
+
+def farmer_sheets():
+    base = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
+    d = ImageDraw.Draw(base)
+    skin, shirt, pants, shoe = (246, 196, 150), (70, 120, 190), (90, 70, 50), (60, 40, 30)
+    for row in range(3):
+        for col in range(6):
+            x, y = col * 16, row * 32
+            step = (0, 1, -1, 0, 0, 0)[col] if col < 3 else 0
+            d.ellipse([x + 4, y + 6, x + 11, y + 14], fill=skin, outline=(160, 110, 80))
+            d.rectangle([x + 4, y + 15, x + 11, y + 22], fill=shirt, outline=(40, 70, 120))
+            d.rectangle([x + 2, y + 16, x + 3, y + 21], fill=skin)
+            d.rectangle([x + 12, y + 16, x + 13, y + 21], fill=skin)
+            d.rectangle([x + 4, y + 23, x + 7, y + 28 + step], fill=pants)
+            d.rectangle([x + 8, y + 23, x + 11, y + 28 - step], fill=pants)
+            d.rectangle([x + 4, y + 29 + step, x + 7, y + 30 + step], fill=shoe)
+            d.rectangle([x + 8, y + 29 - step, x + 11, y + 30 - step], fill=shoe)
+            if row == 0:
+                d.point((x + 6, y + 10), fill=(40, 30, 30))
+                d.point((x + 9, y + 10), fill=(40, 30, 30))
+            elif row == 1:
+                d.point((x + 10, y + 10), fill=(40, 30, 30))
+    hair = Image.new("RGBA", (128, 96), (0, 0, 0, 0))
+    d = ImageDraw.Draw(hair)
+    for row in range(3):
+        x, y = 0, row * 32
+        d.chord([x + 3, y + 4, x + 12, y + 12], 180, 360, fill=(200, 200, 200))
+        d.rectangle([x + 3, y + 7, x + 4, y + 11], fill=(200, 200, 200))
+        if row != 0:
+            d.rectangle([x + (3 if row == 1 else 3), y + 7, x + (6 if row == 1 else 12), y + 12], fill=(200, 200, 200))
+        else:
+            d.rectangle([x + 11, y + 7, x + 12, y + 11], fill=(200, 200, 200))
+    return base, hair
+
+
+def buildings():
+    house = Image.new("RGBA", (160, 144), (0, 0, 0, 0))
+    d = ImageDraw.Draw(house)
+    d.polygon([(4, 64), (80, 6), (156, 64)], fill=(176, 64, 52), outline=(110, 40, 32))
+    for k in range(4):
+        d.line([(4 + k * 19, 64 - k * 14), (156 - k * 19, 64 - k * 14)], fill=(132, 44, 36))
+    d.rectangle([14, 62, 146, 143], fill=(226, 196, 140), outline=(130, 90, 50))
+    for k in range(66, 144, 7):
+        d.line([15, k, 145, k], fill=(200, 166, 112))
+    d.rectangle([88, 112, 103, 143], fill=(120, 72, 36), outline=(80, 46, 22))
+    d.point((100, 128), fill=(240, 210, 90))
+    for wx in (30, 120):
+        d.rectangle([wx, 84, wx + 18, 102], fill=(120, 180, 220), outline=(90, 60, 30))
+        d.line([wx + 9, 84, wx + 9, 102], fill=(90, 60, 30))
+    d.rectangle([110, 20, 124, 44], fill=(150, 80, 60), outline=(90, 50, 40))
+    bin_ = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    d = ImageDraw.Draw(bin_)
+    d.rectangle([1, 10, 30, 31], fill=(150, 98, 52), outline=(92, 54, 24))
+    d.rectangle([0, 6, 31, 12], fill=(176, 120, 66), outline=(92, 54, 24))
+    for k in (8, 16, 24):
+        d.line([k, 13, k, 30], fill=(110, 70, 36))
+    return house, bin_
+
+
+def hoe_dirt():
+    img = Image.new("RGBA", (128, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for half, base in ((0, (150, 104, 62)), (1, (104, 70, 42))):
+        for i in range(16):
+            x, y = half * 64 + (i % 4) * 16, (i // 4) * 16
+            d.rectangle([x, y, x + 15, y + 15], fill=base)
+            for k in range(4):
+                d.line([x + 1, y + 3 + k * 4, x + 14, y + 3 + k * 4], fill=shade(base, 0.85))
+            d.rectangle([x, y, x + 15, y + 15], outline=shade(base, 0.7))
+    return img
+
+
+def data_files():
+    os.makedirs(os.path.join(C, "Data"), exist_ok=True)
+    crops = {
+        "472": {"Seasons": ["Spring"], "DaysInPhase": [1, 1, 1, 1], "RegrowDays": -1, "HarvestItemId": "24", "SpriteIndex": 0},
+        "474": {"Seasons": ["Spring"], "DaysInPhase": [1, 2, 4, 4, 1], "RegrowDays": -1, "HarvestItemId": "190", "SpriteIndex": 1},
+        "475": {"Seasons": ["Spring"], "DaysInPhase": [1, 1, 1, 2, 1], "RegrowDays": -1, "HarvestItemId": "192", "SpriteIndex": 2},
+        "477": {"Seasons": ["Spring"], "DaysInPhase": [1, 2, 2, 1], "RegrowDays": -1, "HarvestItemId": "250", "SpriteIndex": 3},
+        "473": {"Seasons": ["Spring"], "DaysInPhase": [1, 1, 1, 3, 4], "RegrowDays": 3, "IsRaised": True, "HarvestItemId": "188", "SpriteIndex": 4},
+    }
+    objs = {
+        "24": ("Parsnip", 35, 24, -75, 10), "188": ("Green Bean", 40, 188, -75, 10),
+        "190": ("Cauliflower", 175, 190, -75, 30), "192": ("Potato", 80, 192, -75, 10),
+        "250": ("Kale", 110, 250, -75, 20), "388": ("Wood", 2, 388, -16, -300),
+        "390": ("Stone", 2, 390, -16, -300), "771": ("Fiber", 1, 771, -16, -300),
+        "472": ("Parsnip Seeds", 10, 472, -74, -300), "473": ("Bean Starter", 30, 473, -74, -300),
+        "474": ("Cauliflower Seeds", 40, 474, -74, -300), "475": ("Potato Seeds", 25, 475, -74, -300),
+        "477": ("Kale Seeds", 35, 477, -74, -300),
+    }
+    tools = {
+        "Hoe": {"ClassName": "Hoe", "Name": "Hoe", "SpriteIndex": 0, "MenuSpriteIndex": -1, "UpgradeLevel": 0},
+        "WateringCan": {"ClassName": "WateringCan", "Name": "Watering Can", "SpriteIndex": 1, "UpgradeLevel": 0},
+        "Axe": {"ClassName": "Axe", "Name": "Axe", "SpriteIndex": 2, "UpgradeLevel": 0},
+        "Pickaxe": {"ClassName": "Pickaxe", "Name": "Pickaxe", "SpriteIndex": 3, "UpgradeLevel": 0},
+        "Scythe": {"ClassName": "MeleeWeapon", "Name": "Scythe", "SpriteIndex": 4, "UpgradeLevel": 0},
+    }
+    for t in tools.values():
+        t["Texture"] = "TileSheets\\tools"
+    shops = {"SeedShop": {"Items": [
+        {"ItemId": "(O)472", "Price": -1, "Condition": "SEASON Spring"},
+        {"ItemId": "(O)473", "Price": -1, "Condition": "SEASON Spring"},
+        {"ItemId": "(O)474", "Price": -1, "Condition": "SEASON Spring"},
+        {"ItemId": "(O)475", "Price": -1, "Condition": "SEASON Spring"},
+        {"ItemId": "(O)477", "Price": -1, "Condition": "SEASON Spring"},
+        {"ItemId": "(O)388", "Price": -1, "Condition": "PLAYER_HAS_MAIL Current someLetter"},
+    ]}}
+    json.dump(crops, open(os.path.join(C, "Data/Crops.json"), "w"), indent=1)
+    json.dump({k: {"Name": v[0], "Price": v[1], "SpriteIndex": v[2], "Category": v[3], "Edibility": v[4]}
+               for k, v in objs.items()}, open(os.path.join(C, "Data/Objects.json"), "w"), indent=1)
+    json.dump(tools, open(os.path.join(C, "Data/Tools.json"), "w"), indent=1)
+    json.dump(shops, open(os.path.join(C, "Data/Shops.json"), "w"), indent=1)
+
+
+def main():
+    for s in ("spring", "summer", "fall", "winter"):
+        save(outdoor_sheet(s), f"Maps/{s}_outdoorsTileSheet")
+    save(interior_sheet(), "Maps/townInterior")
+    make_maps()
+    save(objects_sheet(), "Maps/springobjects")
+    save(crops_sheet(), "TileSheets/crops")
+    save(tools_sheet(), "TileSheets/tools")
+    save(hoe_dirt(), "TerrainFeatures/hoeDirt")
+    base, hair = farmer_sheets()
+    save(base, "Characters/Farmer/farmer_base")
+    save(hair, "Characters/Farmer/hairstyles")
+    house, bin_ = buildings()
+    save(house, "Buildings/houses")
+    save(bin_, "Buildings/Shipping Bin")
+    data_files()
+    print(f"placeholder content written to {C}")
+
+
+if __name__ == "__main__":
+    main()

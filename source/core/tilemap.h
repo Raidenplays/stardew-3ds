@@ -32,6 +32,13 @@ struct Tileset {
 
 static const uint16_t NO_TILE = 0xFFFF;
 
+// A map-edge or door warp: stepping onto (x, y) sends you to target at (tx, ty).
+struct Warp {
+    int x = 0, y = 0;
+    std::string target;
+    int tx = 0, ty = 0;
+};
+
 class TileMap {
 public:
     bool load(const std::string& path, std::string* err);
@@ -47,9 +54,18 @@ public:
     // Tile index to draw right now (resolves animations).
     uint16_t animatedTile(int ts, uint16_t t, uint32_t timeMs) const;
 
+    // Tile "Action" property at a cell ("" if none), e.g. "Warp 6 29 SeedShop".
+    const std::string& action(int x, int y) const;
+    const Warp* warpAt(int x, int y) const;
+    const Warp* warpTo(const std::string& target) const;   // first warp leading there
+
     std::vector<Tileset> tilesets;
+    std::vector<Warp> warps;
+    bool outdoors = true;
+    std::string name;
 
 private:
+    std::vector<std::pair<uint32_t, std::string>> actions;   // sorted by cell
     int w = 0, h = 0;
     std::vector<uint16_t> tiles[L_COUNT];
     std::vector<uint8_t> tsIdx[L_COUNT];

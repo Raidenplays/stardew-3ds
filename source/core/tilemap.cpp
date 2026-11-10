@@ -1,6 +1,7 @@
 #include "tilemap.h"
 
 #include <cstdio>
+#include <algorithm>
 #include <cstring>
 
 namespace sv {
@@ -58,7 +59,10 @@ bool TileMap::load(const std::string& path, std::string* err) {
     Reader r(data);
     char magic[4];
     r.bytes(magic, 4);
-    if (!r.ok || memcmp(magic, "SMP1", 4) != 0) {
+    int version = 0;
+    if (r.ok && memcmp(magic, "SMP1", 4) == 0) version = 1;
+    if (r.ok && memcmp(magic, "SMP2", 4) == 0) version = 2;
+    if (!version) {
         if (err) *err = "bad map file " + path;
         return false;
     }
@@ -106,11 +110,60 @@ bool TileMap::load(const std::string& path, std::string* err) {
     }
     cellFlags.assign(cells, 0);
     r.bytes(cellFlags.data(), cells);
+
+    warps.clear();
+    actions.clear();
+    outdoors = true;
+    if (version >= 2) {
+        outdoors = r.u8() != 0;
+        int nw = r.u16();
+        for (int i = 0; i < nw && r.ok; i++) {
+            Warp wp;
+            wp.x = (int16_t)r.u16();
+            wp.y = (int16_t)r.u16();
+            int len = r.u8();
+            wp.target.resize(len);
+            r.bytes(&wp.target[0], len);
+            wp.tx = (int16_t)r.u16();
+            wp.ty = (int16_t)r.u16();
+            warps.push_back(wp);
+        }
+        int na = r.u16();
+        for (int i = 0; i < na && r.ok; i++) {
+            uint32_t cell = (uint32_t)r.u16() | ((uint32_t)r.u16() << 16);
+            int len = r.u16();
+            std::string a(len, ' ');
+            r.bytes(&a[0], len);
+            actions.push_back({cell, a});
+        }
+        std::sort(actions.begin(), actions.end());
+    }
     if (!r.ok) {
         if (err) *err = "truncated map file " + path;
         return false;
     }
     return true;
+}
+
+const std::string& TileMap::action(int x, int y) const {
+    static const std::string none;
+    if (!inBounds(x, y)) return none;
+    uint32_t cell = (uint32_t)(y * w + x);
+    auto it = std::lower_bound(actions.begin(), actions.end(), std::make_pair(cell, std::string()));
+    if (it != actions.end() && it->first == cell) return it->second;
+    return none;
+}
+
+const Warp* TileMap::warpAt(int x, int y) const {
+    for (auto& wp : warps)
+        if (wp.x == x && wp.y == y) return &wp;
+    return nullptr;
+}
+
+const Warp* TileMap::warpTo(const std::string& target) const {
+    for (auto& wp : warps)
+        if (wp.target == target) return &wp;
+    return nullptr;
 }
 
 uint16_t TileMap::animatedTile(int ts, uint16_t t, uint32_t timeMs) const {

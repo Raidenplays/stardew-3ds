@@ -1,0 +1,52 @@
+#include "c2d_canvas.h"
+
+static inline u32 toC2D(uint32_t c) {
+    return C2D_Color32((c >> 24) & 0xFF, (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
+}
+
+C2DCanvas::C2DCanvas(const std::string& root) : cache(root) { textBuf = C2D_TextBufNew(4096); }
+C2DCanvas::~C2DCanvas() { C2D_TextBufDelete(textBuf); }
+
+void C2DCanvas::beginFrame() { C2D_TextBufClear(textBuf); }
+
+const Texture* C2DCanvas::get(const std::string& name) {
+    if (lastTex && name == lastName) return lastTex;
+    lastName = name;
+    lastTex = cache.get(name);
+    return lastTex;
+}
+
+void C2DCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+                      bool flipX, uint32_t tint) {
+    const Texture* t = get(tex);
+    if (!t) return;
+    if (tint) {
+        C2D_ImageTint it;
+        C2D_PlainImageTint(&it, toC2D(tint), 1.0f);
+        t->draw(sx, sy, sw, sh, dx, dy, flipX, &it);
+    } else {
+        t->draw(sx, sy, sw, sh, dx, dy, flipX, nullptr);
+    }
+}
+
+void C2DCanvas::rect(float x, float y, float w, float h, uint32_t color) {
+    C2D_DrawRectSolid(x, y, 0.5f, w, h, toC2D(color));
+}
+
+void C2DCanvas::line(float x1, float y1, float x2, float y2, uint32_t color, float width) {
+    u32 c = toC2D(color);
+    C2D_DrawLine(x1, y1, c, x2, y2, c, width, 0.5f);
+}
+
+void C2DCanvas::text(float x, float y, float scale, uint32_t color, const std::string& s, int align) {
+    C2D_Text t;
+    C2D_TextParse(&t, textBuf, s.c_str());
+    C2D_TextOptimize(&t);
+    u32 flags = C2D_WithColor | (align == ALIGN_CENTER ? C2D_AlignCenter : align == ALIGN_RIGHT ? C2D_AlignRight : 0);
+    C2D_DrawText(&t, flags, x, y, 0.5f, scale, scale, toC2D(color));
+}
+
+int C2DCanvas::texWidth(const std::string& tex) {
+    const Texture* t = get(tex);
+    return t ? t->width : 0;
+}

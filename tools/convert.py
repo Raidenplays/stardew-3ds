@@ -67,7 +67,8 @@ EXTRA_TEXTURES = [
     ("LooseSprites/font_bold", False),
 ]
 
-MAPS = ["Farm"]
+# Maps are discovered from Maps/*.tmx; these must exist.
+REQUIRED_MAPS = ["Farm"]
 
 # Layers drawn by the engine, in this fixed order.
 LAYERS = ["Back", "Buildings", "Paths", "Front", "AlwaysFront"]
@@ -289,6 +290,7 @@ def convert_map(content, name, out_dir, textures_needed):
             layers[lname] = _decode_layer_data(lay.find("data"), w, h)
 
     flags = bytearray(w * h)
+    actions = {}          # cell -> action string
     ts_arr = {L: bytearray(w * h) for L in LAYERS}
     tile_arr = {L: [0xFFFF] * (w * h) for L in LAYERS}
     for L in LAYERS:
@@ -312,7 +314,9 @@ def convert_map(content, name, out_dir, textures_needed):
                     flags[i] |= F_BLOCKED
                 if "NoSpawn" in props:
                     flags[i] |= F_NOSPAWN
-            elif L == "Buildings":
+            if props.get("Action") and L in ("Buildings", "Front", "Back"):
+                actions.setdefault(i, props["Action"])
+            if L == "Buildings":
                 if "Passable" in props:
                     flags[i] |= F_PASSABLE_OVERRIDE
                 else:
@@ -339,11 +343,29 @@ def convert_map(content, name, out_dir, textures_needed):
             if "Passable" in pr and lname.startswith("Buildings"):
                 flags[i] |= F_PASSABLE_OVERRIDE
                 flags[i] &= ~F_BLOCKED & 0xFF
+            if pr.get("Action"):
+                # an object can cover several tiles (wide doors, counters)
+                ow = max(1, int(float(ob.get("width", 16)) // 16))
+                oh = max(1, int(float(ob.get("height", 16)) // 16))
+                for yy in range(y, min(h, y + oh)):
+                    for xx in range(x, min(w, x + ow)):
+                        actions[yy * w + xx] = pr["Action"]
+
+    mprops = _props(root)
+    outdoors = mprops.get("Outdoors", "F").upper().startswith("T") or name == "Farm"
+    warps = []
+    toks = mprops.get("Warp", "").split()
+    for k in range(0, len(toks) - 4, 5):
+        try:
+            warps.append((int(toks[k]), int(toks[k + 1]), toks[k + 2],
+                          int(toks[k + 3]), int(toks[k + 4])))
+        except ValueError:
+            pass
 
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, name + ".smap")
     with open(path, "wb") as f:
-        f.write(b"SMP1")
+        f.write(b"SMP2")
         f.write(struct.pack("<HHB", w, h, len(tilesets)))
         for ts in tilesets:
             nb = ts["tex"].encode()
@@ -359,8 +381,21 @@ def convert_map(content, name, out_dir, textures_needed):
             f.write(struct.pack(f"<{w * h}H", *tile_arr[L]))
             f.write(bytes(ts_arr[L]))
         f.write(bytes(flags))
+        f.write(struct.pack("<BH", 1 if outdoors else 0, len(warps)))
+        for (x, y, tgt, tx, ty) in warps:
+            tb = tgt.encode()[:255]
+            f.write(struct.pack("<hhB", x, y, len(tb)))
+            f.write(tb)
+            f.write(struct.pack("<hh", tx, ty))
+        acts = sorted(actions.items())[:65535]
+        f.write(struct.pack("<H", len(acts)))
+        for cell, a in acts:
+            ab = a.encode()[:65535]
+            f.write(struct.pack("<HHH", cell & 0xFFFF, cell >> 16, len(ab)))
+            f.write(ab)
     nd = sum(1 for b in flags if b & F_DIGGABLE)
-    print(f"  map {name}: {w}x{h}, {len(tilesets)} tilesheets, {nd} diggable tiles")
+    print(f"  map {name}: {w}x{h}, {len(tilesets)} sheets, {len(warps)} warps, "
+          f"{len(actions)} actions, {nd} diggable")
     return True
 
 
@@ -424,6 +459,8 @@ def write_data(content, out_dir):
             n += 1
     print(f"  objects.dat: {n} objects")
 
+    write_shops(content, out_dir, season_bits)
+
     tools = _load_json(content, "Data/Tools.json")
     n = 0
     with open(os.path.join(out_dir, "tools.dat"), "w", encoding="utf-8") as f:
@@ -438,6 +475,59 @@ def write_data(content, out_dir):
             ]) + "\n")
             n += 1
     print(f"  tools.dat: {n} tools")
+
+
+def _parse_condition(cond, season_bits):
+    """Returns (ok, seasonMask, minYear). ok=False for conditions we can't
+    evaluate yet, so the item is left out rather than shown too early."""
+    mask, min_year = 0, 1
+    if not cond:
+        return True, 0, 1
+    for clause in [c.strip() for c in cond.split(",") if c.strip()]:
+        parts = clause.split()
+        neg = parts[0].startswith("!")
+        q = parts[0].lstrip("!").upper()
+        args = parts[1:]
+        if q in ("SEASON", "LOCATION_SEASON"):
+            if q == "LOCATION_SEASON":
+                args = args[1:]   # first arg is the location
+            m = 0
+            for a in args:
+                m |= season_bits.get(a.lower(), 0)
+            if neg:
+                m = 0xF & ~m
+            mask = (mask & m) if mask else m
+        elif q == "YEAR" and args and not neg:
+            try:
+                min_year = max(min_year, int(args[0]))
+            except ValueError:
+                return False, 0, 1
+        else:
+            return False, 0, 1
+    return True, mask, min_year
+
+
+def write_shops(content, out_dir, season_bits):
+    shops = _load_json(content, "Data/Shops.json")
+    n = skipped = 0
+    with open(os.path.join(out_dir, "shops.dat"), "w", encoding="utf-8") as f:
+        for shop_id, sh in shops.items():
+            for it in sh.get("Items", []) or []:
+                if it.get("IsRecipe"):
+                    continue
+                iid = str(it.get("ItemId") or it.get("Id") or "")
+                if iid.startswith("(O)"):
+                    iid = iid[3:]
+                if not iid.isdigit():
+                    continue
+                ok, mask, min_year = _parse_condition(it.get("Condition"), season_bits)
+                if not ok:
+                    skipped += 1
+                    continue
+                price = int(it.get("Price", -1) or -1)
+                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\n")
+                n += 1
+    print(f"  shops.dat: {n} shop items ({skipped} with conditions not supported yet)")
 
 
 DEFAULT_LAYOUT = """\
@@ -457,6 +547,11 @@ spawn 64 18
 # bin <tileX> <tileY>         tiles that open the shipping bin
 bin 71 14
 bin 72 14
+#
+# bed <map> <tileX> <tileY> <w> <h>   A on these tiles = sleep
+bed FarmHouse 9 4 2 3
+# wake <map> <tileX> <tileY>          where you wake up (nearest open tile is used)
+wake FarmHouse 9 8
 """
 
 
@@ -472,8 +567,19 @@ def main():
 
     print("Maps...")
     textures = set()
-    for m in MAPS:
-        convert_map(content, m, os.path.join(out_root, "maps"), textures)
+    maps_dir = os.path.join(content, "Maps")
+    names = sorted(f[:-4] for f in os.listdir(maps_dir) if f.lower().endswith(".tmx"))
+    for m in REQUIRED_MAPS:
+        if m not in names:
+            sys.exit(f"Maps/{m}.tmx missing -- is this really an unpacked Content folder?")
+    ok = 0
+    for m in names:
+        try:
+            if convert_map(content, m, os.path.join(out_root, "maps"), textures):
+                ok += 1
+        except Exception as e:   # one odd map shouldn't stop the rest
+            print(f"  ! {m}: {e}")
+    print(f"  {ok}/{len(names)} maps converted")
 
     print("Data...")
     write_data(content, os.path.join(out_root, "data"))

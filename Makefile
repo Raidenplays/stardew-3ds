@@ -12,7 +12,7 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET		:=	stardew3ds
 BUILD		:=	build
-SOURCES		:=	source source/core source/platform
+SOURCES		:=	source source/core source/platform source/render
 DATA		:=	data
 INCLUDES	:=	source
 GRAPHICS	:=
