@@ -126,6 +126,9 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
         } else if (k == "mail" && f.size() > 1) mailReceived.insert(f[1]);
         else if (k == "event" && f.size() > 1) eventsSeen.insert(f[1]);
         else if (k == "mine") mineDeepest = I(f, 1);
+        else if (k == "house") { houseLevel = std::max(0, std::min(2, I(f, 1))); locations.erase("FarmHouse"); }
+        else if (k == "craftrecipe" && f.size() > 1) mailReceived.insert("craft:" + f[1]);
+        else if (k == "cookrecipe" && f.size() > 1) mailReceived.insert("cook:" + f[1]);
         else if (k == "building" && f.size() > 5 && data.buildingType(f[1])) {
             FarmBuilding b;
             b.id = nextBuildingId++;

@@ -447,6 +447,27 @@ bool Game::farmBuildingInteract(int tx, int ty) {
     return false;
 }
 
+// Robin's house upgrades: a kitchen (10,000g + 450 wood), then a nursery (65,000g + 100 hardwood).
+bool Game::startHouseUpgrade() {
+    if (houseLevel >= 2) { say("Your house is as big as it gets (for now)."); return false; }
+    if (houseUpgradeDays > 0) { say("Robin is already working on your house."); return false; }
+    for (auto& b : buildings)
+        if (b.daysLeft > 0) { say("Robin is already busy with a building."); return false; }
+    int cost = houseLevel == 0 ? 10000 : 65000, mat = houseLevel == 0 ? 388 : 709, n = houseLevel == 0 ? 450 : 100;
+    if (money < cost) { say("Not enough money"); return false; }
+    if (countItem(mat) < n) {
+        const ObjectDef* o = data.object(mat);
+        say("Need " + std::to_string(n) + " " + (o ? o->name : "materials"));
+        return false;
+    }
+    money -= cost;
+    takeItem(mat, n);
+    houseUpgradeDays = 3;
+    sfx("purchase");
+    say("Robin will have your house upgraded in 3 days.");
+    return true;
+}
+
 // Every farm has a greenhouse: in ruins until the Community Center pantry is
 // done. The standard farm keeps it at 25,10 (an imported farm brings its own).
 void Game::ensureGreenhouse() {

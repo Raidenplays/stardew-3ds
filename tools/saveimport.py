@@ -261,9 +261,10 @@ def import_save(save_path, root):
     for tag in ("houseUpgradeLevel", "spouse", "caveChoice", "dateStringForSaveGame"):
         if p.find(tag) is not None and txt(p, tag):
             extras.append([tag, clean(txt(p, tag))])
-    for tag in ("craftingRecipes", "cookingRecipes"):
+    for tag, key in (("craftingRecipes", "craftrecipe"), ("cookingRecipes", "cookrecipe")):
         for k, v in dict_items(p.find(tag)):
-            extras.append([tag, clean(k.text or "")])
+            out.append([key, clean(k.text or "")])
+    out.append(["house", num(p, "houseUpgradeLevel")])
 
     locs = sg.find("locations")
     bidx = 0

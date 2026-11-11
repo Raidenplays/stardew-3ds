@@ -98,6 +98,10 @@ std::string Game::mapFileFor(const std::string& name) const {
         if (!data.vfs.exists(p)) p = "maps/Mines_" + std::to_string(n % 10 == 0 ? 10 : 1) + ".smap";
         return data.vfs.path(p);
     }
+    if (name == "FarmHouse" && houseLevel > 0) {   // the upgraded house
+        std::string up = "maps/FarmHouse" + std::to_string(std::min(houseLevel, 2)) + ".smap";
+        if (data.vfs.exists(up)) return data.vfs.path(up);
+    }
     size_t at = name.find('@');      // a farm building's inside: "Coop@3" uses maps/Coop
     if (at != std::string::npos) return mapFileFor(name.substr(0, at));
     std::string variant = "maps/" + name + "@" + seasonName(season) + ".smap";
@@ -286,6 +290,7 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    houseLevel = houseUpgradeDays = 0;
     bundleDefs.clear();
     bundleGiven.clear();
     bundleView = -1;
@@ -439,6 +444,12 @@ void Game::startDay() {
 
 void Game::wakeUp() {
     const Layout& L = data.layout;
+    if (houseLevel > 0 && L.wakeMap == "FarmHouse" && hasMap("FarmHouse")) {   // upgraded: wake just inside the door
+        Location* h = loadLocation("FarmHouse");
+        const Warp* w = h ? h->map.warpTo("Farm") : nullptr;
+        facing = FACE_UP;
+        if (w) { warpTo("FarmHouse", w->x, w->y - 2); return; }
+    }
     if (hasMap(L.wakeMap)) {
         facing = FACE_DOWN;
         warpTo(L.wakeMap, L.wakeX, L.wakeY);
@@ -765,7 +776,7 @@ bool Game::tryInteract(int tx, int ty) {
         }
     }
     const Layout& L = data.layout;
-    if (cur->name == L.bedMap && tx >= L.bedX && tx < L.bedX + L.bedW && ty >= L.bedY &&
+    if (houseLevel == 0 && cur->name == L.bedMap && tx >= L.bedX && tx < L.bedX + L.bedW && ty >= L.bedY &&
         ty < L.bedY + L.bedH) {
         goToBed();
         return true;
@@ -1224,6 +1235,11 @@ bool Game::goToBed() {
     bool newSeason = season != oldSeason;
     if (newSeason) refreshSeasonMaps();
 
+    if (houseUpgradeDays > 0 && --houseUpgradeDays == 0) {
+        houseLevel++;
+        locations.erase("FarmHouse");   // the bigger house loads next time
+        say(houseLevel == 1 ? "Robin finished your house: you have a kitchen now!" : "Robin finished your house upgrade!");
+    }
     growSoils(*farm, newSeason, false);
     fruitTreesNight(*farm, false);
     for (auto& b : buildings)   // the greenhouse grows anything, any time of year
@@ -1263,7 +1279,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 18;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 19;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1279,6 +1295,7 @@ static const uint32_t SAVE_VERSION = 18;   // 2: villager friendships, 3: events
                                           // 16: fruit trees, soil inside buildings (greenhouse)
                                           // 17: Community Center bundles
                                           // 18: item quality
+                                          // 19: house upgrades
 
 namespace {
 struct W {
@@ -1453,6 +1470,8 @@ bool Game::save(const std::string& path) const {
         w.u32((uint32_t)kv.second.size());
         for (uint8_t v : kv.second) w.u8(v);
     }
+    w.i32(houseLevel);
+    w.i32(houseUpgradeDays);
     // item quality: inventory, shipped, then each chest / machine in order
     for (auto& s : inv) w.u8(s.quality);
     w.u32((uint32_t)shipped.size());
@@ -1774,6 +1793,12 @@ bool Game::load(const std::string& path, std::string* err) {
             for (uint32_t j = 0; j < n && r.ok && j < 64; j++) v.push_back(r.u8());
             bundleGiven[idx] = v;
         }
+    }
+    houseLevel = houseUpgradeDays = 0;
+    if (version >= 19 && r.ok) {
+        houseLevel = r.i32();
+        houseUpgradeDays = r.i32();
+        locations.erase("FarmHouse");
     }
     if (version >= 18 && r.ok) {
         for (auto& s : inv) s.quality = r.u8();
