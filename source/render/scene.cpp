@@ -253,6 +253,70 @@ static void drawFarmer(Canvas& c, const Game& g, float sx, float sy, int facing,
     drawFarmerAs(c, g, g.me.outfit, sx, sy, facing, moving, walkTime, frameOverride);
 }
 
+// Swinging a tool (hoe, axe, pickaxe, watering can): the farmer's raise /
+// swing / hit poses from farmer_base, with the tool from TileSheets/tools.
+// Each tool there is a row of 16x32 views starting at its Data/Tools
+// SpriteIndex (21 columns of 16px): 0 held up, 1 front, 2 side, 3 front low,
+// 4 from behind; its menu icon sits elsewhere (MenuSpriteIndex).
+static const float TOOL_SWING = 0.30f;   // matches TOOL_TIME in game.cpp
+static bool swingTool(const Game& g, const ToolDef*& td) {
+    if (g.toolTimer <= 0 || g.inv[g.selected].type != SLOT_TOOL) return false;
+    td = g.data.tool(g.inv[g.selected].id);
+    return td && (td->kind == TOOL_HOE || td->kind == TOOL_AXE || td->kind == TOOL_PICKAXE || td->kind == TOOL_CAN);
+}
+
+static void drawPlayerWithTool(Canvas& c, const Game& g, float sx, float sy) {
+    const ToolDef* td = nullptr;
+    if (!swingTool(g, td)) {
+        drawFarmer(c, g, sx, sy, g.facing, g.moving, g.walkTime, -1);
+        return;
+    }
+    float k = 1.0f - g.toolTimer / TOOL_SWING;                 // 0 -> 1 through the swing
+    int phase = k < 0.40f ? 0 : k < 0.60f ? 1 : 2;             // raise, swing, hit
+    bool can = td->kind == TOOL_CAN;
+    int facing = g.facing & 3;
+    // farmer_base frames (body + arms) for each facing and phase
+    static const int DOWN[3] = {66, 67, 68}, SIDE[3] = {30, 32, 33}, UP[3] = {36, 37, 38};
+    static const int CAN_DOWN[3] = {54, 54, 55}, CAN_SIDE[3] = {58, 58, 59}, CAN_UP[3] = {36, 36, 36};
+    int frame = facing == FACE_DOWN ? (can ? CAN_DOWN : DOWN)[phase]
+              : facing == FACE_UP ? (can ? CAN_UP : UP)[phase]
+              : (can ? CAN_SIDE : SIDE)[phase];
+    // the tool's first view (Data/Tools SpriteIndex); older tools.dat files only
+    // have the menu icon, which is 26 cells further on (23 for the watering can)
+    int tw = c.texWidth(td->texture);
+    int cols = std::max(1, tw / 16);
+    int base = td->spriteIndex - (can ? 23 : 26);
+    int bx = (base % cols) * 16, by = (base / cols) * 16;
+    bool flip = facing == FACE_LEFT;
+    float dir = flip ? -1.0f : 1.0f;
+    auto tool = [&](int view, float ox, float oy, float rot) {
+        // ox/oy: where the tool's grip (bottom middle of the 16x32 view) goes, from the feet
+        if (rot == 0.0f) c.image(td->texture, bx + view * 16, by, 16, 32, std::floor(sx + ox - 8), std::floor(sy + oy - 32), flip);
+        else c.imageRotated(td->texture, bx + view * 16, by, 16, 32, 8, 30, sx + ox, sy + oy, rot * dir);
+    };
+    if (facing == FACE_UP) {   // tool behind the farmer (the can stays in front, out of sight)
+        if (phase < 2 && !can) tool(4, 0, phase == 0 ? -18 : -10, 0);
+        drawFarmer(c, g, sx, sy, g.facing, false, 0, frame);
+        return;
+    }
+    drawFarmer(c, g, sx, sy, g.facing, false, 0, frame);
+    if (can) {
+        int view = facing == FACE_DOWN ? 1 : 2;
+        if (facing == FACE_DOWN) tool(1, 0, phase == 2 ? 4 : 2, 0);   // held out in front, low
+        else tool(view, dir * 6, phase == 2 ? -4 : -8, phase == 2 ? 0.6f : 0.0f);
+        return;
+    }
+    if (facing == FACE_DOWN) {
+        if (phase == 0) tool(0, 0, -20, 0);          // held up over the head
+        else if (phase == 1) tool(1, 0, 0, 0);       // coming down in front
+        else tool(3, 0, 12, 0);                      // hits the ground at the feet
+    } else {
+        if (phase == 0) tool(2, dir * -3, -18, -0.5f);   // raised behind the head
+        else if (phase == 1) tool(2, dir * 4, -16, 0.6f);
+        else tool(2, dir * 6, -12, 1.6f);                 // out in front, level
+    }
+}
+
 // ================================================================ top screen
 struct DrawItem {
     float sortY;
@@ -412,9 +476,10 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 break;
             }
             case 3: {
-                drawFarmer(c, g, g.px - camX, g.py - camY, g.facing, g.moving, g.walkTime, -1);
-                if (g.toolTimer > 0 && g.inv[g.selected].type == SLOT_TOOL) {
-                    int tx, ty;
+                drawPlayerWithTool(c, g, g.px - camX, g.py - camY);
+                const ToolDef* td = nullptr;
+                if (g.toolTimer > 0 && g.inv[g.selected].type == SLOT_TOOL && !swingTool(g, td)) {
+                    int tx, ty;   // tools without a swing yet (scythe, rod...): icon at the target
                     g.targetTile(tx, ty);
                     slotIcon(c, g, g.inv[g.selected], tx * TILE - camX, ty * TILE - camY - 6);
                 }
@@ -585,6 +650,28 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
             c.line(x, y, x - 4, y + 10, col, 1.0f);
         }
         c.rect(0, 0, TOP_W, TOP_H, RGBA(0x20, 0x30, 0x50, 0x30));
+    }
+    if (g.windy && g.season != WINTER) {
+        // blowing petals (spring) / leaves (fall): Cursors row 1184/1200/1216, 4-frame flutter
+        int row = g.season == SPRING ? 1184 : g.season == SUMMER ? 1200 : 1216;
+        float sh = c.shift(2.0f);
+        float camX = g.px, camY = g.py;
+        const int N = 36;
+        for (int i = 0; i < N; i++) {
+            uint32_t h = (uint32_t)(i + 1) * 2654435761u;
+            float speed = 0.012f + (h >> 24) * 0.00008f;              // px per ms, drifting left
+            float fall = 0.006f + ((h >> 16) & 255) * 0.00003f;       // and slowly down
+            float x = std::fmod((float)((h >> 5) % 1000) - timeMs * speed - camX * 0.9f, 460.0f);
+            float y = std::fmod((float)((h >> 11) % 1000) + timeMs * fall - camY * 0.9f, 280.0f);
+            if (x < 0) x += 460.0f;
+            if (y < 0) y += 280.0f;
+            x -= 30;
+            y -= 20;
+            y += std::sin(timeMs * 0.003f + i) * 6.0f;                // flutter
+            int frame = ((int)(timeMs / 140) + i) & 3;
+            int variant = (h >> 9) & 1;
+            c.image("LooseSprites_Cursors", 352 + variant * 64 + frame * 16, row, 16, 16, x + sh, y);
+        }
     }
     int t = g.timeOfDay;
     if (t > 18 * 60) {

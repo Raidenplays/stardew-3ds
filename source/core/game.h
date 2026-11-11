@@ -415,6 +415,7 @@ public:
     int energy = MAX_ENERGY;
     int water = CAN_CAPACITY;
     bool raining = false;
+    bool windy = false;      // spring/fall "debris" days: petals and leaves blow across the screen
     // Sound cues (Stardew's names) the frontend plays then clears.
     std::vector<std::string> sounds;
     void sfx(const char* cue) { sounds.emplace_back(cue); }

@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
     bool fishDemo = false;
     bool mailDemo = false;
     bool titleDemo = false;   // title screen + character creation
-    bool setupDemo = false;
+    bool swingDemo = false, setupDemo = false;
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
     int introFps = 10; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
@@ -100,6 +100,7 @@ int main(int argc, char** argv) {
         else if (a == "--intro-frames") introFrames = true;
         else if (a.rfind("--intro-frames=", 0) == 0) { introFrames = true; introFps = atoi(a.c_str() + 15); }
         else if (a == "--setup") setupDemo = true;
+        else if (a == "--swing") swingDemo = true;
         else if (a == "--story") storyDemo = true;
         else font = a;
     }
@@ -481,6 +482,26 @@ int main(int argc, char** argv) {
     if (!walkUntilWarp(g, ui, 0, 1)) printf("  ! couldn't leave the farmhouse\n");
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
+    if (swingDemo) {
+        // every tool x facing x phase, the top screen only (crop around the farmer later)
+        for (int i = 0; i < HOTBAR; i++) {
+            const Slot& s = g.inv[i];
+            if (s.type != SLOT_TOOL) continue;
+            const ToolDef* td = data.tool(s.id);
+            if (!td || !(td->kind == TOOL_HOE || td->kind == TOOL_AXE || td->kind == TOOL_PICKAXE || td->kind == TOOL_CAN)) continue;
+            g.selectSlot(i);
+            for (int f = 0; f < 4; f++)
+                for (float left : {0.27f, 0.15f, 0.05f}) {
+                    g.facing = f;
+                    g.toolTimer = left;
+                    g.moving = false;
+                    shot(c, g, ui, "swing_" + td->key + "_" + std::to_string(f) + "_" + std::to_string((int)(left * 100)));
+                }
+        }
+        g.toolTimer = 0;
+        printf("  player at %.0f,%.0f\n", g.px, g.py);
+        return 0;
+    }
 
     // 3. Farm a little plot right below the porch
     Input down; down.my = 1;

@@ -953,6 +953,7 @@ bool Game::goToBed() {
     }
 
     raining = (day > 3 && season != WINTER && rand32() % 100 < 18);
+    windy = !raining && day > 2 && (season == SPRING || season == FALL) && rand32() % 100 < 15;
     if (raining)
         for (auto& s : farm->soils)
             if (s.tilled) s.watered = true;
