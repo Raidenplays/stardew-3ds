@@ -1718,6 +1718,17 @@ def write_world_text(content, out_dir):
             f.write(f"note:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Data/SecretNotes.json").items():
             f.write(f"secret:{_flat(k)}\t{_flat(v)}\n")
+        # the game's own words for things the engine says: births, babies, your spouse's lines about them
+        for k, v in load("Strings/Events.json").items():
+            f.write(f"ev:{_flat(k)}\t{_flat(v)}\n")
+        cs = load("Strings/StringsFromCSFiles.json")
+        for k in ("NPC.cs.4439", "NPC.cs.4440", "NPC.cs.4441", "NPC.cs.4443", "NPC.cs.4444", "NPC.cs.4445", "NPC.cs.4447",
+                  "NPC.cs.4448", "Dialogue.cs.793", "Dialogue.cs.794"):
+            if k in cs:
+                f.write(f"cs:{k}\t{_flat(cs[k])}\n")
+        for name, cd in load("Data/Characters.json").items():
+            if isinstance(cd, dict) and cd.get("Gender"):
+                f.write(f"gender:{_flat(name)}\t{_flat(cd['Gender'])}\n")
     with open(os.path.join(out_dir, "petgifts.dat"), "w", encoding="utf-8") as f:   # kind, item, weight
         for kind, pd in load("Data/Pets.json").items():
             k = {"Cat": 1, "Dog": 2, "Turtle": 3}.get(kind)

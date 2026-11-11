@@ -764,6 +764,7 @@ int main(int argc, char** argv) {
             Game::Child b; b.name = "Finn"; b.daysOld = atoi(age);
             g.kids.push_back(a); g.kids.push_back(b);
             g.teleport("FarmHouse", 31, 17);
+            if (getenv("KIDNIGHT")) g.timeOfDay = 21 * 60;
             g.kidsMorning();
             step(g, ui, none, getenv("KIDTIME") ? atoi(getenv("KIDTIME")) : 200);
             for (auto& k : g.kids) printf("  %s stage %d at %.1f,%.1f state %d\n", k.name.c_str(), g.kidStage(k), k.x / 16, k.y / 16, k.state);

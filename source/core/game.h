@@ -701,6 +701,11 @@ public:
     int babyDue = -1;                // nights until the baby arrives
     bool babyAsk = false;            // your spouse wants to talk this morning
     int kidStage(const Child& k) const;
+    std::string gameLine(const std::string& key, const std::string& fallback, const std::string& a0, const std::string& a1);
+    bool spouseIsMale();
+    void ensureChildBeds();
+    bool childBed(int idx, int& bx, int& by) const;
+    bool kidsSpouseTalk(NpcState& n);
     void kidPlace(Child& k, int idx);
     bool canHaveBaby() const;
     void kidsNight();

@@ -610,7 +610,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
     if (!g.riding && g.horseLoc == here.name) items.push_back({g.horseY, 19, 0, 0});
     if (here.name == "FarmHouse")
-        for (size_t i = 0; i < g.kids.size(); i++) items.push_back({g.kids[i].y + (g.kidStage(g.kids[i]) <= 1 ? 40.0f : 0.0f), 21, (int)i, 0});
+        for (size_t i = 0; i < g.kids.size(); i++) items.push_back({g.kids[i].y + (g.kidStage(g.kids[i]) <= 1 ? 40.0f : g.kids[i].state == 2 ? 70.0f : 0.0f), 21, (int)i, 0});
     for (size_t i = 0; i < g.pets.size(); i++)
         if (g.pets[i].loc == here.name) items.push_back({g.pets[i].y, 20, (int)i, 0});
     if (here.isFarm)
@@ -960,12 +960,16 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     const char* tex = k.dark && c.texWidth("Characters_Baby_dark") > 0 ? "Characters_Baby_dark" : "Characters_Baby";
                     if (st == 0) c.image(tex, ((int)(k.anim * 0.7f) & 1) * 22, 0, 22, 16, ax - 11, ay - 14);
                     else if (st == 1) c.image(tex, ((int)(k.anim * 2) & 3) * 22, 32, 22, 32, ax - 11, ay - 28);
-                    else if (k.state == 2) c.image(tex, 0, 16, 22, 16, ax - 11, ay - 14);
+                    else if (k.state == 2) c.image(tex, 0, 16, 22, 16, ax - 11, ay - 12);
                     else {
                         int row = k.facing == FACE_DOWN ? 96 : k.facing == FACE_RIGHT ? 112 : k.facing == FACE_UP ? 128 : 144;
                         if (k.state != 1) row = 160;                 // sitting with its toy
                         c.image(tex, ((int)(k.anim * (k.state == 1 ? 5 : 2)) & 3) * 22, row, 22, 16, ax - 11, ay - 14);
                     }
+                } else if (k.state == 2) {   // asleep in bed: just the head on the pillow
+                    std::string tex = std::string(k.girl ? "Characters_Toddler_girl" : "Characters_Toddler") + (k.dark ? "_dark" : "");
+                    if (c.texWidth(tex) <= 0) tex = k.girl ? "Characters_Toddler_girl" : "Characters_Toddler";
+                    c.image(tex, 0, 6, 16, 13, ax - 8, ay - 14);
                 } else {
                     std::string tex = std::string(k.girl ? "Characters_Toddler_girl" : "Characters_Toddler") + (k.dark ? "_dark" : "");
                     if (c.texWidth(tex) <= 0) tex = k.girl ? "Characters_Toddler_girl" : "Characters_Toddler";

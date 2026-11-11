@@ -12,6 +12,47 @@ namespace sv {
 static const int TILE = 16;
 static const int CRIB_X = 31, CRIB_Y = 14;   // the crib in the upgraded farmhouse's nursery
 
+// The game's own line (Strings/Events, StringsFromCSFiles) with {0} and {1} filled in; ours if it's missing.
+std::string Game::gameLine(const std::string& key, const std::string& fallback, const std::string& a0, const std::string& a1) {
+    const std::string* s = mapString(key);
+    std::string out = s ? *s : fallback;
+    for (int k = 0; k < 2; k++) {
+        std::string tok = k ? "{1}" : "{0}";
+        size_t at;
+        while ((at = out.find(tok)) != std::string::npos) out.replace(at, 3, k ? a1 : a0);
+    }
+    return out;
+}
+
+bool Game::spouseIsMale() {
+    const std::string* g = mapString("gender:" + spouse);
+    return g && *g == "Male";
+}
+
+// Two child beds in the nursery (the game's own Child Bed furniture), once the house has one.
+void Game::ensureChildBeds() {
+    if (houseLevel < 2 || mailReceived.count("s3d_childBeds") || !data.furniture.count(2076)) return;
+    mailReceived.insert("s3d_childBeds");
+    int have = 0;
+    for (auto& fp : furniture) have += fp.map == "FarmHouse" && fp.id == 2076;
+    for (int i = have; i < 2; i++) {
+        FurniturePlacement fp;
+        fp.map = "FarmHouse";
+        fp.id = 2076;
+        fp.x = CRIB_X + 4 + i * 3;
+        fp.y = CRIB_Y;
+        furniture.push_back(fp);
+    }
+}
+
+// The idx-th child's bed (top-left tile of the Child Bed), if there is one.
+bool Game::childBed(int idx, int& bx, int& by) const {
+    int n = 0;
+    for (auto& fp : furniture)
+        if (fp.map == "FarmHouse" && fp.id == 2076 && n++ == idx) { bx = fp.x; by = fp.y; return true; }
+    return false;
+}
+
 int Game::kidStage(const Child& k) const {
     return k.daysOld < 13 ? 0 : k.daysOld < 27 ? 1 : k.daysOld < 55 ? 2 : 3;   // newborn, baby, crawler, toddler
 }
@@ -19,7 +60,12 @@ int Game::kidStage(const Child& k) const {
 void Game::kidPlace(Child& k, int idx) {
     int st = kidStage(k);
     bool night = timeOfDay >= 20 * 60;
-    if (st <= 1 || night) {                  // in the crib (toddlers are tucked in beside it at night)
+    int bx, by;
+    if (st >= 2 && night && childBed(idx, bx, by)) {   // tucked into their own bed
+        k.x = bx * TILE + 16.0f;
+        k.y = by * TILE + 9.0f;
+        k.state = 2;
+    } else if (st <= 1 || night) {           // in the crib (no bed: beside it)
         k.x = (CRIB_X + (st <= 1 ? 0 : idx == 0 ? -2 : 3)) * TILE + 8.0f + (st <= 1 ? idx * 10.0f - 7.0f : 0.0f);
         k.y = (CRIB_Y + (st <= 1 ? 0 : 2)) * TILE + (st <= 1 ? 4.0f : 12.0f);
         k.state = st <= 1 ? 0 : 2;
@@ -54,7 +100,11 @@ void Game::kidsNight() {
             if (!n.empty()) k.name = n;
         }
         kids.push_back(k);
-        morningNote = (k.girl ? "A baby girl arrived in the night! Welcome, " : "A baby boy arrived in the night! Welcome, ") + k.name + ".";
+        const NpcState* sp = npcByName(spouse);
+        std::string who = sp ? sp->def->display : spouse, kind = k.girl ? "girl" : "boy";
+        morningNote = (spouseIsMale() ? gameLine("ev:BirthMessage_Adoption", "During the night, the adoption agency dropped off your new baby {0}.", kind, who)
+                                      : gameLine("ev:BirthMessage_SpouseMother", "During the night, {1} gave birth to a baby {0}.", kind, who)) +
+                      " Welcome, " + k.name + "!";
         if (NpcState* s = npcByNameMut(spouse)) s->friendship = std::min(friendshipCap(*s), s->friendship + 250);
     } else if (canHaveBaby() && rand32() % 100 < 5) {
         babyAsk = true;
@@ -66,7 +116,22 @@ void Game::kidsNight() {
     }
 }
 
+// While a baby's on the way, your spouse's first words each day are about it.
+bool Game::kidsSpouseTalk(NpcState& n) {
+    if (babyDue <= 0 || n.def->name != spouse || n.talkedToday) return false;
+    std::string line = spouseIsMale() ? gameLine("cs:NPC.cs.4440", "{0}, I hope our adoption request gets approved. I want a baby.$l", me.name, "")
+                       : babyDue <= 4 ? gameLine("cs:NPC.cs.4444", "{0}, we're going to have a baby soon.$l", me.name, "")
+                                      : gameLine("cs:NPC.cs.4439", "I wonder how much the new baby will change things?$s", me.name, "");
+    auto pages = parseDialogue(line, me.name);
+    if (pages.empty()) return false;
+    n.friendship = std::min(friendshipCap(n), n.friendship + 20);
+    n.talkedToday = true;
+    showDialogue(n, pages);
+    return true;
+}
+
 void Game::kidsMorning() {
+    ensureChildBeds();
     for (size_t i = 0; i < kids.size(); i++) kidPlace(kids[i], (int)i);
 }
 
@@ -77,7 +142,8 @@ void Game::kidsAsk() {
     if (!canHaveBaby()) return;
     const NpcState* s = npcByName(spouse);
     DialoguePage p;
-    p.text = "I've been thinking... we have the room now. Should we have a baby?";
+    p.text = spouseIsMale() ? gameLine("ev:HaveBabyQuestion_Adoption", "Should we adopt a baby, {0}?", me.name, "")
+                            : gameLine("ev:HaveBabyQuestion", "Should we have a baby, {0}?", me.name, "");
     DialogueChoice c;
     c.label = "Yes"; c.responseKey = "baby:yes"; p.choices.push_back(c);
     c.label = "Not now"; c.responseKey = ""; p.choices.push_back(c);
@@ -92,7 +158,16 @@ bool Game::kidsChoice(const std::string& what, const std::string& key) {
     if (what != "baby") return false;
     if (key == "baby:yes") {
         babyDue = 14;
-        say("In two weeks, then! The nursery won't be empty for long.");
+        // their answer, in the game's words
+        std::string line = spouseIsMale() ? gameLine("cs:NPC.cs.4441", "{0}, I filed our adoption papers. Now all we can do is cross our fingers and wait.$l", me.name, "")
+                                          : gameLine("cs:NPC.cs.4445", "{0}, I'm pregnant. Isn't it wonderful?$l", me.name, "");
+        auto pages = parseDialogue(line, me.name);
+        if (!pages.empty()) {
+            dialogue = DialogueBox();
+            dialogue.active = true;
+            dialogue.npc = spouse;
+            dialogue.pages = pages;
+        }
     }
     return true;
 }
