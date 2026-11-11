@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
     assert(g.farmLocation().soils[ty * g.farmLocation().map.width() + tx].seed == 472);
 
     // ---- villagers
-    assert(g.npcs.size() == 2);
+    assert(g.npcs.size() == 3);   // the two villagers, and Raiden at the Saloon
     const NpcState* jun = g.npcByName("Juniper");
     const NpcState* row = g.npcByName("Rowan");
     assert(jun && row && jun->loc == "Town" && row->loc == "SeedShop");
