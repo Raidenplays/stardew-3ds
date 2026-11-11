@@ -73,6 +73,12 @@ public:
             rev++;
         }
     }
+    void setTile(int layer, int x, int y, uint16_t index, int ts) {
+        if (!inBounds(x, y) || layer < 0 || layer >= L_COUNT) return;
+        tsIdx[layer][y * w + x] = (uint8_t)ts;
+        tiles[layer][y * w + x] = index;
+        rev++;
+    }
     uint32_t rev = 0;   // bumps whenever a tile changes (cached drawings go stale)
     bool isAnimated(int ts, uint16_t t) const {
         if (ts < 0 || ts >= (int)tilesets.size()) return false;

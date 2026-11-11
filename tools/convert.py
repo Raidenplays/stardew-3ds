@@ -86,6 +86,8 @@ EXTRA_TEXTURES = [
     ("TileSheets/critters", False),
     ("LooseSprites/Lighting/lantern", False),
     ("LooseSprites/Lighting/windowLight", False),
+    ("Maps/Mines/mine_frost", False),
+    ("Maps/Mines/mine_lava", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
     ("Minigames/TitleButtons", False),
@@ -1860,7 +1862,20 @@ def main():
                 graph[m] = info
         except Exception as e:   # one odd map shouldn't stop the rest
             print(f"  ! {m}: {e}")
-    print(f"  {ok}/{len(names)} maps converted")
+    # the mine's floors: Maps/Mines/<n>.tmx -> maps/Mines_<n>.smap (the game picks one per level)
+    mines_dir = os.path.join(content, "Maps", "Mines")
+    n_mines = 0
+    if os.path.isdir(mines_dir):
+        for f in sorted(os.listdir(mines_dir)):
+            stem = f[:-4]
+            if not f.lower().endswith(".tmx") or not stem.isdigit() or stem == "77377":
+                continue
+            try:
+                if convert_map(content, "Mines_" + stem, out_maps, textures, os.path.join(mines_dir, f)):
+                    n_mines += 1
+            except Exception as e:
+                print(f"  ! Mines/{stem}: {e}")
+    print(f"  {ok}/{len(names)} maps converted, {n_mines} mine floors")
     took("maps")
     # Seasonal variants of modded maps: kept only where they differ from
     # spring, saved as maps/<Location>@<season>.smap.

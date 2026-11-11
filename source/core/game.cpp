@@ -62,8 +62,10 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
     if (!loc->map.load(loc->file, err)) return nullptr;
     loc->map.name = name;
     loc->isFarm = (name == "Farm");
+    loc->mineLevel = mineLevelOf(name);
     loc->initState();
     if (loc->map.outdoors) treesFromMap(*loc);
+    if (loc->mineLevel) mineGenerate(*loc);
     {   // Light: "x y type x y type ..."
         const std::string& l = loc->map.prop("Light");
         std::vector<int> v;
@@ -89,6 +91,12 @@ std::string Game::mapFileFor(const std::string& name) const {
         std::string v = "maps/" + m + "@" + seasonName(season) + ".smap";
         if (data.vfs.exists(v)) return data.vfs.path(v);
         if (data.vfs.exists("maps/" + m + ".smap")) return data.vfs.path("maps/" + m + ".smap");
+    }
+    if (int lv = mineLevelOf(name)) {   // a mine floor: one of Maps/Mines/1..60, 120 at the bottom
+        int n = lv >= 120 ? 120 : (lv - 1) % 40 + 1;
+        std::string p = "maps/Mines_" + std::to_string(n) + ".smap";
+        if (!data.vfs.exists(p)) p = "maps/Mines_" + std::to_string(n % 10 == 0 ? 10 : 1) + ".smap";
+        return data.vfs.path(p);
     }
     std::string variant = "maps/" + name + "@" + seasonName(season) + ".smap";
     if (data.vfs.exists(variant)) return data.vfs.path(variant);
@@ -211,6 +219,18 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         return true;
     }
     if (bumped) return false;   // everything else needs a button press
+    if (verb == "Mine") {            // the ladder down at the mine entrance
+        std::string which;
+        ss >> which;
+        if (!which.empty()) { say("That part of the mine isn't in yet."); return true; }
+        enterMine(1);
+        return true;
+    }
+    if (verb == "MineElevator") {
+        if (mineDeepest < 5) say("The elevator stops every 5 floors. Reach floor 5 first.");
+        else openElevator();
+        return true;
+    }
     if (verb == "OpenShop") {
         std::string id;
         ss >> id;
@@ -420,6 +440,7 @@ bool Game::tileSolid(int tx, int ty) const {
         if (t.x == tx && t.y == ty && (t.stage > 0 || t.stump)) return true;
     if (bushAt(tx, ty) >= 0) return true;
     if (!cur->clumps.empty() && clumpAt(tx, ty) >= 0) return true;
+    if (cur->mineLevel && m.tile(L_BUILDINGS, tx, ty) != NO_TILE) return true;   // a ladder that turned up
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
@@ -612,6 +633,7 @@ bool Game::sellSlot(int i) {
 bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap; }
 
 bool Game::tryInteract(int tx, int ty) {
+    if (mineInteract(tx, ty)) return true;
     if (NpcState* n = npcAt(tx, ty)) {
         if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
         else talkTo(*n);
@@ -767,6 +789,7 @@ void Game::useSelected(int tx, int ty) {
                         if (const ObjectDef* nd = data.object(o->itemId))
                             burst(nd->texture, (nd->spriteIndex % 24) * 16, (nd->spriteIndex / 24) * 16, 16, 16,
                                   tx * TILE + 8.0f, ty * TILE + 10.0f, 7);
+                        int node = o->itemId;
                         int drop = oreNodeDrop(o->itemId);
                         int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
                         if (has(PR_MINER) && drop != 390) n++;
@@ -774,6 +797,7 @@ void Game::useSelected(int tx, int ty) {
                         if (addItem(drop, n)) itemFlies(drop, tx * TILE + 8.0f, ty * TILE + 10.0f, n);
                         gainXp(SK_MINING, 5);
                         questItem(drop, n);
+                        mineRockBroken(tx, ty, node);
                         const ObjectDef* od = data.object(drop);
                         if (od) say("+" + std::to_string(n) + " " + od->name);
                     }
@@ -1165,7 +1189,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 13;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 14;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1176,6 +1200,7 @@ static const uint32_t SAVE_VERSION = 13;   // 2: villager friendships, 3: events
                                           // 11: your character + farm type
                                           // 12: farm grass
                                           // 13: big stumps, logs and boulders
+                                          // 14: deepest mine floor
 
 namespace {
 struct W {
@@ -1306,6 +1331,7 @@ bool Game::save(const std::string& path) const {
         if (farm->grass[i]) { w.u32((uint32_t)i); w.u8(farm->grass[i]); }
     w.u32((uint32_t)farm->clumps.size());
     for (auto& c : farm->clumps) { w.i32(c.x); w.i32(c.y); w.u8(c.kind); w.u8((uint8_t)c.health); }
+    w.i32(mineDeepest);
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1539,6 +1565,7 @@ bool Game::load(const std::string& path, std::string* err) {
             if (!clear) cs.erase(cs.begin() + k);
         }
     }
+    mineDeepest = version >= 14 && r.ok ? r.i32() : 0;
     for (auto& c : farm->clumps)     // nothing grows under them
         for (int dy = 0; dy < 2; dy++)
             for (int dx = 0; dx < 2; dx++)

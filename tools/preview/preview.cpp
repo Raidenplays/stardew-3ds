@@ -91,7 +91,8 @@ int main(int argc, char** argv) {
     int timeArg = -1;
     int dayArg = -1;
     int mapCacheArg = 0;
-    bool panArg = false;   // HHMM: run the villagers' day up to then
+    bool panArg = false;
+    int mineArg = 0;   // HHMM: run the villagers' day up to then
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
     int introFps = 10; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
@@ -116,6 +117,7 @@ int main(int argc, char** argv) {
         else if (a.rfind("--time=", 0) == 0) timeArg = atoi(a.c_str() + 7);
         else if (a == "--mapcache") mapCacheArg = 1;
         else if (a == "--pan") panArg = true;
+        else if (a.rfind("--mine=", 0) == 0) mineArg = atoi(a.c_str() + 7);
         else if (a.rfind("--day=", 0) == 0) dayArg = atoi(a.c_str() + 6);   // season*28 + day, e.g. 16 or 64
         else font = a;
     }
@@ -501,6 +503,48 @@ int main(int argc, char** argv) {
     if (!walkUntilWarp(g, ui, 0, 1)) printf("  ! couldn't leave the farmhouse\n");
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
+    if (mineArg > 0) {   // a mine floor: as you arrive, then after breaking rocks until the ladder shows
+        g.enterMine(mineArg);
+        step(g, ui, none, 30);
+        shot(c, g, ui, "mine_" + std::to_string(mineArg));
+        printf("  floor %d: %zu rocks\n", mineArg, g.location().objects.size());
+        int broken = 0;
+        size_t pick = 0;
+        while (pick < g.location().objects.size() && broken < 400) {
+            const WorldObject o = g.location().objects[pick];
+            static const int sdx[4] = {0, -1, 0, 1}, sdy[4] = {1, 0, -1, 0}, face[4] = {FACE_UP, FACE_RIGHT, FACE_DOWN, FACE_LEFT};
+            bool placed = false;
+            for (int k = 0; k < 4 && !placed; k++) {
+                g.teleport(g.location().name, o.x + sdx[k], o.y + sdy[k]);
+                g.fade = 0;
+                if ((int)(g.px / 16) == o.x + sdx[k] && (int)((g.py - 4) / 16) == o.y + sdy[k]) { g.facing = face[k]; placed = true; }
+            }
+            if (!placed) { pick++; continue; }
+            step(g, ui, none, 2);
+            for (int i = 0; i < HOTBAR; i++)
+                if (g.inv[i].type == SLOT_TOOL && data.tool(g.inv[i].id)->kind == TOOL_PICKAXE) g.selectSlot(i);
+            g.energy = 270;
+            { Input a; a.action = true; step(g, ui, a, 1);
+              if (broken < 3) printf("  rock %d,%d at me %.0f,%.0f sel %d tool %.2f energy %d dlg %d cs %d\n", o.x, o.y, g.px, g.py, g.selected, g.toolTimer, g.energy, g.dialogue.active, g.cutscene.active);
+              step(g, ui, none, 25); }
+            broken++;
+            bool ladder = false;
+            const TileMap& mm = g.map();
+            for (int y = 0; y < mm.height() && !ladder; y++)
+                for (int x = 0; x < mm.width(); x++)
+                    if (mm.tile(L_BUILDINGS, x, y) == 173) { ladder = true; printf("  ladder at %d,%d after %d rocks (tile %d sheet %d '%s' cols %d)\n", x, y, broken, mm.tile(L_BUILDINGS, x, y), mm.tileset(L_BUILDINGS, x, y), mm.tilesets[mm.tileset(L_BUILDINGS, x, y)].texture.c_str(), mm.tilesets[mm.tileset(L_BUILDINGS, x, y)].columns); g.teleport(g.location().name, x + 2, y + 2); break; }
+            if (ladder) break;
+        }
+        printf("  broke %d, %zu rocks left, toast '%s'\n", broken, g.location().objects.size(), g.toast.c_str());
+        step(g, ui, none, 30);
+        shot(c, g, ui, "mine_ladder");
+        g.facing = FACE_UP;
+        { Input a; a.action = true; step(g, ui, a, 1); }
+        step(g, ui, none, 30);
+        printf("  now in %s\n", g.location().name.c_str());
+        shot(c, g, ui, "mine_next");
+        return 0;
+    }
     if (!whereMap.empty()) {
         // time the top screen at a location (centre of the map), per drawing stage
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }

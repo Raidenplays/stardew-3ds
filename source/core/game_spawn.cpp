@@ -17,6 +17,13 @@ int oreNodeDrop(int node) {
         case 75:  return 535;   // geode
         case 76:  return 536;   // frozen geode
         case 77:  return 537;   // magma geode
+        case 2:   return 72;    // diamond
+        case 4:   return 64;    // ruby
+        case 6:   return 70;    // jade
+        case 8:   return 66;    // amethyst
+        case 10:  return 68;    // topaz
+        case 12:  return 60;    // emerald
+        case 14:  return 62;    // aquamarine
         default:  return 390;   // stone
     }
 }
@@ -46,7 +53,7 @@ WorldObject* Game::objectAt(int x, int y) {
 }
 
 void Game::spawnObjects(Location& loc) {
-    if (loc.isFarm || loc.spawnDay == absoluteDay()) return;
+    if (loc.isFarm || loc.mineLevel || loc.spawnDay == absoluteDay()) return;   // mine floors make their own
     loc.spawnDay = absoluteDay();
     loc.objects.clear();
     const TileMap& m = loc.map;

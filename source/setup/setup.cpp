@@ -36,6 +36,8 @@ static const struct { const char* path; bool required; } EXTRA_TEXTURES[] = {
     {"TerrainFeatures/grass", false},
     {"TileSheets/bushes", false},
     {"TileSheets/rain", false},
+    {"Maps/Mines/mine_frost", false},
+    {"Maps/Mines/mine_lava", false},
     {"TileSheets/bobbers", false},
     {"TileSheets/critters", false},
     {"LooseSprites/Lighting/lantern", false},
