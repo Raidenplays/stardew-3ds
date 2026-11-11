@@ -29,6 +29,9 @@ struct Ui {
     std::map<int, int> cart;  // itemId -> qty
 
     int socialScroll = 0;
+    bool collections = false; // the Social tab is showing Collections
+    int colPage = 0;          // 0 shipped, 1 fish, 2 museum, 3 cooking, 4 achievements
+    int colScroll = 0, colSel = -1;
     int craftSel = 0;         // index into GameData::recipes
     int craftScroll = 0;      // first row shown
     bool cooking = false;     // the craft tab shows kitchen recipes (in an upgraded farmhouse)

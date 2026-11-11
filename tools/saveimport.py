@@ -307,6 +307,16 @@ def import_save(save_path, root):
         for k, v in dict_items(p.find(tag)):
             out.append([key, clean(k.text or "")])
     out.append(["house", num(p, "houseUpgradeLevel")])
+    # collections: what's been shipped, caught and cooked
+    for tag, key in (("basicShipped", "shippedever"), ("fishCaught", "fishever"), ("recipesCooked", "cookedever")):
+        for k, v in dict_items(p.find(tag)):
+            iid = ids.o(k.text)
+            if iid is None:
+                continue
+            n = v.find("int")
+            cnt = int((n.text if n is not None else v.text) or 0)
+            if cnt > 0:
+                out.append([key, iid, cnt])
     # a pet anywhere in the save
     kid_points = {(k.text or ""): num(v, "Points") for k, v in dict_items(p.find("friendshipData"))}
     for el in sg.iter("NPC"):   # children: name, girl, dark hair and skin, days old

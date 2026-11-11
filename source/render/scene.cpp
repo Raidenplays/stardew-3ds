@@ -103,6 +103,12 @@ static void objectIcon(Canvas& c, int spriteIndex, float x, float y,
     c.image(tex, (spriteIndex % cols) * 16, (spriteIndex / cols) * 16, 16, 16, x, y);
 }
 
+static void objectIconTinted(Canvas& c, int spriteIndex, float x, float y, const std::string& tex, uint32_t tint) {
+    int cols = std::max(1, c.texWidth(tex) / 16);
+    if (tex == "Maps_springobjects") cols = 24;
+    c.image(tex, (spriteIndex % cols) * 16, (spriteIndex / cols) * 16, 16, 16, x, y, false, tint);
+}
+
 static void itemIcon(Canvas& c, const ObjectDef* o, float x, float y) {
     if (o) objectIcon(c, o->spriteIndex, x, y, o->texture);
 }
@@ -1943,7 +1949,79 @@ static std::vector<int> socialOrder(const Game& g) {
     return idx;
 }
 
+// Collections: five pages over the Social tab. Icons you've got are bright; the rest are shadows.
+static const int COL_COLS = 11, COL_ROWS = 5, COL_CELL = 26;
+
+static void drawCollections(Canvas& c, Game& g, Ui& ui) {
+    static const char* pages[5] = {"Shipped", "Fish", "Museum", "Cooking", "Awards"};
+    for (int i = 0; i < 5; i++) {
+        box(c, 6 + i * 52, PANEL_Y + 2, 50, 15, ui.colPage == i ? COL_PANEL : COL_TAB_OFF, COL_BORDER, 1);
+        c.text(31 + i * 52, PANEL_Y + 3, 0.34f, COL_TEXT, pages[i], ALIGN_CENTER);
+    }
+    box(c, 268, PANEL_Y + 2, 46, 15, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(291, PANEL_Y + 3, 0.34f, COL_TEXT, "People", ALIGN_CENTER);
+    float gy = PANEL_Y + 20;
+    char buf[96];
+    if (ui.colPage == 4) {
+        auto list = g.achievements();
+        int rows = 6;
+        ui.colScroll = std::max(0, std::min(ui.colScroll, (int)list.size() - rows));
+        int got = 0;
+        for (auto& a : list) got += a.earned;
+        for (int r = 0; r < rows && ui.colScroll + r < (int)list.size(); r++) {
+            const Game::Achievement& a = list[ui.colScroll + r];
+            float y = gy + r * 22;
+            c.rect(8, y + 5, 8, 8, a.earned ? RGBA(0xF0, 0xC8, 0x30) : RGBA(0x9A, 0x82, 0x60));
+            c.text(21, y - 1, 0.4f, a.earned ? COL_TEXT : COL_TEXT_SOFT, a.name);
+            c.text(21, y + 10, 0.3f, COL_TEXT_SOFT, a.desc);
+        }
+        snprintf(buf, sizeof buf, "%d of %d earned", got, (int)list.size());
+        c.text(8, gy + 6 * 22 + 1, 0.36f, COL_TEXT, buf);
+    } else {
+        auto items = g.collectionItems(ui.colPage);
+        int rows = ((int)items.size() + COL_COLS - 1) / COL_COLS;
+        ui.colScroll = std::max(0, std::min(ui.colScroll, rows - COL_ROWS));
+        int got = 0;
+        for (int id : items) got += g.collectionCount(ui.colPage, id) > 0;
+        for (int r = 0; r < COL_ROWS; r++)
+            for (int col = 0; col < COL_COLS; col++) {
+                int i = (ui.colScroll + r) * COL_COLS + col;
+                if (i >= (int)items.size()) break;
+                float x = 6 + col * COL_CELL, y = gy + r * COL_CELL;
+                bool have = g.collectionCount(ui.colPage, items[i]) > 0;
+                box(c, x, y, COL_CELL - 2, COL_CELL - 2, i == ui.colSel ? COL_SLOT_ON : COL_SLOT, i == ui.colSel ? COL_SEL : COL_SLOT_EDGE, 1);
+                const ObjectDef* o = g.data.object(items[i]);
+                if (o) objectIconTinted(c, o->spriteIndex, x + 4, y + 4, o->texture, have ? 0 : RGBA(0x30, 0x20, 0x18, 0xB0));
+            }
+        const ObjectDef* so = ui.colSel >= 0 && ui.colSel < (int)items.size() ? g.data.object(items[ui.colSel]) : nullptr;
+        if (so) {
+            int n = g.collectionCount(ui.colPage, items[ui.colSel]);
+            snprintf(buf, sizeof buf, n > 0 ? (ui.colPage == 2 ? "%s: donated" : "%s: %d") : "%s: not yet", n > 0 || ui.colPage != 1 ? so->name.c_str() : "???", n);
+        } else snprintf(buf, sizeof buf, "%d of %d", got, (int)items.size());
+        c.text(8, gy + COL_ROWS * COL_CELL + 3, 0.38f, COL_TEXT, buf);
+    }
+    box(c, 292, gy, 22, 62, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(303, gy + 22, 0.5f, COL_TEXT, "^", ALIGN_CENTER);
+    box(c, 292, gy + 66, 22, 62, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(303, gy + 88, 0.5f, COL_TEXT, "v", ALIGN_CENTER);
+}
+
+static void touchCollections(Game& g, Ui& ui, int tx, int ty) {
+    for (int i = 0; i < 5; i++)
+        if (hit(tx, ty, 6 + i * 52, PANEL_Y + 2, 50, 15)) { ui.colPage = i; ui.colScroll = 0; ui.colSel = -1; return; }
+    if (hit(tx, ty, 268, PANEL_Y + 2, 46, 15)) { ui.collections = false; return; }
+    float gy = PANEL_Y + 20;
+    if (hit(tx, ty, 292, gy, 22, 62)) { ui.colScroll -= ui.colPage == 4 ? 5 : COL_ROWS - 1; return; }
+    if (hit(tx, ty, 292, gy + 66, 22, 62)) { ui.colScroll += ui.colPage == 4 ? 5 : COL_ROWS - 1; return; }
+    if (ui.colPage == 4) return;
+    for (int r = 0; r < COL_ROWS; r++)
+        for (int col = 0; col < COL_COLS; col++)
+            if (hit(tx, ty, 6 + col * COL_CELL, gy + r * COL_CELL, COL_CELL - 2, COL_CELL - 2)) ui.colSel = (ui.colScroll + r) * COL_COLS + col;
+    (void)g;
+}
+
 static void drawSocialTab(Canvas& c, Game& g, Ui& ui) {
+    if (ui.collections) { drawCollections(c, g, ui); return; }
     auto order = socialOrder(g);
     ui.socialScroll = std::max(0, std::min(ui.socialScroll, (int)order.size() - SOC_ROWS));
     for (int r = 0; r < SOC_ROWS; r++) {
@@ -1965,15 +2043,22 @@ static void drawSocialTab(Canvas& c, Game& g, Ui& ui) {
                     n.talkedToday ? "Talked today" : (n.introduced ? "" : "Not met"), ALIGN_RIGHT);
     }
     if (order.empty()) c.text(160, 120, 0.45f, COL_TEXT_SOFT, "No villagers in your files yet.", ALIGN_CENTER);
-    box(c, 290, SOC_Y, 24, 80, COL_PANEL_DARK, COL_BORDER, 1);
-    c.text(302, SOC_Y + 30, 0.5f, COL_TEXT, "^", ALIGN_CENTER);
-    box(c, 290, SOC_Y + 96, 24, 80, COL_PANEL_DARK, COL_BORDER, 1);
-    c.text(302, SOC_Y + 126, 0.5f, COL_TEXT, "v", ALIGN_CENTER);
+    box(c, 290, SOC_Y, 24, 56, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(302, SOC_Y + 18, 0.5f, COL_TEXT, "^", ALIGN_CENTER);
+    box(c, 290, SOC_Y + 60, 24, 56, COL_PANEL, COL_BORDER, 1);   // Collections and achievements
+    c.rect(297, SOC_Y + 74, 10, 10, RGBA(0xF0, 0xC8, 0x30));
+    c.rect(299, SOC_Y + 84, 6, 4, RGBA(0xC8, 0x9A, 0x20));
+    c.rect(296, SOC_Y + 88, 12, 3, RGBA(0x8A, 0x5A, 0x30));
+    c.text(302, SOC_Y + 96, 0.26f, COL_TEXT, "Coll.", ALIGN_CENTER);
+    box(c, 290, SOC_Y + 120, 24, 56, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(302, SOC_Y + 138, 0.5f, COL_TEXT, "v", ALIGN_CENTER);
 }
 
-static void touchSocialTab(Ui& ui, int tx, int ty) {
-    if (hit(tx, ty, 290, SOC_Y, 24, 80)) ui.socialScroll -= SOC_ROWS - 1;
-    if (hit(tx, ty, 290, SOC_Y + 96, 24, 80)) ui.socialScroll += SOC_ROWS - 1;
+static void touchSocialTab(Game& g, Ui& ui, int tx, int ty) {
+    if (ui.collections) { touchCollections(g, ui, tx, ty); return; }
+    if (hit(tx, ty, 290, SOC_Y, 24, 56)) ui.socialScroll -= SOC_ROWS - 1;
+    if (hit(tx, ty, 290, SOC_Y + 60, 24, 56)) { ui.collections = true; ui.colScroll = 0; ui.colSel = -1; }
+    if (hit(tx, ty, 290, SOC_Y + 120, 24, 56)) ui.socialScroll += SOC_ROWS - 1;
 }
 
 // --------------------------------------------------------------- dialogue takeover
@@ -2959,7 +3044,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (ui.tab == TAB_ITEMS) touchItemsTab(g, ui, tx, ty);
     else if (ui.tab == TAB_CRAFT) touchCraftTab(g, ui, tx, ty);
     else if (ui.tab == TAB_QUESTS) touchQuestsTab(g, ui, tx, ty);
-    else if (ui.tab == TAB_SOCIAL) touchSocialTab(ui, tx, ty);
+    else if (ui.tab == TAB_SOCIAL) touchSocialTab(g, ui, tx, ty);
     else if (ui.tab == TAB_OPTIONS) touchOptionsTab(g, ui, tx, ty, savePath);
 }
 

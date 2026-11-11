@@ -339,6 +339,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     pets.clear();
     bowlFull = false;
     kids.clear();
+    shippedEver.clear(); fishCaught.clear(); cookedEver.clear(); craftedEver.clear();
     babyDue = -1;
     babyAsk = false;
     spouse.clear();
@@ -497,6 +498,7 @@ void Game::startDay() {
     cartMorning();
     petMorning();
     kidsMorning();
+    achievementsMorning();
     if (const Festival* fe = festivalToday())
         if (morningNote.empty()) {
             int h = fe->start / 100;
@@ -1459,7 +1461,10 @@ bool Game::goToBed() {
         return false;
     }
     int earned = 0;
-    for (auto& s : shipped) earned += itemPrice(s) * s.count;
+    for (auto& s : shipped) {
+        earned += itemPrice(s) * s.count;
+        if (s.type == SLOT_OBJECT) shippedEver[s.id] += s.count;
+    }
     shipped.clear();
     money += earned;
     totalEarned += earned;
@@ -1537,7 +1542,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 29;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 30;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1564,6 +1569,7 @@ static const uint32_t SAVE_VERSION = 29;   // 2: villager friendships, 3: events
                                           // 27: your pet
                                           // 28: several pets, their gifts
                                           // 29: children
+                                          // 30: collections
 
 namespace {
 struct W {
@@ -1750,6 +1756,12 @@ bool Game::save(const std::string& path) const {
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
     w.i32(me.petKind); w.i32(me.petBreed);
+    for (auto* m : {&shippedEver, &fishCaught, &cookedEver}) {
+        w.u32((uint32_t)m->size());
+        for (auto& kv : *m) { w.i32(kv.first); w.i32(kv.second); }
+    }
+    w.u32((uint32_t)craftedEver.size());
+    for (int id : craftedEver) w.i32(id);
     w.i32(babyDue); w.u8(babyAsk);
     w.u32((uint32_t)kids.size());
     for (auto& k : kids) { w.str(k.name); w.u8(k.girl); w.u8(k.dark); w.i32(k.daysOld); w.i32(k.friendship); w.u8(k.talked); }
@@ -2111,6 +2123,7 @@ bool Game::load(const std::string& path, std::string* err) {
     pets.clear();
     bowlFull = false;
     kids.clear();
+    shippedEver.clear(); fishCaught.clear(); cookedEver.clear(); craftedEver.clear();
     babyDue = -1;
     babyAsk = false;
     if (version >= 21 && r.ok) {
@@ -2127,6 +2140,14 @@ bool Game::load(const std::string& path, std::string* err) {
         }
         if (version >= 27 && r.ok) {
             { int pk = r.i32(); me.petKind = pk >= 1 && pk <= 3 ? pk : 1; } me.petBreed = std::max(0, std::min(4, (int)r.i32()));
+            if (version >= 30) {
+                for (auto* m : {&shippedEver, &fishCaught, &cookedEver}) {
+                    uint32_t n = r.u32();
+                    for (uint32_t k = 0; k < n && r.ok && k < 5000; k++) { int id = r.i32(); (*m)[id] = r.i32(); }
+                }
+                uint32_t nc = r.u32();
+                for (uint32_t k = 0; k < nc && r.ok && k < 5000; k++) craftedEver.insert(r.i32());
+            }
             if (version >= 29) {
                 babyDue = r.i32(); babyAsk = r.u8() != 0;
                 uint32_t nk = r.u32();

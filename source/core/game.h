@@ -699,6 +699,16 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- collections and achievements (game_collect.cpp) ----
+    std::map<int, int> shippedEver, fishCaught, cookedEver;   // item -> how many, ever
+    std::set<int> craftedEver;
+    struct Achievement { int id = 0; std::string name, desc; bool earned = false, fresh = false; };
+    std::map<int, std::pair<std::string, std::string>> achNames;
+    bool achNamesLoaded = false;
+    std::vector<int> collectionItems(int page) const;   // 0 shipped, 1 fish, 2 museum, 3 cooking
+    int collectionCount(int page, int item) const;
+    std::vector<Achievement> achievements();
+    void achievementsMorning();
     // ---- children (game_kids.cpp) ----
     struct Child {
         std::string name;

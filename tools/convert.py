@@ -1729,6 +1729,11 @@ def write_world_text(content, out_dir):
         for name, cd in load("Data/Characters.json").items():
             if isinstance(cd, dict) and cd.get("Gender"):
                 f.write(f"gender:{_flat(name)}\t{_flat(cd['Gender'])}\n")
+    with open(os.path.join(out_dir, "achievements.dat"), "w", encoding="utf-8") as f:
+        for k, v in load("Data/Achievements.json").items():
+            parts = str(v).split("^")
+            if len(parts) >= 2 and str(k).isdigit():
+                f.write(f"{k}\t{_flat(parts[0])}\t{_flat(parts[1])}\n")
     with open(os.path.join(out_dir, "petgifts.dat"), "w", encoding="utf-8") as f:   # kind, item, weight
         for kind, pd in load("Data/Pets.json").items():
             k = {"Cat": 1, "Dog": 2, "Turtle": 3}.get(kind)

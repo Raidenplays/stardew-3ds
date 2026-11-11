@@ -147,6 +147,8 @@ bool Game::craft(const Recipe& r) {
         }
     }
     addSlot(out);
+    if (r.cooking) cookedEver[r.outId] += r.outCount;
+    else craftedEver.insert(r.outBig ? -r.outId - 1 : r.outId);
     say("Crafted " + itemName(out));
     questCrafted(r.outBig, r.outId);
     sfx("coin");

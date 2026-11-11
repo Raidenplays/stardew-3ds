@@ -781,6 +781,15 @@ int main(int argc, char** argv) {
             step(g, ui, none, 5);
             shot(c, g, ui, "fixes");
         }
+        if (getenv("COLL")) {   // COLL=<page>: the Collections pages with a few things in them
+            for (int id : {24, 188, 190, 192, 254, 256, 400, 16, 18, 20}) g.shippedEver[id] = 20 + id;
+            for (int id : {145, 137, 142, 128, 129}) g.fishCaught[id] = 3;
+            g.totalEarned = 60000;
+            ui.tab = TAB_SOCIAL; ui.collections = true; ui.colPage = atoi(getenv("COLL")); ui.colSel = 2;
+            shot(c, g, ui, "collections");
+            ui.collections = false;
+            shot(c, g, ui, "social");
+        }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");
             auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];
