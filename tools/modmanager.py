@@ -32,6 +32,20 @@ sys.path.insert(0, HERE)
 import sjson  # noqa: E402
 import layer  # noqa: E402
 
+
+def _copytree(src, dst):
+    """Copy a folder's files only (no permissions/xattrs: Android app storage
+    refuses those, which made shutil.copytree crash on phones)."""
+    for dirpath, dirs, files in os.walk(src):
+        out = os.path.join(dst, os.path.relpath(dirpath, src))
+        os.makedirs(out, exist_ok=True)
+        for f in files:
+            d = os.path.join(out, f)
+            if os.path.lexists(d):
+                os.remove(d)
+            shutil.copyfile(os.path.join(dirpath, f), d)
+
+
 HOME = os.path.join(os.path.expanduser("~"), ".stardew3ds")
 SETTINGS = os.path.join(HOME, "settings.json")
 
@@ -117,7 +131,7 @@ def add(path, lib):
         os.makedirs(dest)
         for d, man in mans:
             name = os.path.basename(d.rstrip(os.sep)) or entry_id
-            shutil.copytree(d, os.path.join(dest, name), dirs_exist_ok=True)
+            _copytree(d, os.path.join(dest, name))
         return entry_id
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -232,7 +246,7 @@ def _stage(entry_ids, by_id, where):
         shutil.rmtree(where)
     os.makedirs(where)
     for eid in entry_ids:
-        shutil.copytree(by_id[eid]["folder"], os.path.join(where, eid))
+        _copytree(by_id[eid]["folder"], os.path.join(where, eid))
     return where
 
 
@@ -314,7 +328,7 @@ def deploy(s, sd_root, log=print):
             continue
         src, dst = os.path.join(base_root, name), os.path.join(dest, name)
         if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
+            _copytree(src, dst)
         else:
             shutil.copyfile(src, dst)
     layers = os.path.join(bdir, "layers")
@@ -326,7 +340,7 @@ def deploy(s, sd_root, log=print):
         d = os.path.join(dest, "mods", lid)
         if os.path.exists(d):
             shutil.rmtree(d)
-        shutil.copytree(os.path.join(layers, lid), d)
+        _copytree(os.path.join(layers, lid), d)
         log(f"  mod {lid}")
     log("Done. Saves, backups and your on/off choices on the 3DS were left alone.")
 
