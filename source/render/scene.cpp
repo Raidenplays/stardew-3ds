@@ -414,6 +414,11 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     int mapW = m.width() * TILE, mapH = m.height() * TILE;
     const Cutscene& cs = g.cutscene;
     float camX = g.px - TOP_W / 2.0f, camY = g.py - 16 - TOP_H / 2.0f;
+    if (!g.placing.empty() && g.location().isFarm)   // choosing a building spot: look there
+        if (const BuildingType* pt = g.data.buildingType(g.placing)) {
+            camX = (g.placeX + pt->w / 2.0f) * TILE - TOP_W / 2.0f;
+            camY = (g.placeY + pt->h / 2.0f) * TILE - TOP_H / 2.0f;
+        }
     if (cs.active) {
         // events park the camera far off the map to show a black screen
         if (cs.camX < -20 * TILE || cs.camY < -20 * TILE || cs.camX > mapW + 20 * TILE ||
@@ -585,6 +590,18 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         if (b.x >= x0 - 3 && b.x <= x1 && b.y >= y0 && b.y <= y1 + 3) items.push_back({(float)((b.y + 1) * TILE - 2), 11, (int)i, 0});
     }
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
+    if (here.isFarm)
+        for (size_t i = 0; i < g.buildings.size(); i++) {
+            const BuildingType* bt = g.typeOf(g.buildings[i]);
+            if (bt) items.push_back({(float)((g.buildings[i].y + bt->h) * TILE - 1), 14, (int)i, 0});
+        }
+    const FarmBuilding* inside = g.buildingForInterior(here.name);
+    if (inside) {
+        for (size_t i = 0; i < g.animals.size(); i++)
+            if (g.animals[i].home == inside->id && g.animals[i].x >= 0) items.push_back({g.animals[i].y, 15, (int)i, 0});
+        if (const BuildingType* bt = g.typeOf(*inside))
+            if (bt->hopperX >= 0) items.push_back({(float)(bt->hopperY * TILE + 15), 16, bt->hopperX, bt->hopperY});
+    }
     for (size_t i = 0; i < here.clumps.size(); i++) {
         const Location::Clump& b = here.clumps[i];
         if (b.x >= x0 - 2 && b.x <= x1 && b.y >= y0 - 2 && b.y <= y1) items.push_back({(float)((b.y + 2) * TILE - 2), 12, (int)i, 0});
@@ -812,6 +829,49 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 }
                 break;
             }
+            case 14: {   // a farm building (see-through while Robin works on it)
+                const FarmBuilding& fb = g.buildings[it.a];
+                const BuildingType* bt = g.typeOf(fb);
+                int sw = bt->srcW ? bt->srcW : c.texWidth(bt->texture), sh = bt->srcH ? bt->srcH : c.texHeight(bt->texture);
+                float dx = fb.x * TILE + (bt->w * TILE - sw) / 2.0f - camX, dy = (fb.y + bt->h) * TILE - sh - camY;
+                bool building = fb.daysLeft > 0 && fb.upgradingTo.empty();
+                if (sw > 0) c.image(bt->texture, bt->srcX, bt->srcY, sw, sh, std::floor(dx), std::floor(dy), false,
+                                    building ? RGBA(0xFF, 0xFF, 0xFF, 0x70) : 0);
+                else c.rect(fb.x * TILE - camX, fb.y * TILE - camY, bt->w * TILE, bt->h * TILE, RGBA(0x8A, 0x5A, 0x30));
+                if (building) {   // scaffolding hint
+                    c.rect(fb.x * TILE - camX, (fb.y + bt->h) * TILE - 4 - camY, bt->w * TILE, 4, RGBA(0x9A, 0x6A, 0x3A));
+                    c.text(fb.x * TILE + bt->w * 8 - camX, fb.y * TILE - camY, 0.4f, COL_CREAM,
+                           std::to_string(fb.daysLeft) + (fb.daysLeft == 1 ? " day" : " days"), ALIGN_CENTER);
+                }
+                break;
+            }
+            case 15: {   // a farm animal
+                const FarmAnimal& a = g.animals[it.a];
+                const AnimalType* at = g.data.animalType(a.type);
+                if (!at) break;
+                bool baby = a.age < at->daysToMature && !at->babyTex.empty();
+                const std::string& tex = baby ? at->babyTex : at->tex;
+                int w = at->w, h = at->h;
+                if (baby && w > 16 && c.texWidth(tex) > 0 && c.texWidth(tex) < 4 * w) { w = c.texWidth(tex) / 4; h = w; }
+                int row = a.facing == 0 ? 0 : a.facing == 2 ? 2 : 1;
+                int frame = (a.vx || a.vy) ? ((int)(a.anim * 6) & 3) : 0;
+                float ax = std::floor(a.x - camX), ay = std::floor(a.y - camY);
+                c.rect(ax - w / 3.0f, ay - 2, w * 2 / 3.0f, 3, RGBA(0, 0, 0, 0x40));
+                c.image(tex, frame * w, row * h, w, h, ax - w / 2.0f, ay - h + 2, a.facing == 3);
+                if (a.heart > 0) {   // a little heart when petted
+                    float hy = ay - h - 4 - (1.2f - a.heart) * 6;
+                    c.rect(ax - 3, hy, 2, 2, RGBA(0xE0, 0x30, 0x40));
+                    c.rect(ax + 1, hy, 2, 2, RGBA(0xE0, 0x30, 0x40));
+                    c.rect(ax - 3, hy + 1, 6, 2, RGBA(0xE0, 0x30, 0x40));
+                    c.rect(ax - 2, hy + 3, 4, 1, RGBA(0xE0, 0x30, 0x40));
+                    c.rect(ax - 1, hy + 4, 2, 1, RGBA(0xE0, 0x30, 0x40));
+                }
+                if (a.ready >= 0) c.rect(ax - 1, ay - h - 2, 3, 3, RGBA(0xFF, 0xF0, 0x80));   // produce waiting
+                break;
+            }
+            case 16:   // the feed hopper
+                bigSprite(c, g, 99, 0, it.a * TILE - camX, (it.b - 1) * TILE - camY);
+                break;
             case 13: {   // a monster
                 const Location::Monster& mo = here.monsters[it.a];
                 float mx = std::floor(mo.x - camX), my = std::floor(mo.y - camY);
@@ -897,6 +957,23 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         }
     }
 
+    if (inside) {   // hay lying in the troughs
+        auto tr = g.troughTiles(here);
+        for (size_t i = 0; i < tr.size() && i < inside->troughs.size(); i++)
+            if (inside->troughs[i]) itemIcon(c, g.data.object(178), tr[i].first * TILE - camX, tr[i].second * TILE - 2 - camY);
+    }
+    if (!g.placing.empty() && here.isFarm)
+        if (const BuildingType* pt = g.data.buildingType(g.placing)) {
+            bool ok = g.placeOk(g.placeX, g.placeY);
+            int sw = pt->srcW ? pt->srcW : c.texWidth(pt->texture), sh = pt->srcH ? pt->srcH : c.texHeight(pt->texture);
+            if (sw > 0)
+                c.image(pt->texture, pt->srcX, pt->srcY, sw, sh, std::floor(g.placeX * TILE + (pt->w * TILE - sw) / 2.0f - camX),
+                        std::floor((g.placeY + pt->h) * TILE - sh - camY), false, RGBA(0xFF, 0xFF, 0xFF, 0x80));
+            for (int dy = 0; dy < pt->h; dy++)
+                for (int dx = 0; dx < pt->w; dx++)
+                    c.rect((g.placeX + dx) * TILE + 1 - camX, (g.placeY + dy) * TILE + 1 - camY, TILE - 2, TILE - 2,
+                           ok ? RGBA(0x40, 0xE0, 0x40, 0x60) : RGBA(0xE0, 0x30, 0x30, 0x60));
+        }
     profEnd(PROF_OBJECTS);
     drawLayer(L_FRONT, 0.0f);
     drawLayer(L_ALWAYSFRONT, 0.0f);
@@ -1077,6 +1154,12 @@ static void drawHud(Canvas& c, Game& g) {
     float hs = c.shift(3.0f);
     static const char* days[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     char buf[48];
+    if (!g.placing.empty()) {   // choosing where Robin builds: just the instructions
+        box(c, 40 + hs, 6, TOP_W - 80, 34, COL_PANEL, COL_BORDER);
+        c.text(TOP_W / 2.0f + hs, 9, 0.5f, COL_TEXT, "Where should the " + g.placing + " go?", ALIGN_CENTER);
+        c.text(TOP_W / 2.0f + hs, 24, 0.4f, COL_TEXT_SOFT, "Move: Circle Pad / D-Pad   A: build   L: cancel", ALIGN_CENTER);
+        return;
+    }
     if (gameUi(c)) {
         // the game's own clock dial and money box from your Cursors sheet
         const float DW = 71, DH = 43;
@@ -1773,6 +1856,111 @@ static std::vector<int> sellableSlots(Game& g) {
     return out;
 }
 
+// Robin: buildings you can order now (new ones, and upgrades of ones you have).
+static std::vector<const BuildingType*> buildOffers(const Game& g) {
+    std::vector<const BuildingType*> out;
+    for (auto& t : g.data.buildingTypes) {
+        if (t.upgradeFrom.empty()) { out.push_back(&t); continue; }
+        for (auto& b : g.buildings)
+            if (b.type == t.upgradeFrom && b.daysLeft <= 0) { out.push_back(&t); break; }
+    }
+    return out;
+}
+
+// Marnie: animals for sale, then the milk pail and shears.
+struct AnimalOffer { const AnimalType* a; std::string tool; };
+static std::vector<AnimalOffer> animalOffers(const Game& g) {
+    std::vector<AnimalOffer> out;
+    for (auto& a : g.data.animalTypes)
+        if (a.price > 0 && !a.house.empty()) out.push_back({&a, ""});
+    for (const char* t : {"MilkPail", "Shears"})
+        if (g.data.toolByKey(t) >= 0) out.push_back({nullptr, t});
+    return out;
+}
+
+static const int OFFER_ROWS = 5, OFFER_H = 30;
+
+static void drawShopExtra(Canvas& c, Game& g, Ui& ui) {
+    char buf[96];
+    if (ui.shop == "Carpenter") {
+        auto offers = buildOffers(g);
+        ui.shopScroll = std::max(0, std::min(ui.shopScroll, (int)offers.size() - OFFER_ROWS));
+        for (int r = 0; r < OFFER_ROWS; r++) {
+            int i = ui.shopScroll + r;
+            if (i >= (int)offers.size()) break;
+            const BuildingType& t = *offers[i];
+            float y = LIST_Y + r * OFFER_H;
+            box(c, 4, y, BOT_W - 8, OFFER_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
+            c.text(10, y + 1, 0.45f, COL_TEXT, t.name + (t.upgradeFrom.empty() ? "" : " (upgrade)"));
+            std::string mats = std::to_string(t.cost) + "g";
+            for (auto& m : t.mats) {
+                const ObjectDef* o = g.data.object(m.first);
+                mats += "  " + std::to_string(m.second) + " " + (o ? o->name : "?");
+            }
+            bool ok = g.canAfford(t, nullptr);
+            c.text(10, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT, mats);
+            box(c, 252, y + 4, 58, 20, ok ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK, 1);
+            c.text(281, y + 6, 0.42f, COL_CREAM, "Build", ALIGN_CENTER);
+        }
+        snprintf(buf, sizeof buf, "Hay in silos: %d/%d", g.hay, g.hayCapacity());
+        c.text(8, 214, 0.36f, COL_CREAM, buf);
+    } else {
+        auto offers = animalOffers(g);
+        ui.shopScroll = std::max(0, std::min(ui.shopScroll, (int)offers.size() - OFFER_ROWS));
+        for (int r = 0; r < OFFER_ROWS; r++) {
+            int i = ui.shopScroll + r;
+            if (i >= (int)offers.size()) break;
+            const AnimalOffer& o = offers[i];
+            float y = LIST_Y + r * OFFER_H;
+            box(c, 4, y, BOT_W - 8, OFFER_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
+            bool ok;
+            if (o.a) {
+                if (!o.a->shopTex.empty() && o.a->shopW > 0)
+                    c.image(o.a->shopTex, o.a->shopX, o.a->shopY, o.a->shopW, o.a->shopH, 8, y + 6);
+                c.text(46, y + 1, 0.45f, COL_TEXT, o.a->name);
+                bool room = g.roomFor(*o.a) != 0;
+                ok = room && g.money >= o.a->price;
+                snprintf(buf, sizeof buf, "%dg  %s", o.a->price,
+                         room ? "has room" : ("needs a " + (o.a->requires.empty() ? o.a->house : o.a->requires)).c_str());
+                c.text(46, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT, buf);
+            } else {
+                int ti = g.data.toolByKey(o.tool);
+                Slot ts; ts.type = SLOT_TOOL; ts.id = ti; ts.count = 1;
+                slotIcon(c, g, ts, 10, y + 5);
+                const ToolDef* td = g.data.tool(ti);
+                c.text(46, y + 1, 0.45f, COL_TEXT, td ? td->name : o.tool);
+                ok = g.money >= 1000;
+                c.text(46, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT, "1000g");
+            }
+            box(c, 252, y + 4, 58, 20, ok ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK, 1);
+            c.text(281, y + 6, 0.42f, COL_CREAM, "Buy", ALIGN_CENTER);
+        }
+        c.text(8, 214, 0.36f, COL_CREAM, "Animals live in your coop or barn.");
+    }
+}
+
+static bool touchShopExtra(Game& g, Ui& ui, int tx, int ty) {
+    for (int r = 0; r < OFFER_ROWS; r++) {
+        if (!hit(tx, ty, 252, LIST_Y + r * OFFER_H + 4, 58, 20)) continue;
+        int i = ui.shopScroll + r;
+        if (ui.shop == "Carpenter") {
+            auto offers = buildOffers(g);
+            if (i < (int)offers.size() && g.startBuilding(offers[i]->name) && !g.placing.empty()) {
+                ui.shop.clear();   // off to the farm to pick a spot
+                ui.cart.clear();
+            }
+        } else {
+            auto offers = animalOffers(g);
+            if (i < (int)offers.size()) {
+                if (offers[i].a) g.buyAnimal(offers[i].a->name);
+                else g.buyAnimalTool(offers[i].tool);
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 static void drawShop(Canvas& c, Game& g, Ui& ui) {
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     box(c, 4, 4, BOT_W - 8, 32, COL_PANEL, COL_BORDER);
@@ -1785,14 +1973,23 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
 
     // Buy / Sell (/ Upgrade at the blacksmith) toggle
     bool smith = ui.shop == "Blacksmith";
-    for (int i = 0; i < (smith ? 3 : 2); i++) {
+    bool extra = ui.shop == "Carpenter" || ui.shop == "AnimalShop";
+    bool third = smith || extra;
+    const char* thirdName = smith ? "Upgrade" : ui.shop == "Carpenter" ? "Build" : "Animals";
+    for (int i = 0; i < (third ? 3 : 2); i++) {
         bool on = i == 2 ? ui.shopUpgrade : (!ui.shopUpgrade && (i == 1) == ui.shopSell);
         box(c, 4 + i * 60, 38, 58, 18, on ? COL_PANEL : COL_TAB_OFF, COL_BORDER, 1);
-        c.text(33 + i * 60, 39, 0.45f, COL_TEXT, i == 2 ? "Upgrade" : (i ? "Sell" : "Buy"), ALIGN_CENTER);
+        c.text(33 + i * 60, 39, 0.45f, COL_TEXT, i == 2 ? thirdName : (i ? "Sell" : "Buy"), ALIGN_CENTER);
     }
-    float scrollX = smith ? 190 : 128;
+    float scrollX = third ? 190 : 128;
 
-    if (ui.shopUpgrade) {
+    if (ui.shopUpgrade && extra) {
+        drawShopExtra(c, g, ui);
+        box(c, scrollX, 38, 40, 18, COL_PANEL_DARK, COL_BORDER, 1);
+        c.text(scrollX + 20, 39, 0.42f, COL_TEXT, "Up", ALIGN_CENTER);
+        box(c, scrollX + 44, 38, 40, 18, COL_PANEL_DARK, COL_BORDER, 1);
+        c.text(scrollX + 64, 39, 0.42f, COL_TEXT, "Down", ALIGN_CENTER);
+    } else if (ui.shopUpgrade) {
         auto offers = g.upgradeOffers();
         if (g.upgradeTool >= 0) {
             const ToolDef* t = g.data.tool(g.upgradeTool);
@@ -1888,10 +2085,17 @@ static void touchShop(Game& g, Ui& ui, int tx, int ty) {
         return;
     }
     bool smith = ui.shop == "Blacksmith";
-    float scrollX = smith ? 190 : 128;
+    bool extra = ui.shop == "Carpenter" || ui.shop == "AnimalShop";
+    float scrollX = smith || extra ? 190 : 128;
     if (hit(tx, ty, 4, 38, 58, 18)) { ui.shopSell = false; ui.shopUpgrade = false; ui.shopScroll = 0; return; }
     if (hit(tx, ty, 64, 38, 58, 18)) { ui.shopSell = true; ui.shopUpgrade = false; ui.shopScroll = 0; return; }
-    if (smith && hit(tx, ty, 124, 38, 58, 18)) { ui.shopUpgrade = true; return; }
+    if ((smith || extra) && hit(tx, ty, 124, 38, 58, 18)) { ui.shopUpgrade = true; ui.shopScroll = 0; return; }
+    if (ui.shopUpgrade && extra) {
+        if (hit(tx, ty, scrollX, 38, 40, 18)) { ui.shopScroll--; return; }
+        if (hit(tx, ty, scrollX + 44, 38, 40, 18)) { ui.shopScroll++; return; }
+        touchShopExtra(g, ui, tx, ty);
+        return;
+    }
     if (ui.shopUpgrade) {
         auto offers = g.upgradeOffers();
         float y0 = LIST_Y + (g.upgradeTool >= 0 ? ROW_H + 4 : 0);

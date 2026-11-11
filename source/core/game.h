@@ -269,6 +269,27 @@ static const int DAY_START = 6 * 60;     // 6:00 am
 static const int DAY_END = 26 * 60;      // 2:00 am -> pass out
 static const float SECONDS_PER_10MIN = 7.0f;
 
+// Something Robin built on the farm (or is building).
+struct FarmBuilding {
+    int id = 0;
+    std::string type;             // Data/Buildings name
+    int x = 0, y = 0;             // top-left of the footprint
+    int daysLeft = 0;             // still under construction
+    std::string upgradingTo;      // an upgrade under way
+    std::vector<uint8_t> troughs; // hay in each trough inside (map order)
+};
+
+struct FarmAnimal {
+    std::string type, name;
+    int home = 0;                 // FarmBuilding id
+    float x = 0, y = 0;           // feet, pixels in its building
+    int age = 0, friendship = 0, daysSinceProduce = 0;
+    bool petted = false, fed = true;
+    int ready = -1;               // milk / wool waiting for the pail or shears
+    int facing = 0;
+    float vx = 0, vy = 0, think = 0, anim = 0, heart = 0;
+};
+
 struct ShopEntry {
     int itemId;
     int price;
@@ -515,6 +536,36 @@ public:
     void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
     int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
+    // Farm buildings and animals
+    std::vector<FarmBuilding> buildings;
+    std::vector<FarmAnimal> animals;
+    int hay = 0;                             // in the silos
+    int nextBuildingId = 1;
+    std::string placing;                     // a building waiting for a spot on the farm
+    int placeX = 0, placeY = 0;
+    float placeRepeat = 0;
+    const BuildingType* typeOf(const FarmBuilding& b) const { return data.buildingType(b.type); }
+    FarmBuilding* buildingById(int id);
+    FarmBuilding* buildingAtTile(int tx, int ty);
+    std::string interiorName(const FarmBuilding& b) const;
+    FarmBuilding* buildingForInterior(const std::string& loc);
+    int hayCapacity() const;
+    bool canAfford(const BuildingType& t, std::string* why) const;
+    bool startBuilding(const std::string& type);   // Robin: pay, then place it (or upgrade)
+    bool placeOk(int x, int y) const;
+    void updatePlacing(const Input& in, float dt);
+    bool buildingSatisfies(const std::string& have, const std::string& need) const;
+    int roomFor(const AnimalType& a) const;        // building id with space, or 0
+    bool buyAnimal(const std::string& type);
+    bool buyAnimalTool(const std::string& key);
+    void animalsNight();
+    void animalsUpdate(float dt);
+    bool animalInteract(int tx, int ty);
+    bool hopperInteract(int tx, int ty);
+    bool farmBuildingInteract(int tx, int ty);
+    std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
+    int countItem(int id) const;
+    void takeItem(int id, int n);
     // The Mines
     int mineDeepest = 0;                     // deepest floor reached
     int health = 100, maxHealth = 100;       // knocked out at 0

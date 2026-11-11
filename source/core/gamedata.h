@@ -50,6 +50,25 @@ struct ToolDef {
     int minDamage = 0, maxDamage = 0;   // weapons
 };
 
+// Data/Buildings: something Robin builds on the farm.
+struct BuildingType {
+    std::string name, texture, interior, occupants, upgradeFrom;
+    int srcX = 0, srcY = 0, srcW = 0, srcH = 0;   // srcW 0: the whole texture
+    int w = 1, h = 1, cost = 0, days = 0, hay = 0, maxOcc = 0;
+    std::vector<std::pair<int, int>> mats;         // item id, amount
+    int doorX = -1, doorY = -1;                    // human door (relative)
+    int adX = -1, adY = -1, adW = 0, adH = 0;      // animal door
+    int hopperX = -1, hopperY = -1;                // feed hopper inside
+};
+
+// Data/FarmAnimals
+struct AnimalType {
+    std::string name, house, tex, babyTex, harvestedTex, harvestType, harvestTool, sound, requires, shopTex;
+    int price = -1, w = 16, h = 16, daysToProduce = 1, daysToMature = 1;
+    int shopX = 0, shopY = 0, shopW = 0, shopH = 0;
+    std::vector<int> produce, deluxe;
+};
+
 // Data/Monsters: what a monster is like.
 struct MonsterDef {
     std::string name;
@@ -253,6 +272,16 @@ public:
     std::vector<NpcDef> npcs;
     std::unordered_map<std::string, NpcAnim> npcAnims;
     std::unordered_map<std::string, MonsterDef> monsters;
+    std::vector<BuildingType> buildingTypes;
+    std::vector<AnimalType> animalTypes;
+    const BuildingType* buildingType(const std::string& n) const {
+        for (auto& b : buildingTypes) if (b.name == n) return &b;
+        return nullptr;
+    }
+    const AnimalType* animalType(const std::string& n) const {
+        for (auto& a : animalTypes) if (a.name == n) return &a;
+        return nullptr;
+    }
     struct GeodeDef { bool basics = false; std::vector<int> items; };   // basics: stone, ore, coal...
     std::unordered_map<int, GeodeDef> geodes;
     const MonsterDef* monster(const std::string& name) const {

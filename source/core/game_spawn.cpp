@@ -53,7 +53,7 @@ WorldObject* Game::objectAt(int x, int y) {
 }
 
 void Game::spawnObjects(Location& loc) {
-    if (loc.isFarm || loc.mineLevel || loc.spawnDay == absoluteDay()) return;   // mine floors make their own
+    if (loc.isFarm || loc.mineLevel || loc.name.find('@') != std::string::npos || loc.spawnDay == absoluteDay()) return;   // mine floors make their own
     loc.spawnDay = absoluteDay();
     loc.objects.clear();
     const TileMap& m = loc.map;
