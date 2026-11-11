@@ -531,6 +531,9 @@ int main(int argc, char** argv) {
                 settle();
                 shot(c, g, ui, "import_greenhouse");
             }
+        g.bundleView = 0; shot(c, g, ui, "bundles_rooms");
+        g.bundleView = 1; g.bundleRoom = "Pantry"; shot(c, g, ui, "bundles_pantry");
+        g.bundleView = 2; g.bundleSel = 0; g.addItem(24, 3); shot(c, g, ui, "bundles_spring");
         return 0;
     }
     if (animalsArg) {   // Robin builds a coop and a barn, Marnie sells animals, a look inside

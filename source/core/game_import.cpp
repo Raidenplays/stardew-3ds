@@ -49,6 +49,8 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     for (auto& s : inv) s = Slot();
     buildings.clear();
     animals.clear();
+    bundleDefs.clear();
+    bundleGiven.clear();
     std::map<int, int> bid;   // import index -> building id
     int counts[8] = {};
 
@@ -200,6 +202,12 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             t.x = I(f, 2); t.y = I(f, 3); t.sapling = I(f, 4); t.daysLeft = std::max(0, I(f, 5)); t.fruit = std::min(3, I(f, 6));
             L->fruitTrees.push_back(t);
             counts[3]++;
+        } else if (k == "bundledef" && f.size() > 2) {
+            bundleDefs.push_back({f[1], f[2]});
+        } else if (k == "bundle" && f.size() > 2) {
+            std::vector<uint8_t> v;
+            for (char ch : f[2]) v.push_back(ch == '1');
+            bundleGiven[I(f, 1)] = v;
         } else if (k == "drop" && f.size() > 4) {   // an egg or forage lying there
             Location* L = locFor(f[1]);
             if (!L || !data.object(I(f, 4))) continue;

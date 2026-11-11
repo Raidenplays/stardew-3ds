@@ -108,6 +108,7 @@ bool GameData::load(const std::string& root, std::string* err) {
         o.edibility = atoi(f[5].c_str());
         if (f.size() > 6 && !f[6].empty()) o.texture = f[6];
         o.stringId = f.size() > 7 ? f[7] : f[0];
+        objectIds[o.stringId] = o.id;
         objects[o.id] = o;
     }
 
@@ -448,6 +449,12 @@ bool GameData::load(const std::string& root, std::string* err) {
             r = ints(f[14]);
             if (r.size() == 2) { b.hopperX = r[0]; b.hopperY = r[1]; }
             buildingTypes.push_back(b);
+        }
+    lines.clear();
+    if (readLines(root + "data/bundles.dat", lines))
+        for (auto& l : lines) {
+            size_t t = l.find('\t');
+            if (t != std::string::npos) bundles.push_back({l.substr(0, t), l.substr(t + 1)});
         }
     lines.clear();
     if (readLines(root + "data/fruittrees.dat", lines))

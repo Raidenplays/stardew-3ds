@@ -64,5 +64,12 @@
       </terrainFeatures></GameLocation>
     <GameLocation xsi:type="FarmHouse"><name>FarmHouse</name><objects /><terrainFeatures /></GameLocation>
   </locations>
+  <bundleData>
+    <item><key><string>Pantry/0</string></key><value><string>Spring Crops/O 465 20/24 1 0 188 1 0 190 1 0 192 1 0/0///Spring Crops</string></value></item>
+    <item><key><string>Vault/23</string></key><value><string>2,500g/O 220 3/-1 2500 2500/4///2,500g</string></value></item>
+  </bundleData>
+  <netWorldState><Bundles>
+    <item><key><int>0</int></key><value><ArrayOfBoolean><boolean>true</boolean><boolean>false</boolean><boolean>true</boolean><boolean>false</boolean></ArrayOfBoolean></value></item>
+  </Bundles></netWorldState>
   <currentSeason>fall</currentSeason><dayOfMonth>12</dayOfMonth><year>2</year><whichFarm>0</whichFarm>
 </SaveGame>

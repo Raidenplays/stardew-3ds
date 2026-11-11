@@ -301,6 +301,17 @@ struct FarmAnimal {
     float vx = 0, vy = 0, think = 0, anim = 0, heart = 0;
 };
 
+// A Community Center bundle, parsed from its Data/Bundles line.
+struct Bundle {
+    std::string key, room, name;   // "Pantry/0", "Pantry", "Spring Crops"
+    int index = 0;                 // the number after the slash (saves use it)
+    struct Item { int id; int count; int quality; };   // id -1: gold (the vault)
+    std::vector<Item> items;
+    int needed = 0;                // how many of the items complete it
+    std::string reward;            // "O 465 20", "BO 10 1"...
+    int color = 0;
+};
+
 struct ShopEntry {
     int itemId;
     int price;
@@ -577,6 +588,19 @@ public:
     std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
     int countItem(int id) const;
     bool applyImport(const std::string& path, std::string* summary);   // a PC save via tools/saveimport.py
+    // Community Center
+    std::vector<std::pair<std::string, std::string>> bundleDefs;   // empty: the game data's; an imported save brings its own
+    std::map<int, std::vector<uint8_t>> bundleGiven;                // bundle index -> each item slot given
+    std::vector<Bundle> bundles() const;
+    static std::vector<std::string> bundleRooms();
+    int bundleGivenCount(const Bundle& b) const;
+    bool bundleDone(const Bundle& b) const { return bundleGivenCount(b) >= b.needed; }
+    bool roomDone(const std::string& room) const;
+    int bundleHave(const Bundle::Item& it) const;   // how many you could give
+    bool bundleGive(int bundleIndex, int slot);      // donate one item slot of a bundle
+    int bundleView = -1;                             // -1 closed, 0 rooms, 1 a room's bundles, 2 one bundle
+    std::string bundleRoom;
+    int bundleSel = -1;
     int fruitTreeAt(int tx, int ty) const;           // index into cur->fruitTrees, or -1
     bool plantFruitTree(int tx, int ty);
     bool shakeFruitTree(int tx, int ty);

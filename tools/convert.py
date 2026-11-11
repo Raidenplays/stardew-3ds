@@ -689,6 +689,12 @@ def write_data(content, out_dir):
             n += 1
     print(f"  objects.dat: {n} objects")
     write_buildings_animals(content, out_dir)
+    # Community Center bundles, raw ("Pantry/0" -> "Spring Crops/O 465 20/24 1 0 .../0///Spring Crops")
+    bp = os.path.join(content, "Data", "Bundles.json")
+    if os.path.isfile(bp):
+        with open(os.path.join(out_dir, "bundles.dat"), "w", encoding="utf-8") as f:
+            for k, v in _load_json(content, "Data/Bundles.json").items():
+                f.write(f"{_clean(k)}\t{_clean(v)}\n")
     # fruit trees: sapling, seasons, fruit, texture, row
     fp = os.path.join(content, "Data", "FruitTrees.json")
     if os.path.isfile(fp):
