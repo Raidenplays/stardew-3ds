@@ -175,8 +175,8 @@ void bus(Canvas& c, StoryUi& s) {
     for (float wx : {520.0f, 1150.0f, 1700.0f}) {
         if (!onScreen(wx, 48) || c.texWidth(TREE) == 0) continue;
         float x = std::floor(wx - scroll);
-        c.image(TREE, 32, 128, 16, 32, x + 16, 172 - camY);   // trunk
-        c.image(TREE, 0, 0, 48, 96, x, 100 - camY);           // leaves
+        c.image(TREE, 32, 104, 16, 24, x + 16, 180 - camY);   // roots, standing on the verge
+        c.image(TREE, 0, 0, 48, 84, x, 100 - camY);           // trunk and leaves, meeting the roots
     }
     for (auto rng : {std::make_pair(900.0f, 1300.0f), std::make_pair(1650.0f, 2050.0f)})
         for (float wx = rng.first; wx < rng.second; wx += 16)
