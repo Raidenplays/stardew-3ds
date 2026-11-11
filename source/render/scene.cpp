@@ -647,13 +647,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         for (size_t i = 0; i < g.npcs.size(); i++)
             if (g.npcs[i].loc == g.location().name) items.push_back({g.npcs[i].y, 4, (int)i, 0});
     }
-    for (size_t i = 0; i < g.data.layout.furniture.size(); i++) {
-        const FurniturePlacement& fp = g.data.layout.furniture[i];
+    for (size_t i = 0; i < g.furniture.size(); i++) {
+        const FurniturePlacement& fp = g.furniture[i];
         if (fp.map != g.location().name) continue;
         auto fd = g.data.furniture.find(fp.id);
         int bh = fd != g.data.furniture.end() ? fd->second.boxH : 1;
         bool flat = fd != g.data.furniture.end() && fd->second.type == "rug";   // rugs lie under everything
-        items.push_back({flat ? -1000.0f : (float)((fp.y + g.furnDY(fp.map) + bh) * TILE) - 1, 5, (int)i, 0});
+        items.push_back({flat ? -1000.0f : (float)((fp.y + bh) * TILE) - 1, 5, (int)i, 0});
     }
     std::stable_sort(items.begin(), items.end(),
                      [](const DrawItem& a, const DrawItem& b) { return a.sortY < b.sortY; });
@@ -779,13 +779,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 break;
             }
             case 5: {
-                const FurniturePlacement& fp = g.data.layout.furniture[it.a];
+                const FurniturePlacement& fp = g.furniture[it.a];
                 auto fd = g.data.furniture.find(fp.id);
                 if (fd == g.data.furniture.end()) break;
                 int sw = fd->second.spriteW * 16, sh = fd->second.spriteH * 16;
                 int sx = (fp.id % 32) * 16, sy = (fp.id / 32) * 16;
-                float bottom = (fp.y + g.furnDY(fp.map) + fd->second.boxH) * TILE;
-                c.image("TileSheets_furniture", sx, sy, sw, sh, (fp.x + g.furnDX(fp.map)) * TILE - camX, bottom - sh - camY);
+                float bottom = (fp.y + fd->second.boxH) * TILE;
+                c.image("TileSheets_furniture", sx, sy, sw, sh, fp.x * TILE - camX, bottom - sh - camY);
                 break;
             }
             case 9: {

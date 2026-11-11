@@ -63,7 +63,12 @@
         <item><key><Vector2><X>6</X><Y>12</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>1</state><crop><netSeedIndex>472</netSeedIndex><currentPhase>3</currentPhase><dayOfCurrentPhase>0</dayOfCurrentPhase><fullyGrown>false</fullyGrown><dead>false</dead></crop></TerrainFeature></value></item>
         <item><key><Vector2><X>14</X><Y>12</Y></Vector2></key><value><TerrainFeature xsi:type="FruitTree"><treeId>630</treeId><daysUntilMature>10</daysUntilMature><fruit /></TerrainFeature></value></item>
       </terrainFeatures></GameLocation>
-    <GameLocation xsi:type="FarmHouse"><name>FarmHouse</name><objects /><terrainFeatures /></GameLocation>
+    <GameLocation xsi:type="FarmHouse"><name>FarmHouse</name>
+      <furniture>
+        <Furniture xsi:type="BedFurniture"><itemId>2048</itemId><tileLocation><X>22</X><Y>4</Y></tileLocation></Furniture>
+        <Furniture xsi:type="TV"><itemId>1466</itemId><tileLocation><X>12</X><Y>3</Y></tileLocation></Furniture>
+        <Furniture><itemId>1451</itemId><tileLocation><X>15</X><Y>7</Y></tileLocation></Furniture>
+      </furniture><objects /><terrainFeatures /></GameLocation>
   </locations>
   <bundleData>
     <item><key><string>Pantry/0</string></key><value><string>Spring Crops/O 465 20/24 1 0 188 1 0 190 1 0 192 1 0/0///Spring Crops</string></value></item>
