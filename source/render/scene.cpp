@@ -268,7 +268,58 @@ static bool swingTool(const Game& g, const ToolDef*& td) {
     return td && (td->kind == TOOL_HOE || td->kind == TOOL_AXE || td->kind == TOOL_PICKAXE || td->kind == TOOL_CAN);
 }
 
+// Fishing: the rod (its 16x16 picture from TileSheets/tools, a diagonal
+// rod) turned to the pose -- held back over the shoulder while charging,
+// swung forward on the cast, held out while waiting. Returns the rod tip.
+static void rodPose(const Game& g, float sx, float sy, float& hx, float& hy, float& dir) {
+    const Fishing& f = g.fishing;
+    int facing = g.facing & 3;
+    bool left = facing == FACE_LEFT;
+    // direction the rod points (radians, screen coords: 0 = right, -pi/2 = up)
+    float back, out;
+    if (facing == FACE_DOWN) { back = -1.75f; out = 1.15f; hx = sx + 3; hy = sy - 14; }
+    else if (facing == FACE_UP) { back = 1.2f; out = -1.6f; hx = sx + 3; hy = sy - 18; }
+    else { back = -2.0f; out = -0.35f; hx = sx + (left ? -5.0f : 5.0f); hy = sy - 16; }
+    float k = 1.0f;
+    if (f.state == FS_CHARGE) k = 0.0f;
+    else if (f.state == FS_CAST) k = std::min(1.0f, f.t / 0.18f);
+    dir = back + (out - back) * k;
+    if (left && facing != FACE_UP && facing != FACE_DOWN) dir = 3.14159f - dir;   // mirror for facing left
+}
+
+static void rodTip(const Game& g, float sx, float sy, float& tx, float& ty) {
+    float hx, hy, dir;
+    rodPose(g, sx, sy, hx, hy, dir);
+    tx = hx + std::cos(dir) * 17.0f;
+    ty = hy + std::sin(dir) * 17.0f;
+}
+
+static void drawFishingFarmer(Canvas& c, const Game& g, float sx, float sy) {
+    const Fishing& f = g.fishing;
+    int facing = g.facing & 3;
+    bool charging = f.state == FS_CHARGE || (f.state == FS_CAST && f.t < 0.1f);
+    int frame = facing == FACE_DOWN ? (charging ? 66 : 68) : facing == FACE_UP ? (charging ? 36 : 38) : (charging ? 30 : 33);
+    const Slot& s = g.inv[g.selected];
+    const ToolDef* td = s.type == SLOT_TOOL ? g.data.tool(s.id) : nullptr;
+    float hx, hy, dir;
+    rodPose(g, sx, sy, hx, hy, dir);
+    auto rod = [&]() {
+        if (!td) return;
+        int cols = std::max(1, c.texWidth(td->texture) / 16);
+        int ix = (td->spriteIndex % cols) * 16, iy = (td->spriteIndex / cols) * 16;
+        // the picture's rod runs from the bottom-left (handle) up to the top-right (tip): -45 degrees
+        c.imageRotated(td->texture, ix, iy, 16, 16, 2, 14, hx, hy, dir + 0.785f);
+    };
+    if (facing == FACE_UP) rod();
+    drawFarmer(c, g, sx, sy, g.facing, false, 0, frame);
+    if (facing != FACE_UP) rod();
+}
+
 static void drawPlayerWithTool(Canvas& c, const Game& g, float sx, float sy) {
+    if (g.fishingActive() && g.fishing.state != FS_DONE) {
+        drawFishingFarmer(c, g, sx, sy);
+        return;
+    }
     const ToolDef* td = nullptr;
     if (!swingTool(g, td)) {
         // holding an item or machine: carried over the head, bobbing with each step
@@ -731,22 +782,33 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     if (g.fishingActive() && !cs.active) {
         const Fishing& f = g.fishing;
         float pxs = std::floor(g.px - camX), pys = std::floor(g.py - camY);
-        if (f.state == FS_CHARGE) {   // cast power meter above the farmer
-            c.rect(pxs - 3, pys - 62, 6, 26, RGBA(0x30, 0x20, 0x10, 0xD0));
-            float h = 24 * f.power;
-            uint32_t col = f.power > 0.8f ? RGBA(0x7C, 0xD0, 0x42) : RGBA(0xFF, 0xD0, 0x40);
-            c.rect(pxs - 2, pys - 37 - h, 4, h, col);
+        if (f.state == FS_CHARGE) {   // horizontal power bar over the head: red -> yellow -> green
+            float bx = pxs - 18, by = pys - 60;
+            box(c, bx, by, 36, 8, RGBA(0xFF, 0xE0, 0xA8), RGBA(0x8A, 0x3A, 0x10), 1);
+            float p = f.power;
+            uint32_t col = p < 0.33f ? RGBA(0xE0, 0x30, 0x10) : p < 0.66f ? RGBA(0xF8, 0xC0, 0x20) : RGBA(0x70, 0xE0, 0x30);
+            c.rect(bx + 2, by + 2, 32 * p, 4, col);
         } else if (f.state != FS_DONE || f.caught) {
+            float tipX, tipY;
+            rodTip(g, pxs, pys, tipX, tipY);
             float bx = f.bobX * TILE + 8 - camX, by = f.bobY * TILE + 8 - camY;
-            if (f.state == FS_CAST) {   // bobber flying out
+            if (f.state == FS_CAST) {   // bobber flying out in an arc
                 float k = std::min(1.0f, f.t / 0.5f);
-                bx = pxs + (bx - pxs) * k;
-                by = (pys - 20) + (by - (pys - 20)) * k - std::sin(k * 3.14159f) * 24;
+                bx = tipX + (bx - tipX) * k;
+                by = tipY + (by - tipY) * k - std::sin(k * 3.14159f) * 28;
             }
-            float bob = (f.state == FS_WAIT) ? std::sin(f.t * 4) * 1.0f : (f.state == FS_BITE ? 2.0f : 0.0f);
-            c.line(pxs + (g.facing == FACE_LEFT ? -10 : 10), pys - 26, bx, by + bob, RGBA(0xF0, 0xF0, 0xF0, 0xA0), 1);
-            c.rect(bx - 2, by - 2 + bob, 4, 4, RGBA(0xE0, 0x30, 0x30));
-            c.rect(bx - 2, by + bob, 4, 2, RGBA(0xF8, 0xF8, 0xF8));
+            bool dip = (f.state == FS_WAIT && ((int)(f.t * 2.2f) & 1)) || f.state == FS_BITE || f.state == FS_REEL;
+            c.line(tipX, tipY, bx, by - 3, RGBA(0xF0, 0xF0, 0xF0, 0xB0), 1);
+            if (c.texWidth("TileSheets_bobbers") > 0) {
+                c.image("TileSheets_bobbers", 0, dip ? 16 : 0, 16, 16, std::floor(bx - 8), std::floor(by - 10));
+            } else {
+                c.rect(bx - 2, by - 2, 4, 4, RGBA(0xE0, 0x30, 0x30));
+                c.rect(bx - 2, by, 4, 2, RGBA(0xF8, 0xF8, 0xF8));
+            }
+            if (f.state == FS_WAIT && f.t < 0.3f && c.texWidth("TileSheets_rain") >= 64) {   // splash where it lands
+                int fr = 1 + std::min(2, (int)(f.t / 0.1f));
+                c.image("TileSheets_rain", fr * 16, 0, 16, 16, std::floor(bx - 8), std::floor(by - 10));
+            }
             if (f.state == FS_BITE) {
                 c.rect(pxs - 5, pys - 58, 10, 16, RGBA(0xFF, 0xFF, 0xFF, 0xE0));
                 c.text(pxs, pys - 58, 0.55f, RGBA(0xD0, 0x20, 0x20), "!", ALIGN_CENTER);

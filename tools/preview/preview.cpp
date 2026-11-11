@@ -553,6 +553,25 @@ int main(int argc, char** argv) {
             shot(c, g, ui, "carry_" + std::to_string(f));
         }
         g.moving = false;
+        // fishing: every state, facing right / left / down
+        g.giveTool("BambooPole");
+        for (int i = 0; i < INV_SIZE; i++)
+            if (g.inv[i].type == SLOT_TOOL && data.tool(g.inv[i].id) && data.tool(g.inv[i].id)->kind == TOOL_ROD) { g.selectSlot(i); break; }
+        int ftx = (int)(g.px / 16), fty = (int)(g.py / 16);
+        for (int f : {FACE_RIGHT, FACE_LEFT, FACE_DOWN}) {
+            g.facing = f;
+            g.fishing.bobX = ftx + (f == FACE_RIGHT ? 4 : f == FACE_LEFT ? -4 : 0);
+            g.fishing.bobY = fty + (f == FACE_DOWN ? 4 : 0);
+            struct St { FishState s; float t; } sts[] = {{FS_CHARGE, 0.5f}, {FS_CAST, 0.25f}, {FS_WAIT, 0.15f}, {FS_WAIT, 1.0f}};
+            int k = 0;
+            for (auto st : sts) {
+                g.fishing.state = st.s;
+                g.fishing.t = st.t;
+                g.fishing.power = 0.7f;
+                shot(c, g, ui, "fish_" + std::to_string(f) + "_" + std::to_string(k++));
+            }
+        }
+        g.fishing.state = FS_NONE;
         g.addItem(390, 1);   // stone
         g.itemFlies(390, g.px + 20, g.py);
         g.addItem(388, 3);   // wood
