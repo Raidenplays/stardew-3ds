@@ -27,6 +27,7 @@ const Texture* C2DCanvas::get(TexName name) {
 
 void C2DCanvas::image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                       bool flipX, uint32_t tint) {
+    draws++;
     const Texture* t = get(tex);
     if (!t) return;
     if (tint) {
@@ -40,6 +41,7 @@ void C2DCanvas::image(TexName tex, int sx, int sy, int sw, int sh, float dx, flo
 
 void C2DCanvas::imageRotated(TexName tex, int sx, int sy, int sw, int sh, float px, float py,
                              float dx, float dy, float radians, uint32_t tint) {
+    draws++;
     const Texture* t = get(tex);
     if (!t) return;
     // citro2d turns around the image centre: move the centre so the pivot stays put
@@ -57,6 +59,7 @@ void C2DCanvas::imageRotated(TexName tex, int sx, int sy, int sw, int sh, float 
 
 void C2DCanvas::imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                             float scale, bool flipX, uint32_t tint) {
+    draws++;
     const Texture* t = get(tex);
     if (!t) return;
     if (tint) {
@@ -69,6 +72,7 @@ void C2DCanvas::imageScaled(TexName tex, int sx, int sy, int sw, int sh, float d
 }
 
 void C2DCanvas::rect(float x, float y, float w, float h, uint32_t color) {
+    draws++;
     C2D_DrawRectSolid(x, y, 0.5f, w, h, toC2D(color));
 }
 

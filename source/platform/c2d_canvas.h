@@ -8,6 +8,7 @@
 
 class C2DCanvas : public Canvas {
 public:
+    unsigned draws = 0;   // draw calls this frame (performance readout)
     explicit C2DCanvas(std::function<std::string(const std::string&)> resolve);
     ~C2DCanvas();
     void beginFrame();   // clears the text buffer; call once per frame
