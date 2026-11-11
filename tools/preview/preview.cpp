@@ -737,20 +737,27 @@ int main(int argc, char** argv) {
                 shot(c, g, ui, "festival");
             }
         }
-        if (const char* kind = getenv("PET")) {   // PET=cat|dog: adopt one and watch it for a bit
-            g.me.petKind = kind[0] == 'd' ? 2 : 1;
+        if (const char* kind = getenv("PET")) {   // PET=cat|dog|turtle: adopt one, watch it, then a second from Marnie
+            g.me.petKind = kind[0] == 'd' ? 2 : kind[0] == 't' ? 3 : 1;
             g.me.petBreed = getenv("BREED") ? atoi(getenv("BREED")) : 0;
             g.adoptPet(g.me.petKind);
-            g.teleport("Farm", (int)(g.pet.x / 16) - 2, (int)(g.pet.y / 16) + 1);
-            step(g, ui, none, 30);
-            shot(c, g, ui, "pet_sitting");
+            g.teleport("Farm", (int)(g.pets[0].x / 16) - 2, (int)(g.pets[0].y / 16) + 1);
             step(g, ui, none, 400);
-            printf("  pet %s at %.0f,%.0f state %d\n", g.pet.name.c_str(), g.pet.x / 16, g.pet.y / 16, g.pet.state);
-            g.teleport("Farm", (int)(g.pet.x / 16) - 1, (int)(g.pet.y / 16) + 1);
-            g.petInteract((int)(g.pet.x / 16), (int)((g.pet.y - 4) / 16));
+            g.pets[0].friendship = 1000;
+            g.money = 50000;
+            g.buyPet(1, 3);
+            g.pets[0].gift = g.petGiftFor(g.pets[0]);
+            printf("  %zu pets; %s at %.0f,%.0f state %d, gift %d\n", g.pets.size(), g.pets[0].name.c_str(), g.pets[0].x / 16, g.pets[0].y / 16,
+                   g.pets[0].state, g.pets[0].gift);
+            g.teleport("Farm", (int)(g.pets[0].x / 16) - 1, (int)(g.pets[0].y / 16) + 1);
             step(g, ui, none, 3);
-            shot(c, g, ui, "pet_petted");
-            for (auto& b : g.buildings) if (b.type == "Pet Bowl") printf("  bowl at %d,%d\n", b.x, b.y);
+            shot(c, g, ui, "pets");
+            g.petInteract((int)(g.pets[0].x / 16), (int)((g.pets[0].y - 4) / 16));
+            step(g, ui, none, 3);
+            shot(c, g, ui, "pet_gift");
+            ui.shop = "AnimalShop"; ui.shopUpgrade = true; ui.shopScroll = 99;
+            shot(c, g, ui, "marnie_pets");
+            ui.shop.clear();
         }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");

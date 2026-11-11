@@ -94,6 +94,7 @@ EXTRA_TEXTURES = [
     ("Characters/Monsters/Bat", False),
     ("Animals/horse", False),
     ("Animals/cat", False), ("Animals/cat1", False), ("Animals/cat2", False), ("Animals/cat3", False), ("Animals/cat4", False),
+    ("Animals/turtle", False), ("Animals/turtle1", False),
     ("Animals/dog", False), ("Animals/dog1", False), ("Animals/dog2", False), ("Animals/dog3", False), ("Animals/dog4", False),
     ("Characters/Monsters/Frost Bat", False),
     ("Characters/Monsters/Lava Bat", False),
@@ -1715,6 +1716,27 @@ def write_world_text(content, out_dir):
             f.write(f"note:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Data/SecretNotes.json").items():
             f.write(f"secret:{_flat(k)}\t{_flat(v)}\n")
+    with open(os.path.join(out_dir, "petgifts.dat"), "w", encoding="utf-8") as f:   # kind, item, weight
+        for kind, pd in load("Data/Pets.json").items():
+            k = {"Cat": 1, "Dog": 2, "Turtle": 3}.get(kind)
+            if not k:
+                continue
+            for g in (pd or {}).get("Gifts") or []:
+                q = str(g.get("QualifiedItemID") or g.get("ItemId") or "")
+                ids = []
+                if q.startswith("RANDOM_ITEMS"):          # "RANDOM_ITEMS (O) 715 719": any id in the range
+                    nums = [int(x) for x in q.split() if x.isdigit()]
+                    if len(nums) >= 2:
+                        ids = list(range(nums[0], nums[1] + 1))
+                elif q.startswith("LOCATION_FISH"):       # a fish from that water: the common ones
+                    ids = [145, 137, 142, 132] if "Mountain" in q else [143, 139, 138, 145]
+                else:
+                    ids = [q.replace("(O)", "")]
+                w = float(g.get("Weight", 1) or 1) / max(1, len(ids))
+                for one in ids:
+                    iid = ITEM_IDS.get(str(one))
+                    if iid is not None:
+                        f.write(f"{k}\t{iid}\t{w}\n")
     with open(os.path.join(out_dir, "minecarts.dat"), "w", encoding="utf-8") as f:
         for net, nd in load("Data/Minecarts.json").items():
             for d in (nd or {}).get("Destinations") or []:

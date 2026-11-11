@@ -171,7 +171,7 @@ bool Game::eventConditionsMet(const std::string& key) const {
         } else if (code == "m") {          // total earnings
             ok = w.size() > 1 && totalEarned >= atoll(w[1].c_str());
         } else if (code == "h") {          // pet preference: the cat's event is the one that plays
-            ok = w.size() > 1 && (w[1] == "dog") == (me.petKind == 2) && !pet.type && !mailReceived.count("hasPet") && !mailReceived.count("s3d_noPet");
+            ok = w.size() > 1 && (w[1] == "dog") == (me.petKind == 2) && pets.empty() && !mailReceived.count("hasPet") && !mailReceived.count("s3d_noPet");
         } else if (code == "Skill") {
             static const char* names[SK_COUNT] = {"Farming", "Fishing", "Foraging", "Mining", "Combat"};
             ok = false;
@@ -661,9 +661,16 @@ bool Game::eventStep(const std::string& raw) {
             ch.label = "Mushrooms"; p.choices.push_back(ch);
             ch.label = "Fruit bats"; p.choices.push_back(ch);
         } else {
-            p.text = me.petKind == 2 ? "Adopt the dog? It looks like it needs a home." : "Adopt the cat? It looks like it needs a home.";
-            ch.label = "Yes"; p.choices.push_back(ch);
-            ch.label = "No"; p.choices.push_back(ch);
+            // the one you picked when you made your farmer comes first; a farm from before that choice can still pick
+            static const char* kinds[3] = {"The cat", "The dog", "The turtle"};
+            p.text = "Marnie found a few strays. Give one a home?";
+            int first = std::max(1, std::min(3, me.petKind));
+            ch.label = kinds[first - 1]; ch.responseKey = "pet:adopt:" + std::to_string(first); p.choices.push_back(ch);
+            for (int k = 1; k <= 3; k++)
+                if (k != first && (k != 3 || data.vfs.exists("tex/Animals_turtle.s3t"))) {
+                    ch.label = kinds[k - 1]; ch.responseKey = "pet:adopt:" + std::to_string(k); p.choices.push_back(ch);
+                }
+            ch.label = "No"; ch.responseKey = "pet:adopt:0"; p.choices.push_back(ch);
         }
         cs.special = c;
         cs.forkWant = 0;

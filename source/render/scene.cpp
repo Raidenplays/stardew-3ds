@@ -609,7 +609,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
     if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
     if (!g.riding && g.horseLoc == here.name) items.push_back({g.horseY, 19, 0, 0});
-    if (g.pet.type && g.pet.loc == here.name) items.push_back({g.pet.y, 20, 0, 0});
+    for (size_t i = 0; i < g.pets.size(); i++)
+        if (g.pets[i].loc == here.name) items.push_back({g.pets[i].y, 20, (int)i, 0});
     if (here.isFarm)
         for (size_t i = 0; i < g.buildings.size(); i++) {
             const BuildingType* bt = g.typeOf(g.buildings[i]);
@@ -950,17 +951,19 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 break;
             }
             case 20: {   // your pet: walk rows down/right/up/left, sitting on row 4, curled up asleep on row 7
-                const Game::Pet& p = g.pet;
-                std::string tex = std::string(p.type == 2 ? "Animals_dog" : "Animals_cat") + (p.breed > 0 ? std::to_string(p.breed) : "");
-                if (c.texWidth(tex) <= 0) tex = p.type == 2 ? "Animals_dog" : "Animals_cat";
+                const Game::Pet& p = g.pets[it.a];
+                const char* base = p.type == 2 ? "Animals_dog" : p.type == 3 ? "Animals_turtle" : "Animals_cat";
+                std::string tex = std::string(base) + (p.breed > 0 ? std::to_string(p.breed) : "");
+                if (c.texWidth(tex) <= 0) tex = base;
                 float ax = std::floor(p.x - camX), ay = std::floor(p.y - camY);
                 int f;
                 if (p.state == 2) f = 28 + ((int)(p.anim * 0.8f) & 1);
                 else if (p.state == 1) f = (p.facing == FACE_DOWN ? 0 : p.facing == FACE_RIGHT ? 4 : p.facing == FACE_UP ? 8 : 12) + ((int)(p.anim * 7) & 3);
-                else f = p.type == 2 ? 16 + ((int)(p.anim * 1.5f) % 6 == 0 ? 1 : 0) : 18 + ((int)(p.anim * 1.5f) % 6 == 0 ? 1 : 0);
+                else f = p.type != 1 ? 16 + ((int)(p.anim * 1.5f) % 6 == 0 ? 1 : 0) : 18 + ((int)(p.anim * 1.5f) % 6 == 0 ? 1 : 0);
                 if (c.texWidth(tex) > 0) c.image(tex, (f % 4) * 32, (f / 4) * 32, 32, 32, ax - 16, ay - 28);
                 else c.rect(ax - 5, ay - 9, 10, 9, RGBA(0xD8, 0x90, 0x40));
                 if (p.heart > 0) c.text(ax, ay - 36 - (1.5f - p.heart) * 6, 0.5f, RGBA(0xE8, 0x40, 0x50), "<", ALIGN_CENTER);
+                else if (p.gift >= 0) itemIcon(c, g.data.object(p.gift), ax - 8, ay - 44 + std::sin(timeMs * 0.005f) * 2);   // look what it found
                 break;
             }
             case 19: {   // your horse, waiting
@@ -2018,6 +2021,10 @@ static std::vector<AnimalOffer> animalOffers(const Game& g) {
         if (a.price > 0 && !a.house.empty()) out.push_back({&a, ""});
     for (const char* t : {"MilkPail", "Shears"})
         if (g.data.toolByKey(t) >= 0) out.push_back({nullptr, t});
+    if (!g.pets.empty())   // another pet, once the first one loves you: "Pet <kind> <coat>"
+        for (int kind = 1; kind <= 3; kind++)
+            for (int coat = 0; coat < (kind == 3 ? 2 : 5); coat++)
+                out.push_back({nullptr, "Pet " + std::to_string(kind) + " " + std::to_string(coat)});
     return out;
 }
 
@@ -2079,6 +2086,18 @@ static void drawShopExtra(Canvas& c, Game& g, Ui& ui) {
                 snprintf(buf, sizeof buf, "%dg  %s", o.a->price,
                          room ? "has room" : ("needs a " + (o.a->requires.empty() ? o.a->house : o.a->requires)).c_str());
                 c.text(46, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT, buf);
+            } else if (o.tool.rfind("Pet ", 0) == 0) {
+                int kind = 1, coat = 0;
+                sscanf(o.tool.c_str(), "Pet %d %d", &kind, &coat);
+                const char* base = kind == 2 ? "Animals_dog" : kind == 3 ? "Animals_turtle" : "Animals_cat";
+                std::string tex = std::string(base) + (coat ? std::to_string(coat) : "");
+                int fr = kind == 1 ? 18 : 16;
+                if (c.texWidth(tex) > 0) c.image(tex, (fr % 4) * 32, (fr / 4) * 32 + 6, 32, 24, 8, y + 2);
+                snprintf(buf, sizeof buf, "%s %d", kind == 2 ? "Dog" : kind == 3 ? "Turtle" : "Cat", coat + 1);
+                c.text(46, y + 1, 0.45f, COL_TEXT, buf);
+                ok = g.money >= 40000 && g.pets[0].friendship >= 1000 && g.pets.size() < 6;
+                c.text(46, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT,
+                       g.pets[0].friendship < 1000 ? "40000g  once your pet loves you" : "40000g");
             } else {
                 int ti = g.data.toolByKey(o.tool);
                 Slot ts; ts.type = SLOT_TOOL; ts.id = ti; ts.count = 1;
@@ -2113,7 +2132,11 @@ static bool touchShopExtra(Game& g, Ui& ui, int tx, int ty) {
             auto offers = animalOffers(g);
             if (i < (int)offers.size()) {
                 if (offers[i].a) g.buyAnimal(offers[i].a->name);
-                else g.buyAnimalTool(offers[i].tool);
+                else if (offers[i].tool.rfind("Pet ", 0) == 0) {
+                    int kind = 1, coat = 0;
+                    sscanf(offers[i].tool.c_str(), "Pet %d %d", &kind, &coat);
+                    g.buyPet(kind, coat);
+                } else g.buyAnimalTool(offers[i].tool);
             }
         }
         return true;

@@ -421,12 +421,13 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
                 val = t.draft.farmType < (int)g.data.farmTypes.size() ? g.data.farmTypes[t.draft.farmType].name : "?";
                 arrows(c, y, on);
                 break;
-            case CF_PET: {   // the stray Marnie brings by: cat or dog, five coats each
-                snprintf(buf, sizeof buf, "%s %d", t.draft.petKind == 2 ? "Dog" : "Cat", t.draft.petBreed + 1);
+            case CF_PET: {   // the stray Marnie brings by: cat, dog or turtle, and its coat
+                int k = t.draft.petKind;
+                snprintf(buf, sizeof buf, "%s %d", k == 2 ? "Dog" : k == 3 ? "Turtle" : "Cat", t.draft.petBreed + 1);
                 val = buf;
-                std::string tex = std::string(t.draft.petKind == 2 ? "Animals_dog" : "Animals_cat") +
+                std::string tex = std::string(k == 2 ? "Animals_dog" : k == 3 ? "Animals_turtle" : "Animals_cat") +
                                   (t.draft.petBreed ? std::to_string(t.draft.petBreed) : "");
-                int fr = t.draft.petKind == 2 ? 16 : 18;
+                int fr = k == 1 ? 18 : 16;
                 if (c.texWidth(tex) > 0) c.image(tex, (fr % 4) * 32 + 8, (fr / 4) * 32 + 12, 16, 18, 168, y + 1);
                 arrows(c, y, on);
                 break;
@@ -459,10 +460,10 @@ static void change(TitleUi& t, const GameData& data, int dir) {
         case CF_SHIRT: o.shirt = wrap(o.shirt + dir, N_SHIRTS); break;
         case CF_HAIR_COLOR: t.hairColor = wrap(t.hairColor + dir, N_HAIR_COLORS); break;
         case CF_PANTS_COLOR: t.pantsColor = wrap(t.pantsColor + dir, N_PANTS_COLORS); break;
-        case CF_PET: {
-            int k = wrap((t.draft.petKind == 2 ? 5 : 0) + t.draft.petBreed + dir, 10);
-            t.draft.petKind = k >= 5 ? 2 : 1;
-            t.draft.petBreed = k % 5;
+        case CF_PET: {   // cat 1-5, dog 1-5, turtle 1-2
+            int k = wrap((t.draft.petKind == 2 ? 5 : t.draft.petKind == 3 ? 10 : 0) + t.draft.petBreed + dir, 12);
+            t.draft.petKind = k >= 10 ? 3 : k >= 5 ? 2 : 1;
+            t.draft.petBreed = k >= 10 ? k - 10 : k % 5;
             break;
         }
         case CF_FARM_TYPE: t.draft.farmType = wrap(t.draft.farmType + dir, (int)std::max<size_t>(1, data.farmTypes.size())); break;

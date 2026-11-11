@@ -44,6 +44,7 @@ static const struct { const char* path; bool required; } EXTRA_TEXTURES[] = {
     {"Characters/Monsters/Bat", false},
     {"Animals/horse", false},
     {"Animals/cat", false}, {"Animals/cat1", false}, {"Animals/cat2", false}, {"Animals/cat3", false}, {"Animals/cat4", false},
+    {"Animals/turtle", false}, {"Animals/turtle1", false},
     {"Animals/dog", false}, {"Animals/dog1", false}, {"Animals/dog2", false}, {"Animals/dog3", false}, {"Animals/dog4", false},
     {"Characters/Monsters/Frost Bat", false},
     {"Characters/Monsters/Lava Bat", false},

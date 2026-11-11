@@ -689,23 +689,33 @@ public:
     void caveNight();
     // ---- your pet (game_pet.cpp) ----
     struct Pet {
-        int type = 0;              // 0 none, 1 cat, 2 dog
-        int breed = 0;             // which of the five coats
+        int type = 0;              // 1 cat, 2 dog, 3 turtle
+        int breed = 0;             // which coat
         std::string name;
         int friendship = 0;        // 0..1000
-        bool petted = false, watered = false;
+        bool petted = false;
+        int gift = -1;             // something it brought you (object id)
         std::string loc = "Farm";
         float x = 0, y = 0, tx = 0, ty = 0;
         int facing = 0, state = 0; // 0 sitting, 1 walking, 2 asleep
         float timer = 0, anim = 0, heart = 0;
-    } pet;
+    };
+    std::vector<Pet> pets;
+    bool bowlFull = false;
+    struct PetGift { int kind, item; float weight; };
+    std::vector<PetGift> petGifts;
+    bool petGiftsLoaded = false;
     std::function<std::string(const std::string& hint, const std::string& current, int maxLen)> keyboard;   // the system keyboard
-    void adoptPet(int type);
-    void petHome();
+    void adoptPet(int type, int breed = -1);
+    bool buyPet(int type, int breed);
+    void petHome(Pet& pet, int idx);
+    void petTokens();
+    int petGiftFor(const Pet& pet);
     void ensurePetBowl();
     void petMorning();
     void petUpdate(float dt);
     bool petInteract(int tx, int ty);
+    bool petChoice(const std::string& what, const std::string& key);
     bool petBowlInteract();
     bool visitFestival();                    // (previews, tests) start today and walk into its festival
     bool hasEvent(const std::string& loc, const std::string& id) const;

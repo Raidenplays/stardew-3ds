@@ -437,6 +437,7 @@ void Game::dialogueChoose(int i) {
         dialogueNext();
         if (what == "festival" && ch.responseKey == "festival:go") { festivalMain(); return; }
         if (worldChoice(what, ch.responseKey)) return;
+        if (petChoice(what, ch.responseKey)) return;
         if (what == "elevator" && ch.responseKey.rfind("mine:", 0) == 0) {
             int lv = atoi(ch.responseKey.c_str() + 5);
             if (lv <= 0) { sfx("stairsdown"); warpTo("Mine", 17, 4, false); }
@@ -448,10 +449,7 @@ void Game::dialogueChoose(int i) {
         cutscene.forkFlag = (i == cutscene.forkWant);
         cutscene.questionPending = false;
         if (cutscene.special == "cave") mailReceived.insert(i == 0 ? "caveMushrooms" : "caveBats");
-        if (cutscene.special == "catQuestion") {
-            if (i == 0) adoptPet(me.petKind);
-            else mailReceived.insert("s3d_noPet");
-        }
+        if (cutscene.special == "catQuestion") petChoice("pet", ch.responseKey);
         cutscene.special.clear();
     }
     std::vector<DialoguePage> reply;

@@ -335,7 +335,8 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     for (auto& e : equip) e = Slot();
     invSlots = 12;
     binOpen = false;
-    pet = Pet();
+    pets.clear();
+    bowlFull = false;
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -479,10 +480,10 @@ void Game::startDay() {
     setDialogueToken("%farm%", me.farm);
     setDialogueToken("%farm", me.farm);         // the game's own form ("This is %farm farm.")
     setDialogueToken("%spouse", spouse.empty() ? "your spouse" : spouse);
-    setDialogueToken("%pet", pet.type ? pet.name : "your pet");
+    setDialogueToken("%pet", pets.empty() ? "your pet" : pets[0].name);
     setDialogueToken("%name%", me.name);
     setDialogueToken("%spouse%", spouse.empty() ? "your spouse" : spouse);
-    setDialogueToken("%pet%", pet.type ? pet.name : "your pet");
+    setDialogueToken("%pet%", pets.empty() ? "your pet" : pets[0].name);
     setDialogueToken("%year%", std::to_string(year));
     setDialogueToken("%season%", seasonName(season));
     npcsStartDay();
@@ -1512,7 +1513,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 27;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 28;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1537,6 +1538,7 @@ static const uint32_t SAVE_VERSION = 27;   // 2: villager friendships, 3: events
                                           // 25: backpack size
                                           // 26: what the mill and junimo huts hold
                                           // 27: your pet
+                                          // 28: several pets, their gifts
 
 namespace {
 struct W {
@@ -1723,7 +1725,9 @@ bool Game::save(const std::string& path) const {
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
     w.i32(me.petKind); w.i32(me.petBreed);
-    w.i32(pet.type); w.i32(pet.breed); w.str(pet.name); w.i32(pet.friendship); w.u8(pet.petted); w.u8(pet.watered);
+    w.u8(bowlFull);
+    w.u32((uint32_t)pets.size());
+    for (auto& p : pets) { w.i32(p.type); w.i32(p.breed); w.str(p.name); w.i32(p.friendship); w.u8(p.petted); w.i32(p.gift); }
     for (auto& b : buildings)
         for (auto* v : {&b.items, &b.pending}) {
             w.u32((uint32_t)v->size());
@@ -2076,7 +2080,8 @@ bool Game::load(const std::string& path, std::string* err) {
     museumOpen = false;
     for (auto& e : equip) e = Slot();
     invSlots = INV_SIZE;   // saves from before backpacks keep all their room
-    pet = Pet();
+    pets.clear();
+    bowlFull = false;
     if (version >= 21 && r.ok) {
         furniture.clear();
         uint32_t nf = r.u32();
@@ -2090,9 +2095,21 @@ bool Game::load(const std::string& path, std::string* err) {
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
         if (version >= 27 && r.ok) {
-            me.petKind = r.i32() == 2 ? 2 : 1; me.petBreed = std::max(0, std::min(4, (int)r.i32()));
-            pet.type = r.i32(); pet.breed = r.i32(); pet.name = r.str(); pet.friendship = r.i32();
-            pet.petted = r.u8() != 0; pet.watered = r.u8() != 0;
+            { int pk = r.i32(); me.petKind = pk >= 1 && pk <= 3 ? pk : 1; } me.petBreed = std::max(0, std::min(4, (int)r.i32()));
+            if (version >= 28) {
+                bowlFull = r.u8() != 0;
+                uint32_t np = r.u32();
+                for (uint32_t k = 0; k < np && r.ok && k < 16; k++) {
+                    Pet p;
+                    p.type = r.i32(); p.breed = r.i32(); p.name = r.str(); p.friendship = r.i32(); p.petted = r.u8() != 0; p.gift = r.i32();
+                    pets.push_back(p);
+                }
+            } else {
+                Pet p;
+                p.type = r.i32(); p.breed = r.i32(); p.name = r.str(); p.friendship = r.i32(); p.petted = r.u8() != 0;
+                bowlFull = r.u8() != 0;
+                if (p.type) pets.push_back(p);
+            }
         }
         if (version >= 26 && r.ok)
             for (auto& b : buildings)
