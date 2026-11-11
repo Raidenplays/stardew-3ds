@@ -808,27 +808,31 @@ def write_music(content, out_dir):
     print(f"  music.dat: {n} locations")
 
 
-def copy_xact(content_dirs, out_root):
-    """Your own Content/XACT sound banks -> audio/ (read directly on the 3DS)."""
+def copy_xact(search_dirs, out_root):
+    """Your own Stardew sound banks (Content/XACT: *.xsb, *.xwb) -> audio/.
+    Looks anywhere under the given folders, so a zipped XACT folder added with
+    your mods works too. The 3DS reads them directly."""
     audio_dir = os.path.join(out_root, "audio")
-    done = 0
-    for c in content_dirs:
-        if not c:
+    found = {}
+    for d in search_dirs:
+        if not d or not os.path.isdir(d):
             continue
-        x = sjson.ci_path(c, "XACT")
-        if not x or not os.path.isdir(x):
-            continue
-        for fn in sorted(os.listdir(x)):
-            if not fn.lower().endswith((".xwb", ".xsb")):
-                continue
-            src, dst = os.path.join(x, fn), os.path.join(audio_dir, fn)
-            os.makedirs(audio_dir, exist_ok=True)
-            if not (os.path.isfile(dst) and os.path.getsize(dst) == os.path.getsize(src)):
-                shutil.copyfile(src, dst)
-            done += 1
-        if done:
-            break
-    print(f"  audio: {done} XACT file(s)" + ("" if done else " (no Content/XACT found: the game will be silent)"))
+        for dirpath, dirnames, files in os.walk(d):
+            dirnames[:] = [x for x in dirnames if not x.startswith("_merged")]
+            for fn in files:
+                if fn.lower().endswith((".xwb", ".xsb")) and fn.lower() not in found:
+                    found[fn.lower()] = os.path.join(dirpath, fn)
+    for src in found.values():
+        dst = os.path.join(audio_dir, os.path.basename(src))
+        os.makedirs(audio_dir, exist_ok=True)
+        if not (os.path.isfile(dst) and os.path.getsize(dst) == os.path.getsize(src)):
+            shutil.copyfile(src, dst)
+    names = ", ".join(sorted(os.path.basename(p) for p in found.values()))
+    if not any(n.endswith(".xsb") for n in found):
+        print(f"  audio: no Sound Bank found{' (got ' + names + ')' if names else ''}: the game will be silent."
+              " Add your Steam Content/XACT folder (zipped) with your mods.")
+    else:
+        print(f"  audio: {names}")
 
 
 def write_mod_audio(content, out_root, mods_dir):
@@ -1816,7 +1820,8 @@ def main():
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
     print("Sound...")
-    copy_xact([BASE_CONTENT[0] or content, content, os.path.dirname(BASE_CONTENT[0] or content)], out_root)
+    base = BASE_CONTENT[0] or content
+    copy_xact([os.path.join(base, "XACT"), base, MODS_DIR[0], os.path.dirname(base)], out_root)
     write_mod_audio(content, out_root, MODS_DIR[0])
     print("Fonts...")
     write_fonts(content, out_root)

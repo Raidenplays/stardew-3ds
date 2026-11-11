@@ -69,20 +69,47 @@ bool convertTexture(const std::string& contentDir, const std::string& contentPat
 }
 
 Setup::Setup(const std::string& root) : root_(root), content_(root + "Content/") {
+    locateGame();
     state_ = installed() ? State::Done : haveContent() ? State::Ready : State::NeedFiles;
+}
+
+static bool isContent(const std::string& dir) { return fileExists(dir + "Maps/springobjects.xnb"); }
+
+bool Setup::locateGame() {
+    // the game folder: where it's most likely, then any folder you dropped in
+    std::vector<std::string> games = {root_, root_ + "Stardew Valley/"};
+    if (DIR* d = opendir(root_.c_str())) {
+        while (dirent* e = readdir(d)) {
+            std::string n = e->d_name;
+            if (n == "." || n == ".." || n == "tex" || n == "maps" || n == "data" || n == "audio") continue;
+            games.push_back(root_ + n + "/");
+        }
+        closedir(d);
+    }
+    for (auto& g : games) {
+        for (const char* sub : {"Content/", "Contents/Resources/Content/", "Stardew Valley.app/Contents/Resources/Content/"}) {
+            if (!isContent(g + sub)) continue;
+            content_ = g + sub;
+            // SMAPI keeps mods next to the game: Mods/ (or, on a Mac, in Contents/MacOS/Mods)
+            mods_.clear();
+            for (const char* m : {"Mods/", "Contents/MacOS/Mods/", "Stardew Valley.app/Contents/MacOS/Mods/"})
+                if (fileExists(g + m)) { mods_ = g + m; break; }
+            if (mods_.empty() && fileExists(root_ + "mods/")) mods_ = root_ + "mods/";
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Setup::installed() const { return fileExists(root_ + "VERSION"); }
 
-bool Setup::haveContent() const {
-    return fileExists(content_ + "Maps/springobjects.xnb") && fileExists(content_ + "Data");
-}
+bool Setup::haveContent() const { return isContent(content_) && fileExists(content_ + "Data"); }
 
 static const char* UI_TEXTURES[] = {"LooseSprites/Cursors", "LooseSprites/stardewPanorama",
                                      "Minigames/Clouds", "Minigames/treestrip"};
 
 bool Setup::prepareUi() {
-    if (!haveContent()) return false;
+    if (!haveContent() && !locateGame()) return false;
     makeDirs(root_ + "tex/");
     makeDirs(root_ + "data/");
     bool ok = true;
@@ -122,7 +149,7 @@ void Setup::begin() {
     next_ = 0;
     doneWeight_ = totalWeight_ = 0;
     error_.clear();
-    if (!haveContent()) { state_ = State::NeedFiles; return; }
+    if (!haveContent() && !locateGame()) { state_ = State::NeedFiles; return; }
     makeDirs(root_ + "tex/");
     makeDirs(root_ + "maps/");
     makeDirs(root_ + "data/");
