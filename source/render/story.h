@@ -28,6 +28,8 @@ void storyInit(StoryUi& s, const GameData& data, const Game& g);
 void storyTick(StoryUi& s, float dt);
 void storyA(StoryUi& s);         // A / tap: next line or letter page
 void storySkip(StoryUi& s);      // START: skip the whole story
+// The music for the current part (Stardew cue names; "" = silence).
+std::string storyMusic(const StoryUi& s);
 void drawStoryTop(Canvas& c, const Game& g, StoryUi& s);
 void drawStoryBottom(Canvas& c, const Game& g, StoryUi& s);
 

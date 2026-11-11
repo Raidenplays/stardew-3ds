@@ -270,6 +270,7 @@ int main() {
             if (k & (KEY_A | KEY_TOUCH)) storyA(story);
             if (k & KEY_START) storySkip(story);
             storyTick(story, sdt);
+            sound.music(storyMusic(story));
             sound.update(sdt);
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
             canvas.beginFrame();

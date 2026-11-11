@@ -258,6 +258,16 @@ void storySkip(StoryUi& s) {
     s.done = true;
 }
 
+std::string storyMusic(const StoryUi& s) {
+    switch (s.part) {
+        case GRANDPA: return s.t < GRANDPA_LEN - 0.6f ? "grandpas_theme" : "";
+        case OFFICE: case CUBICLES: case DESK: return "jojaOfficeSoundscape";
+        case LETTER_READ: return "grandpas_theme";
+        case BUS: return "roadnoise";
+        default: return "";
+    }
+}
+
 void drawStoryTop(Canvas& c, const Game& g, StoryUi& s) {
     switch (s.part) {
         case GRANDPA: grandpa(c, s); break;
