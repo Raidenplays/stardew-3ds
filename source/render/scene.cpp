@@ -130,6 +130,10 @@ static void slotIcon(Canvas& c, const Game& g, const Slot& s, float x, float y) 
     } else if (s.type == SLOT_TOOL) {
         const ToolDef* td = g.data.tool(s.id);
         if (!td) return;
+        if (td->kind == TOOL_HAT) {
+            c.image(td->texture, (td->spriteIndex % 12) * 20 + 2, (td->spriteIndex / 12) * 80 + 2, 16, 16, x, y);
+            return;
+        }
         int w = c.texWidth(td->texture);
         int cols = std::max(1, w / 16);
         c.image(td->texture, (td->spriteIndex % cols) * 16, (td->spriteIndex / cols) * 16, 16, 16, x, y);
@@ -242,6 +246,12 @@ static void drawFarmerAs(Canvas& c, const Game& g, const Outfit& o, float sx, fl
     int hs = o.hair;
     img("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[facing & 3] * 32, 16, 32, 0, bob, flip,
         RGBA(o.hairR, o.hairG, o.hairB));
+    if (&o == &g.me.outfit && !g.equip[Game::EQ_HAT].empty())
+        if (const ToolDef* hat = g.data.tool(g.equip[Game::EQ_HAT].id)) {
+            static const int hatRow[4] = {0, 1, 3, 2};   // sheet order: down, right, left, up
+            img(hat->texture, (hat->spriteIndex % 12) * 20, (hat->spriteIndex / 12) * 80 + hatRow[facing & 3] * 20, 20, 20,
+                -2, -4 + bob, false, 0);
+        }
 }
 
 void drawFarmerPreview(Canvas& c, const Game& g, const Outfit& o, float feetX, float feetY, int facing,
@@ -1456,18 +1466,27 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
         if (p > 0) info += (info.empty() ? "" : "  ") + std::string("Sells ") + std::to_string(p) + "g";
     } else if (sel.type == SLOT_TOOL) {
         const ToolDef* td = g.data.tool(sel.id);
-        info = td && td->kind == TOOL_ROD ? "Hold A to cast, A when it bites, hold A to reel."
+        info = td && td->kind == TOOL_BOOTS ? "Boots: +" + std::to_string(td->minDamage) + " defense, +" +
+                                                  std::to_string(td->maxDamage) + " immunity. Tap Wear."
+               : td && td->kind == TOOL_HAT ? "A hat. Tap Wear to put it on."
+               : td && td->kind == TOOL_ROD ? "Hold A to cast, A when it bites, hold A to reel."
                                           : "Press A to use. Hold A to keep going.";
     } else if (sel.type == SLOT_BIG) {
         info = "Press A to put it down. Pickaxe picks it back up.";
     }
     c.text(16, iy + 19, 0.38f, COL_TEXT_SOFT, info);
 
-    static const char* labels[3] = {"Trash", "Eat", "Sleep"};
+    const char* labels[3] = {"Trash", g.equipKind(sel) >= 0 ? "Wear" : "Eat", "Sleep"};
     for (int i = 0; i < 3; i++) {
-        float bx = 10 + i * 102;
-        box(c, bx, iy + 42, 96, 26, COL_PANEL_DARK, COL_BORDER);
-        c.text(bx + 48, iy + 47, 0.5f, COL_TEXT, labels[i], ALIGN_CENTER);
+        float bx = 10 + i * 68;
+        box(c, bx, iy + 42, 64, 26, COL_PANEL_DARK, COL_BORDER);
+        c.text(bx + 32, iy + 47, 0.5f, COL_TEXT, labels[i], ALIGN_CENTER);
+    }
+    for (int e = 0; e < Game::EQ_COUNT; e++) {   // what you're wearing: ring, ring, boots, hat (tap to take off)
+        float ex = 216 + e * 24;
+        uiSlot(c, ex, iy + 44, 22, 22, false);
+        if (!g.equip[e].empty()) slotIcon(c, g, g.equip[e], ex + 3, iy + 47);
+        else c.text(ex + 11, iy + 49, 0.34f, COL_TEXT_SOFT, e < 2 ? "o" : e == 2 ? "b" : "h", ALIGN_CENTER);
     }
     char buf[80];
     snprintf(buf, sizeof buf, "%s %d, Year %d   %dg   Energy %d/%d", seasonShort(g.season), g.day,
@@ -1483,12 +1502,16 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
 static void touchItemsTab(Game& g, Ui& ui, int tx, int ty) {
     float iy = PANEL_Y + 72;
     int target = ui.picked >= 0 ? ui.picked : g.selected;
-    if (hit(tx, ty, 10, iy + 42, 96, 26)) {
+    if (hit(tx, ty, 10, iy + 42, 64, 26)) {
         if (g.trashSlot(target)) ui.picked = -1;
-    } else if (hit(tx, ty, 112, iy + 42, 96, 26)) {
-        if (g.eatSlot(target) && g.inv[target].empty()) ui.picked = -1;
-    } else if (hit(tx, ty, 214, iy + 42, 96, 26)) {
+    } else if (hit(tx, ty, 78, iy + 42, 64, 26)) {
+        if (g.equipKind(g.inv[target]) >= 0) { if (g.wearSlot(target)) ui.picked = -1; }
+        else if (g.eatSlot(target) && g.inv[target].empty()) ui.picked = -1;
+    } else if (hit(tx, ty, 146, iy + 42, 64, 26)) {
         g.goToBed();
+    } else {
+        for (int e = 0; e < Game::EQ_COUNT; e++)
+            if (hit(tx, ty, 216 + e * 24, iy + 44, 22, 22)) g.takeOff(e);
     }
 }
 

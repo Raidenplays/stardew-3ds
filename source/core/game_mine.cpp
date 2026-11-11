@@ -155,6 +155,8 @@ void Game::mineSpawnMonsters(Location& loc) {
 
 void Game::monstersUpdate(float dt) {
     if (invuln > 0) invuln -= dt;
+    if (speedBoost > 0) speedBoost -= dt;
+    if (warriorBoost > 0) warriorBoost -= dt;
     if (!cur || cur->monsters.empty() || cutscene.active || dialogue.active) return;
     auto solidAt = [&](float x, float y) { return tileSolid((int)std::floor(x / TILE), (int)std::floor(y / TILE)); };
     for (auto& mo : cur->monsters) {
@@ -175,7 +177,7 @@ void Game::monstersUpdate(float dt) {
             mo.y += (mo.vy + mo.ky) * dt;
             mo.kx *= std::pow(0.02f, dt);
             mo.ky *= std::pow(0.02f, dt);
-            if (dist < 12 && invuln <= 0 && mo.hurt <= 0) hurtPlayer(mo.damage, mo.x, mo.y);
+            if (dist < 12 && invuln <= 0 && mo.hurt <= 0 && !(mo.ai == 0 && wearing("Slime Charmer Ring"))) hurtPlayer(mo.damage, mo.x, mo.y);
             continue;
         }
         if (mo.ai == 4 && mo.hidden) {   // a rock crab: just a rock, until you come too close
@@ -208,13 +210,20 @@ void Game::monstersUpdate(float dt) {
         else { if (mo.bug) mo.vx = -mo.vx; mo.kx = 0; }
         if (!solidAt(mo.x, mo.y + my + (my > 0 ? 1 : -6))) mo.y += my;
         else { if (mo.bug) mo.vy = -mo.vy; mo.ky = 0; }
-        if (dist < 11 && invuln <= 0 && mo.hurt <= 0) hurtPlayer(mo.damage, mo.x, mo.y);
+        if (dist < 11 && invuln <= 0 && mo.hurt <= 0 && !(mo.ai == 0 && wearing("Slime Charmer Ring"))) hurtPlayer(mo.damage, mo.x, mo.y);
     }
 }
 
 void Game::hurtPlayer(int damage, float fromX, float fromY) {
-    health -= std::max(1, damage);
-    invuln = 1.2f;
+    if (wearing("Yoba's Blessing") && rand32() % 100 < 10) { invuln = 5.0f; sfx("yoba"); return; }
+    health -= std::max(1, damage - defense());
+    invuln = wearing("Ring of Yoba") && rand32() % 100 < 10 ? 5.0f : 1.2f;
+    if (wearing("Thorns Ring")) {   // whoever hit you feels it too
+        for (auto& mo : cur->monsters) {
+            float ddx = mo.x - fromX, ddy = mo.y - fromY;
+            if (ddx * ddx + ddy * ddy < 4) { mo.hp -= std::max(1, damage); mo.hurt = 0.3f; }
+        }
+    }
     sfx("ow");
     float dx = px - fromX, dy = py - fromY, d = std::sqrt(dx * dx + dy * dy);
     if (d > 0.1f)
@@ -243,11 +252,19 @@ void Game::swingWeapon(const ToolDef& w) {
         float dx = mo.x - hx, dy = (mo.y - 8) - hy;
         if (dx * dx + dy * dy > 20.0f * 20.0f || mo.hurt > 0.15f) continue;
         int dmg = w.minDamage + (int)(rand32() % (uint32_t)std::max(1, w.maxDamage - w.minDamage + 1));
+        if (warriorBoost > 0) dmg += 10;
+        if (wearing("Ruby Ring")) dmg += (dmg + 9) / 10;
+        if (wearing("Iridium Band")) dmg += (dmg + 9) / 10;
+        if (wearing("Aquamarine Ring") || wearing("Lucky Ring") ? rand32() % 100 < 12 : rand32() % 100 < 2) {
+            dmg *= wearing("Jade Ring") ? 4 : 3;   // a critical hit
+            sfx("crit");
+        }
         mo.hp -= std::max(1, dmg);
         mo.hurt = 0.3f;
         mo.hidden = false;
-        mo.kx = fx[f] * 160.0f;
-        mo.ky = fy[f] * 160.0f;
+        float kb = wearing("Amethyst Ring") ? 190.0f : 160.0f;
+        mo.kx = fx[f] * kb;
+        mo.ky = fy[f] * kb;
         if (!mo.bug) mo.think = 0.6f;
         sfx(mo.bug ? "hitEnemy" : "slimeHit");
         if (mo.hp > 0) continue;
@@ -262,10 +279,16 @@ void Game::swingWeapon(const ToolDef& w) {
             for (auto& ch : t) if (ch == ' ') ch = '_';
             burst(t, 16, 0, 16, 24, mo.x, mo.y - 12, 8);
         }
+        if (wearing("Vampire Ring")) health = std::min(maxHealth, health + 2);
+        if (wearing("Soul Sapper Ring")) energy = std::min(MAX_ENERGY, energy + 4);
+        if (wearing("Savage Ring")) speedBoost = 3.0f;
+        if (wearing("Warrior Ring") && rand32() % 10 == 0) warriorBoost = 5.0f;
         if (d) {
-            for (auto& dr : d->drops)
-                if ((rand32() % 1000) / 1000.0f < dr.second && data.object(dr.first) && addItem(dr.first, 1))
-                    itemFlies(dr.first, mo.x, mo.y - 8);
+            int rolls = wearing("Burglar's Ring") ? 2 : 1;
+            for (int roll = 0; roll < rolls; roll++)
+                for (auto& dr : d->drops)
+                    if ((rand32() % 1000) / 1000.0f < dr.second && data.object(dr.first) && addItem(dr.first, 1))
+                        itemFlies(dr.first, mo.x, mo.y - 8);
             gainXp(SK_COMBAT, d->xp);
         }
         cur->monsters.erase(cur->monsters.begin() + i);

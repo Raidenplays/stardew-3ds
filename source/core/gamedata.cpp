@@ -43,6 +43,8 @@ static std::string lower(std::string s) {
 
 static ToolKind classify(const std::string& cls, const std::string& key) {
     std::string c = lower(cls), k = lower(key);
+    if (c == "boots") return TOOL_BOOTS;
+    if (c == "hat") return TOOL_HAT;
     if (c == "hoe") return TOOL_HOE;
     if (c == "wateringcan") return TOOL_CAN;
     if (c == "axe") return TOOL_AXE;
@@ -499,6 +501,12 @@ bool GameData::load(const std::string& root, std::string* err) {
             t.texture = f[3];
             t.row = atoi(f[4].c_str());
             fruitTrees.push_back(t);
+        }
+    lines.clear();
+    if (readLines(root + "data/rings.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() >= 2) rings[atoi(f[0].c_str())] = f[1];
         }
     lines.clear();
     if (readLines(root + "data/fishponds.dat", lines))

@@ -106,9 +106,9 @@ TOOL_TYPES = {"Axe": "Axe", "Pickaxe": "Pickaxe", "Hoe": "Hoe", "WateringCan": "
               "FishingRod": "FishingRod", "MilkPail": "MilkPail", "Shears": "Shears", "Pan": "Pan"}
 
 
-def item_line(it, ids):
+def item_line(it, ids, kind=None):
     """One inventory/chest item -> 'O id count quality' / 'B id count' / 'T kind level' / 'W weaponId'."""
-    t = xtype(it)
+    t = xtype(it) or kind or ""
     if t in TOOL_TYPES:
         return ["T", TOOL_TYPES[t], num(it, "UpgradeLevel")]
     if t == "MeleeWeapon":
@@ -119,8 +119,20 @@ def item_line(it, ids):
     if is_big:
         b = ids.b(sid)
         return ["B", b, max(1, num(it, "Stack", 1))] if b is not None else None
+    if t == "Boots":
+        return ["T", "Boots_" + sid, 0]
+    if t == "Hat":
+        return ["T", "Hat_" + sid.replace("(H)", ""), 0]
+    if t == "Ring":
+        o = ids.o(sid)
+        return ["O", o, 1, 0] if o is not None else None
+    if t == "CombinedRing":   # two rings forged together: keep the first
+        inner = it.find("combinedRings")
+        if inner is not None and len(inner):
+            return item_line(inner[0], ids)
+        return None
     if t not in ("", "Object", "ColoredObject"):
-        return None   # hats, boots, rings, furniture...: not in the 3DS game yet
+        return None   # clothes, furniture, trinkets: not in the 3DS game yet
     o = ids.o(sid)
     if o is None:
         return None
@@ -259,6 +271,12 @@ def import_save(save_path, root):
             il = item_line(it, ids)
             if il:
                 out.append(["inv", slot] + il)
+    for e, tag in enumerate(("leftRing", "rightRing", "boots", "hat")):
+        worn = p.find(tag)
+        if worn is not None and len(worn):
+            il = item_line(worn, ids, "Ring" if e < 2 else "Boots" if e == 2 else "Hat")
+            if il:
+                out.append(["equip", e] + il)
     for k, v in dict_items(p.find("friendshipData")):
         who = clean(k.text or "")
         out.append(["friend", who, num(v, "Points")])

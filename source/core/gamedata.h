@@ -40,7 +40,7 @@ struct ObjectDef {
     std::string stringId;            // the game's own id ("24", "Rafseazz.RSVCP_Ridge_Cherry")
 };
 
-enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER, TOOL_ROD, TOOL_WEAPON };
+enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER, TOOL_ROD, TOOL_WEAPON, TOOL_BOOTS, TOOL_HAT };
 
 struct ToolDef {
     std::string key, className, name, texture;
@@ -315,6 +315,7 @@ public:
         if (it != objectIds.end()) return it->second;
         return !s.empty() && (isdigit((unsigned char)s[0]) || s[0] == '-') ? atoi(s.c_str()) : -1;
     }
+    std::unordered_map<int, std::string> rings;   // object id -> name (Data/Objects Type Ring)
     std::vector<FishPondDef> fishPonds;
     const FishPondDef* fishPond(int fish) const {
         for (auto& f : fishPonds) if (f.fish == fish) return &f;

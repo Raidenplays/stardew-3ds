@@ -109,6 +109,14 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
         const std::string& k = f[0];
         if (k == "name" && f.size() > 1) me.name = f[1];
         else if (k == "farm" && f.size() > 1) me.farm = f[1];
+        else if (k == "equip" && f.size() > 3) {
+            Slot sl;
+            int e = I(f, 1);
+            if (e >= 0 && e < EQ_COUNT && slotFrom(f, 2, sl)) {
+                int kind = equipKind(sl);
+                if (kind == e || (kind == EQ_RING1 && e == EQ_RING2)) { sl.count = 1; equip[e] = sl; }
+            }
+        }
         else if (k == "money") money = I(f, 1);
         else if (k == "date") {
             season = std::max(0, std::min(3, I(f, 1)));

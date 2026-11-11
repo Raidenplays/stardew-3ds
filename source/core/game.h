@@ -353,6 +353,14 @@ public:
     bool sellSlot(int i);
     bool trashSlot(int i);
     bool eatSlot(int i);
+    // worn things: two rings, boots, a hat
+    enum { EQ_RING1 = 0, EQ_RING2, EQ_BOOTS, EQ_HAT, EQ_COUNT };
+    Slot equip[EQ_COUNT];
+    int equipKind(const Slot& s) const;     // which EQ_ slot it goes in (rings: EQ_RING1), or -1
+    bool wearSlot(int i);                   // from the bag; swaps with what's on
+    bool takeOff(int e);
+    bool wearing(const char* ringName) const;
+    int defense() const;
 
     WorldObject* objectAt(int x, int y);
     std::string mapFileFor(const std::string& name) const;   // seasonal variant if there is one
@@ -655,6 +663,7 @@ public:
     // The Mines
     int mineDeepest = 0;                     // deepest floor reached
     int health = 100, maxHealth = 100;       // knocked out at 0
+    float speedBoost = 0, warriorBoost = 0;   // Savage / Warrior ring, seconds left
     float invuln = 0;                        // after a hit: a moment you can't be hurt again
     static int mineLevelOf(const std::string& name);   // "UndergroundMine12" -> 12, else 0
     void enterMine(int level);               // 0 = back up to the entrance
