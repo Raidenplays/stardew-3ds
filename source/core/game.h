@@ -839,7 +839,7 @@ public:
     void fruitTreesNight(Location& loc, bool anySeason);
     void growSoils(Location& loc, bool newSeason, bool anySeason);
     bool greenhouseFixed() const { return mailReceived.count("ccPantry") > 0; }
-    bool inGreenhouse() const { return cur && cur->name.rfind("Greenhouse", 0) == 0; }
+    bool inGreenhouse() const { return cur && (cur->name.rfind("Greenhouse", 0) == 0 || cur->name == "IslandWest"); }   // grows anything, any season
     bool cropLand() const { return cur && (cur->isFarm || inGreenhouse()); }   // where you can hoe and plant
     void ensureGreenhouse();
     void notify(const std::string& s) { say(s); }

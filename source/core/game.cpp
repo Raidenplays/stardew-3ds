@@ -159,7 +159,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     if (riding && !dest->map.outdoors) riding = false;   // the horse waits outside
     cur = dest;
     // Only the farm and where you are stay in memory.
-    if (prev && prev != farm && prev != cur && prev->name.find('@') == std::string::npos) {   // farm buildings stay too
+    if (prev && prev != farm && prev != cur && prev->name.find('@') == std::string::npos && prev->name != "IslandWest") {   // farm buildings and the island farm stay too
         std::string old = prev->name;   // copy: erase destroys the key's owner
         locations.erase(old);
     }
@@ -1511,6 +1511,11 @@ bool Game::goToBed() {
                 fruitTreesNight(*gh, true);
             }
 
+    {   // the island farm: summer all year
+        auto iw = locations.find("IslandWest");
+        if (iw != locations.end()) growSoils(*iw->second, newSeason, true);
+    }
+
     raining = (day > 3 && season != WINTER && rand32() % 100 < 18);
     windy = !raining && day > 2 && (season == SPRING || season == FALL) && rand32() % 100 < 15;
     stormy = raining && rand32() % 100 < (season == SUMMER ? 40 : 15);
@@ -1545,7 +1550,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 31;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 32;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1574,6 +1579,7 @@ static const uint32_t SAVE_VERSION = 31;   // 2: villager friendships, 3: events
                                           // 29: children
                                           // 30: collections
                                           // 31: special orders
+                                          // 32: the island farm's soil, arcade best
 
 namespace {
 struct W {
@@ -1760,6 +1766,21 @@ bool Game::save(const std::string& path) const {
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
     w.i32(me.petKind); w.i32(me.petBreed);
+    {   // the island farm
+        auto iw = locations.find("IslandWest");
+        const Location* in = iw != locations.end() ? iw->second.get() : nullptr;
+        uint32_t nt = 0;
+        if (in) for (auto& s : in->soils) nt += s.tilled;
+        w.u32(nt);
+        if (in)
+            for (size_t i = 0; i < in->soils.size(); i++) {
+                const Soil& s = in->soils[i];
+                if (!s.tilled) continue;
+                w.u32((uint32_t)i); w.u8((s.watered ? 2 : 0) | (s.dead ? 4 : 0) | (s.regrown ? 8 : 0));
+                w.i32(s.seed); w.u8(s.phase); w.u8(s.dayInPhase); w.u8((uint8_t)s.regrowWait);
+            }
+        w.i32(junimoBest);
+    }
     w.str(orderKey); w.i32(orderDays);
     w.u32((uint32_t)orderProgress.size());
     for (int v : orderProgress) w.i32(v);
@@ -2148,6 +2169,19 @@ bool Game::load(const std::string& path, std::string* err) {
         }
         if (version >= 27 && r.ok) {
             { int pk = r.i32(); me.petKind = pk >= 1 && pk <= 3 ? pk : 1; } me.petBreed = std::max(0, std::min(4, (int)r.i32()));
+            if (version >= 32) {
+                uint32_t ns = r.u32();
+                Location* in = ns ? loadLocation("IslandWest") : nullptr;
+                for (uint32_t k = 0; k < ns && r.ok && k < 100000; k++) {
+                    uint32_t i = r.u32();
+                    uint8_t bits = r.u8();
+                    Soil s;
+                    s.tilled = true; s.watered = bits & 2; s.dead = bits & 4; s.regrown = bits & 8;
+                    s.seed = r.i32(); s.phase = r.u8(); s.dayInPhase = r.u8(); s.regrowWait = (int8_t)r.u8();
+                    if (in && i < in->soils.size()) in->soils[i] = s;
+                }
+                junimoBest = r.i32();
+            }
             if (version >= 31) {
                 orderKey = r.str(); orderDays = r.i32();
                 uint32_t n = r.u32();

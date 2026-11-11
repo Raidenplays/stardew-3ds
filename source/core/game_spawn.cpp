@@ -12,6 +12,7 @@ int oreNodeDrop(int node) {
         case 290: return 380;   // iron
         case 764: return 384;   // gold
         case 765: return 386;   // iridium
+        case 843: return 848;   // cinder shard
         case 46:  return 386;   // mystic stone
         case 95:  return 909;   // radioactive
         case 75:  return 535;   // geode

@@ -182,6 +182,37 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
         warpTo("BusStop", 22, 11, false);
         return true;
     }
+    if (verb == "WarpBoatTunnel") {       // the door at the back of Willy's shop
+        if (!ccDone()) { say("Willy: \"That's just the old boat room. Nothing to see... yet.\""); return true; }
+        if (!hasMap("BoatTunnel")) { say("The boat room wasn't converted."); return true; }
+        warpTo("BoatTunnel", 6, 11, true);
+        return true;
+    }
+    if (verb == "BoatTicket") {           // Willy's boat to Ginger Island: mend it, then 1,000g a trip
+        if (!mailReceived.count("willyBoatFixed")) {
+            bool ok = countItem(709) >= 200 && countItem(337) >= 5 && countItem(787) >= 5;
+            if (!ok) { say("The old boat needs 200 hardwood, 5 iridium bars and 5 battery packs."); return true; }
+            takeItem(709, 200); takeItem(337, 5); takeItem(787, 5);
+            mailReceived.insert("willyBoatFixed");
+            sfx("axchop");
+            say("The boat is seaworthy again! Willy will take you to Ginger Island for 1,000g.");
+            return true;
+        }
+        if (!hasMap("IslandSouth")) { say("The island wasn't converted."); return true; }
+        if (money < 1000) { say("A ticket to Ginger Island is 1,000g."); return true; }
+        money -= 1000;
+        sfx("waterSlosh");
+        warpTo("IslandSouth", 21, 43, false);
+        say("Ginger Island! Summer all year: anything grows on the farm to the west.");
+        return true;
+    }
+    if (verb == "VolcanoEntrance") { enterMine(301); return true; }
+    if (verb == "IslandTrader" || verb == "ResortBar" || verb == "VolcanoShop" || verb == "QiGemShop") {
+        const char* shop = verb == "IslandTrader" ? "IslandTrade" : verb.c_str();
+        if (!data.shops.count(shop)) return false;
+        openShop = shop;
+        return true;
+    }
     if (verb == "BrokenBeachBridge") {
         if (mailReceived.count("beachBridgeFixed")) return false;
         if (countItem(388) < 300) { say("The bridge is out. 300 wood would fix it."); return true; }

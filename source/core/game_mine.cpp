@@ -26,7 +26,7 @@ void Game::mineGenerate(Location& loc) {
     int level = loc.mineLevel;
     TileMap& m = loc.map;
     // deeper floors use the frozen and the lava look (same layout, other sheet)
-    const char* look = level >= 80 && level < 120 ? "_lava" : level >= 40 && level < 80 ? "_frost" : nullptr;
+    const char* look = (level >= 80 && level < 120) || level > 300 ? "_lava" : level >= 40 && level < 80 ? "_frost" : nullptr;
     if (look)
         for (auto& ts : m.tilesets)
             if (ts.texture == "Maps_Mines_mine" && data.vfs.exists(std::string("tex/Maps_Mines_mine") + look + ".s3t"))
@@ -76,7 +76,9 @@ void Game::mineGenerate(Location& loc) {
             int roll = (int)((r >> 8) % 1000);
             int deep = level % 40;     // ore gets commoner further down each section
             int oreChance = 40 + deep * 2;
-            if (level > 120 && roll < std::min(120, 15 + (level - 120) * 2)) {
+            if (level > 300 && roll < 90) {
+                o.itemId = 843;                                                       // the volcano: cinder shard nodes
+            } else if (level > 120 && level <= 300 && roll < std::min(120, 15 + (level - 120) * 2)) {
                 o.itemId = 765;                                                       // iridium, more the deeper you go
             } else if (roll < oreChance) {
                 o.itemId = level >= 80 ? 764 : level >= 40 ? 290 : 751;               // gold / iron / copper
@@ -344,6 +346,10 @@ void Game::enterMine(int level) {
             if (loc->map.tile(L_BUILDINGS, x, y) == LADDER_UP) { sx = x; sy = y + 1; }
     sfx("stairsdown");
     warpTo(name, sx, sy, false);
+    if (level > 300) {
+        say(level >= 310 ? "The top of the volcano!" : "Volcano, floor " + std::to_string(level - 300));
+        return;
+    }
     orderEvent("floor", 0, level, "");
     say(skull ? "Skull Cavern, floor " + std::to_string(level - 120) : "Floor " + std::to_string(level));
     if (level > mineDeepest && !skull) {
@@ -396,6 +402,13 @@ bool Game::mineInteract(int tx, int ty) {
         return true;
     }
     uint16_t t = cur->map.tile(L_BUILDINGS, tx, ty);
+    if (t == LADDER_DOWN && cur->mineLevel >= 310 && cur->mineLevel < 400) {   // out the top: the caldera and its forge
+        sfx("stairsdown");
+        if (hasMap("Caldera")) warpTo("Caldera", 21, 30, false);
+        else warpTo("IslandNorth", 40, 24, false);
+        return true;
+    }
+    if (t == LADDER_UP && cur->mineLevel > 300) { sfx("stairsdown"); warpTo("IslandNorth", 40, 24, false); return true; }
     if (t == LADDER_DOWN) { enterMine(cur->mineLevel + 1); return true; }
     if (t == LADDER_UP && cur->mineLevel > 120) {
         sfx("stairsdown");
