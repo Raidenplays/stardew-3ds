@@ -44,6 +44,9 @@ import shutil
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sjson  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     import numpy as np
@@ -593,6 +596,7 @@ def write_data(content, out_dir):
 
     write_shops(content, out_dir, season_bits)
     write_location_names(content, out_dir)
+    write_music(content, out_dir)
     write_spawns(content, out_dir, MODS_DIR[0])
     farmer_bob(content, out_dir)
     write_furniture(content, out_dir)
@@ -762,6 +766,109 @@ def write_location_names(content, out_dir):
             f.write(f"{_clean(name)}\t{_clean(dn)}\n")
             n += 1
     print(f"  location_names.dat: {n} names")
+
+
+# ---------------------------------------------------------------- audio
+def _time_window(cond):
+    """'TIME 1700' / 'TIME 0 1800' -> (from, to) in hhmm; None if unsupported."""
+    cond = (cond or "").strip()
+    if not cond:
+        return (0, 2600)
+    m = re.match(r"^TIME\s+(\d+)(?:\s+(\d+))?$", cond, re.I)
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2) or 2600))
+
+
+def write_music(content, out_dir):
+    """Data/Locations Music/MusicDefault -> data/music.dat
+    (loc, default track, flags r=not in rain t=town theme, track@from-to;...)."""
+    p = os.path.join(content, "Data", "Locations.json")
+    if not os.path.isfile(p):
+        return
+    try:
+        data = json.load(open(p, encoding="utf-8-sig"))
+    except ValueError:
+        return
+    n = 0
+    with open(os.path.join(out_dir, "music.dat"), "w", encoding="utf-8") as f:
+        for name, d in data.items():
+            d = d or {}
+            default = str(d.get("MusicDefault") or "")
+            timed = []
+            for m in d.get("Music") or []:
+                w = _time_window(m.get("Condition"))
+                if w and m.get("Track"):
+                    timed.append(f"{_clean(str(m['Track']))}@{w[0]}-{w[1]}")
+            if not default and not timed:
+                continue
+            flags = ("r" if d.get("MusicIgnoredInRain") else "") + ("t" if d.get("MusicIsTownTheme") else "")
+            f.write(f"{_clean(name)}\t{_clean(default)}\t{flags}\t{';'.join(timed)}\n")
+            n += 1
+    print(f"  music.dat: {n} locations")
+
+
+def copy_xact(content_dirs, out_root):
+    """Your own Content/XACT sound banks -> audio/ (read directly on the 3DS)."""
+    audio_dir = os.path.join(out_root, "audio")
+    done = 0
+    for c in content_dirs:
+        if not c:
+            continue
+        x = sjson.ci_path(c, "XACT")
+        if not x or not os.path.isdir(x):
+            continue
+        for fn in sorted(os.listdir(x)):
+            if not fn.lower().endswith((".xwb", ".xsb")):
+                continue
+            src, dst = os.path.join(x, fn), os.path.join(audio_dir, fn)
+            os.makedirs(audio_dir, exist_ok=True)
+            if not (os.path.isfile(dst) and os.path.getsize(dst) == os.path.getsize(src)):
+                shutil.copyfile(src, dst)
+            done += 1
+        if done:
+            break
+    print(f"  audio: {done} XACT file(s)" + ("" if done else " (no Content/XACT found: the game will be silent)"))
+
+
+def write_mod_audio(content, out_root, mods_dir):
+    """Data/AudioChanges (mod music, .ogg) -> data/audio.dat + audio/mods/*.ogg"""
+    p = os.path.join(content, "Data", "AudioChanges.json")
+    if not os.path.isfile(p):
+        return
+    try:
+        data = json.load(open(p, encoding="utf-8-sig"))
+    except ValueError:
+        return
+    out_dir = os.path.join(out_root, "audio", "mods")
+    lines, missing = [], 0
+    for cue, d in data.items():
+        d = d or {}
+        paths = d.get("FilePaths") or []
+        if not paths:
+            continue
+        raw = str(paths[0]).replace("\\", "/")
+        raw = "/".join(part.strip() for part in raw.split("/"))
+        src = raw if os.path.isfile(raw) else None
+        if not src:
+            for base in (os.getcwd(), os.path.dirname(mods_dir or ""), mods_dir or ""):
+                if base:
+                    src = sjson.ci_path(base, raw)
+                    if src and os.path.isfile(src):
+                        break
+                    src = None
+        if not src or not src.lower().endswith((".ogg", ".wav")):
+            missing += 1
+            continue
+        name = re.sub(r"[^A-Za-z0-9_.-]", "_", str(d.get("ID") or cue)) + os.path.splitext(src)[1].lower()
+        dst = os.path.join(out_dir, name)
+        os.makedirs(out_dir, exist_ok=True)
+        if not (os.path.isfile(dst) and os.path.getsize(dst) == os.path.getsize(src)):
+            shutil.copyfile(src, dst)
+        lines.append(f"{_clean(cue)}\t{_clean(str(d.get('Category') or ''))}\t{1 if d.get('Looped') else 0}\taudio/mods/{name}")
+    with open(os.path.join(out_root, "data", "audio.dat"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + ("\n" if lines else ""))
+    print(f"  audio.dat: {len(lines)} mod tracks" + (f" ({missing} files not found)" if missing else ""))
 
 
 def write_trees(content, out_dir):
@@ -1708,6 +1815,9 @@ def main():
     write_npcs(content, os.path.join(out_root, "data"), textures)
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
+    print("Sound...")
+    copy_xact([BASE_CONTENT[0] or content, content, os.path.dirname(BASE_CONTENT[0] or content)], out_root)
+    write_mod_audio(content, out_root, MODS_DIR[0])
     print("Fonts...")
     write_fonts(content, out_root)
     took("data, villagers, events")

@@ -223,6 +223,10 @@ bool Game::startEvent(const std::string& location, const std::string& key, const
     cs.retFacing = facing;
     cs.fade = 1;
     cs.fadeTarget = 0;
+    {
+        std::vector<std::string> mus = tokenize(cmds[0]);
+        cs.music = mus.empty() ? "continue" : mus[0];
+    }
 
     std::vector<std::string> vp = tokenize(cmds[1]);
     if (vp.size() >= 2 && isNum(vp[0]) && isNum(vp[1])) {
@@ -373,6 +377,18 @@ bool Game::eventStep(const std::string& raw) {
     auto arg = [&](size_t i) -> std::string { return i < w.size() ? w[i] : ""; };
     auto iarg = [&](size_t i) { return atoi(arg(i).c_str()); };
 
+    if (c == "playMusic") {
+        cs.music = arg(1);
+        return true;
+    }
+    if (c == "stopMusic") {
+        cs.music = "none";
+        return true;
+    }
+    if (c == "playSound") {
+        if (!arg(1).empty()) sounds.push_back(arg(1));
+        return true;
+    }
     if (c == "pause") {
         cs.wait = iarg(1) / 1000.0f;
         return false;

@@ -115,6 +115,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
                 n.path.clear();
                 n.pathIdx = 0;
             }
+    if (prev && prev != dest) sfx("doorClose");
     cur = dest;
     // Only the farm and where you are stay in memory.
     if (prev && prev != farm && prev != cur) {
@@ -483,6 +484,7 @@ bool Game::eatSlot(int i) {
     int gain = (int)std::ceil(o->edibility * 2.5f);
     energy = std::min(MAX_ENERGY, energy + gain);
     say("Ate " + o->name + " (+" + std::to_string(gain) + ")");
+    sfx("eat");
     if (--sl.count <= 0) sl = Slot();
     return true;
 }
@@ -530,6 +532,7 @@ bool Game::buy(const std::string& shop, int itemId, int qty) {
             }
             if (!addItem(itemId, qty)) return false;
             money -= cost;
+            sfx("purchase");
             return true;
         }
     return false;
@@ -546,6 +549,7 @@ bool Game::sellSlot(int i) {
     if (p <= 0) return false;
     money += p * inv[i].count;
     say("Sold for " + std::to_string(p * inv[i].count) + "g");
+    sfx("purchaseClick");
     inv[i] = Slot();
     return true;
 }
@@ -566,6 +570,7 @@ bool Game::tryInteract(int tx, int ty) {
         if (!o->ore) {
             int id = o->itemId;
             if (addItem(id, 1)) {
+                sfx("pickUpItem");
                 gainXp(SK_FORAGING, 7);
                 questItem(id, 1);
                 if (has(PR_GATHERER) && rand32() % 5 == 0 && addItem(id, 1)) say("Found two!");
@@ -582,6 +587,7 @@ bool Game::tryInteract(int tx, int ty) {
             const CropDef* c = data.cropForSeed(s.seed);
             int n = c->harvestMin;
             if (!addItem(c->harvestId, n)) return true;
+            sfx("harvest");
             const ObjectDef* o = data.object(c->harvestId);
             if (o) gainXp(SK_FARMING, (int)std::lround(16.0 * std::log(0.018 * std::max(0, o->price) + 1.0)));
             questItem(c->harvestId, n);
@@ -602,6 +608,7 @@ bool Game::tryInteract(int tx, int ty) {
                 if (sl.type == SLOT_OBJECT || sl.type == SLOT_BIG) {
                     if (itemPrice(sl) > 0) {
                         shipped.push_back(sl);
+                        sfx("Ship");
                         say("Shipped " + std::to_string(sl.count) + " " + itemName(sl));
                         sl = Slot();
                         return true;
@@ -654,16 +661,21 @@ void Game::useSelected(int tx, int ty) {
                     s = Soil();
                     s.tilled = true;
                     s.watered = raining;
+                    sfx("hoeHit");
+                } else {
+                    sfx("woodyHit");
                 }
                 break;
             case TOOL_CAN:
                 if (f & CF_WATER) {
                     water = canCapacity();
+                    sfx("slosh");
                     say("Watering can filled");
                 } else if (s.tilled) {
                     if (water > 0) {
                         s.watered = true;
                         water--;
+                        sfx("wateringCan");
                     } else {
                         say("Watering can is empty");
                     }
@@ -671,6 +683,7 @@ void Game::useSelected(int tx, int ty) {
                 break;
             case TOOL_AXE:
                 if (chopTree(tx, ty, t->upgrade)) break;
+                sfx("axchop");
                 if (deb == DEB_TWIG) {
                     deb = DEB_NONE;
                     addItem(OBJ_WOOD, 1);
@@ -678,8 +691,10 @@ void Game::useSelected(int tx, int ty) {
                 }
                 break;
             case TOOL_PICKAXE:
+                sfx("hammer");
                 if (WorldObject* o = objectAt(tx, ty)) {
                     if (o->ore) {
+                        sfx("stoneCrack");
                         int drop = oreNodeDrop(o->itemId);
                         int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
                         if (has(PR_MINER) && drop != 390) n++;
@@ -692,6 +707,7 @@ void Game::useSelected(int tx, int ty) {
                     }
                 } else if (deb == DEB_STONE) {
                     deb = DEB_NONE;
+                    sfx("stoneCrack");
                     addItem(OBJ_STONE, 1);
                     gainXp(SK_MINING, 1);
                 } else if ((s.tilled && s.seed < 0) || s.dead) {
@@ -699,8 +715,10 @@ void Game::useSelected(int tx, int ty) {
                 }
                 break;
             case TOOL_SCYTHE:
+                sfx("swordswipe");
                 if (deb == DEB_WEED) {
                     deb = DEB_NONE;
+                    sfx("cut");
                     if (rand32() % 2) addItem(OBJ_FIBER, 1);
                 } else if (s.dead) {
                     s.seed = -1;
@@ -731,6 +749,7 @@ void Game::useSelected(int tx, int ty) {
         s.regrown = false;
         s.dead = false;
         s.variant = (uint8_t)(rand32() & 1);
+        sfx("dirtyHit");
         if (--sl.count <= 0) sl = Slot();
         return;
     }

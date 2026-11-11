@@ -429,6 +429,31 @@ bool GameData::load(const std::string& root, std::string* err) {
             if (f.size() >= 2) locationNames[f[0]] = f[1];
         }
     lines.clear();
+    // loc \t default \t flags (r = not in rain, t = town theme) \t track@from-to;...
+    if (readLines(root + "data/music.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 2) continue;
+            LocationMusic& m = music[f[0]];
+            m.def = f[1];
+            if (f.size() > 2) { m.ignoreRain = f[2].find('r') != std::string::npos; m.townTheme = f[2].find('t') != std::string::npos; }
+            if (f.size() > 3) {
+                size_t s = 0;
+                const std::string& t = f[3];
+                while (s < t.size()) {
+                    size_t e = t.find(';', s);
+                    if (e == std::string::npos) e = t.size();
+                    std::string item = t.substr(s, e - s);
+                    size_t at = item.find('@');
+                    MusicEntry me;
+                    me.track = item.substr(0, at);
+                    if (at != std::string::npos) sscanf(item.c_str() + at + 1, "%d-%d", &me.from, &me.to);
+                    if (!me.track.empty()) m.timed.push_back(me);
+                    s = e + 1;
+                }
+            }
+        }
+    lines.clear();
     if (readLines(root + "data/spawns.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);

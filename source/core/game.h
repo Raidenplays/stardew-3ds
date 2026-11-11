@@ -181,6 +181,7 @@ struct Cutscene {
     float retX = 0, retY = 0;
     int retFacing = 0;
     std::string after;               // "newDay", "warpOut" ...
+    std::string music = "continue"; // the script's track; "continue" = keep what's playing
 };
 
 struct Input {
@@ -414,6 +415,9 @@ public:
     int energy = MAX_ENERGY;
     int water = CAN_CAPACITY;
     bool raining = false;
+    // Sound cues (Stardew's names) the frontend plays then clears.
+    std::vector<std::string> sounds;
+    void sfx(const char* cue) { sounds.emplace_back(cue); }
     int selected = 0;
     Slot inv[INV_SIZE];
     std::vector<Slot> shipped;
