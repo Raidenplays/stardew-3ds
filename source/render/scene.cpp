@@ -754,6 +754,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 const NpcState& n = g.npcs[it.a];
                 int step = n.moving ? ((int)(n.walkTime * 6)) & 3 : 0;
                 int frame = (n.facing & 3) * 4 + step;
+                int af = n.moving ? -1 : n.animFrame();
+                if (af >= 0) frame = af;
                 c.image("Characters_" + n.def->name, (frame % 4) * 16, (frame / 4) * 32, 16, 32,
                         std::floor(n.x - 8 - camX), std::floor(n.y - 30 - camY));
                 break;

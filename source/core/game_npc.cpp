@@ -51,10 +51,30 @@ void Game::npcsStartDay() {
         n.path.clear();
         n.pathIdx = 0;
         n.moving = false;
+        n.anim = nullptr;
+        n.endAnim.clear();
         n.talkedToday = false;
         n.giftsToday = 0;
         if (weekday() == 0) n.giftsWeek = 0;
     }
+}
+
+void Game::startAnim(NpcState& n) {
+    n.anim = n.endAnim.empty() ? nullptr : data.npcAnim(n.endAnim);
+    n.animTime = 0;
+    n.animOut = false;
+}
+
+// Frame of the stop animation now, or -1 when it's over / none.
+int NpcState::animFrame() const {
+    if (!anim) return -1;
+    const float FT = 0.125f;           // seconds per listed frame
+    int i = (int)(animTime / FT);
+    if (animOut) return i < (int)anim->outro.size() ? anim->outro[i] : -1;
+    if (i < (int)anim->intro.size()) return anim->intro[i];
+    i -= (int)anim->intro.size();
+    if (anim->loop.empty()) return anim->intro.empty() ? -1 : anim->intro.back();
+    return anim->loop[i % anim->loop.size()];
 }
 
 void Game::npcPlan(NpcState& n, const SchedEntry& e) {
@@ -66,11 +86,13 @@ void Game::npcPlan(NpcState& n, const SchedEntry& e) {
     n.path.clear();
     n.pathIdx = 0;
     n.endFacing = e.facing;
+    n.endAnim = e.anim;
     if (!ok) {
         // No known way there (map not converted?): just appear.
         n.loc = e.loc;
         placeAt(n, e.x, e.y);
         n.facing = e.facing;
+        startAnim(n);
         return;
     }
     std::string m = n.loc;
@@ -103,6 +125,7 @@ void Game::npcFinishLeg(NpcState& n) {
     } else {
         placeAt(n, L.tx, L.ty);
         n.facing = n.endFacing;
+        startAnim(n);
     }
     n.leg++;
     n.legDone = 0;
@@ -117,6 +140,17 @@ void Game::npcFinishLeg(NpcState& n) {
 
 void Game::npcsUpdate(float dt) {
     for (auto& n : npcs) {
+        if (n.anim) n.animTime += dt;
+        if (n.anim && n.animOut) {          // let the outro finish before walking off
+            if (n.animFrame() >= 0) continue;
+            n.anim = nullptr;
+        }
+        if (n.anim && n.next < n.sched.size() && timeOfDay >= n.sched[n.next].time) {
+            n.animOut = true;
+            n.animTime = 0;
+            if (n.animFrame() >= 0) continue;
+            n.anim = nullptr;
+        }
         while (n.next < n.sched.size() && timeOfDay >= n.sched[n.next].time) {
             npcPlan(n, n.sched[n.next]);
             n.next++;

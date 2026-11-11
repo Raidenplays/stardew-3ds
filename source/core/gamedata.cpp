@@ -407,6 +407,25 @@ bool GameData::load(const std::string& root, std::string* err) {
         }
     }
     lines.clear();
+    if (readLines(root + "data/animations.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 4) continue;
+            NpcAnim a;
+            std::vector<int>* dst[3] = {&a.intro, &a.loop, &a.outro};
+            for (int k = 0; k < 3; k++) {
+                const char* p = f[1 + k].c_str();
+                while (*p) {
+                    char* end;
+                    long v = strtol(p, &end, 10);
+                    if (end == p) break;
+                    dst[k]->push_back((int)v);
+                    p = end;
+                }
+            }
+            if (!a.loop.empty() || !a.intro.empty()) npcAnims[f[0]] = std::move(a);
+        }
+    lines.clear();
     if (readLines(root + "data/universal_tastes.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);
