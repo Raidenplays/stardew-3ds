@@ -258,6 +258,24 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         if (openShop == "Blacksmith") collectUpgrade();
         return true;
     }
+    if (verb == "BuyBackpack") {
+        if (invSlots >= INV_SIZE) { say("You already have the biggest backpack."); return true; }
+        int cost = invSlots < 24 ? 2000 : 10000;
+        const char* nm = invSlots < 24 ? "Large Pack (24 slots)" : "Deluxe Pack (36 slots)";
+        if (packAsk <= 0) {
+            say(std::string(nm) + ": " + std::to_string(cost) + "g. Press A again to buy.");
+            packAsk = 4.0f;
+        } else if (money < cost) {
+            say("Not enough money");
+        } else {
+            money -= cost;
+            invSlots = invSlots < 24 ? 24 : 36;
+            packAsk = 0;
+            sfx("purchase");
+            say(std::string("Bought the ") + (invSlots == 24 ? "Large Pack!" : "Deluxe Pack!"));
+        }
+        return true;
+    }
     if (verb == "Mailbox") {
         if (!openMail()) say("No new mail");
         return true;
@@ -301,6 +319,8 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     museumDonated.clear();
     museumOpen = false;
     for (auto& e : equip) e = Slot();
+    invSlots = 12;
+    binOpen = false;
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -622,8 +642,30 @@ void Game::selectSlot(int i) {
     if (i >= 0 && i < INV_SIZE) selected = i;
 }
 
+void Game::closeChest() {
+    if (binOpen) {
+        shipped.clear();
+        for (auto& s : binBox.items)
+            if (!s.empty()) shipped.push_back(s);
+        binOpen = false;
+        sfx("doorCreakReverse");
+    }
+    chestOpen = false;
+}
+
+void Game::openBin(int x, int y) {
+    binBox = Placed();
+    binBox.items.assign(36, Slot());
+    for (size_t i = 0; i < shipped.size() && i < 36; i++) binBox.items[i] = shipped[i];
+    binX = x;
+    binY = y;
+    binOpen = chestOpen = true;
+    sfx("doorCreak");
+}
+
 void Game::swapSlots(int a, int b) {
     if (a < 0 || b < 0 || a >= INV_SIZE || b >= INV_SIZE || a == b) return;
+    if (b >= invSlots) return;   // a bigger backpack unlocks those
     Slot& A = inv[a];
     Slot& B = inv[b];
     if (A.stacksWith(B)) {
@@ -853,17 +895,7 @@ bool Game::tryInteract(int tx, int ty) {
         }
         for (auto& b : data.layout.bins)
             if (b.first == tx && b.second == ty) {
-                Slot& sl = inv[selected];
-                if (sl.type == SLOT_OBJECT || sl.type == SLOT_BIG) {
-                    if (itemPrice(sl) > 0) {
-                        shipped.push_back(sl);
-                        sfx("Ship");
-                        say("Shipped " + std::to_string(sl.count) + " " + itemName(sl));
-                        sl = Slot();
-                        return true;
-                    }
-                }
-                say("Hold something to ship");
+                openBin(tx, ty);
                 return true;
             }
         if (tx == data.layout.mailX && ty == data.layout.mailY) {
@@ -1128,6 +1160,14 @@ void Game::updateEffects(float dt) {
 
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
+    if (packAsk > 0) packAsk -= dt;
+    {   // the shipping bin's lid swings open as you come near
+        bool near = binOpen;
+        if (cur && cur->isFarm)
+            for (auto& b : data.layout.bins)
+                near |= std::fabs(px - (b.first * TILE + 8)) < 28 && std::fabs(py - (b.second * TILE + 8)) < 30;
+        binLid = std::max(0.0f, std::min(1.0f, binLid + (near ? dt : -dt) * 5.0f));
+    }
     if (lightning > 0) lightning = std::max(0.0f, lightning - dt * 2.5f);
     if (stormy && raining && cur && cur->map.outdoors && !cutscene.active) {
         nextLightning -= dt;
@@ -1410,7 +1450,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 24;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 25;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1432,6 +1472,7 @@ static const uint32_t SAVE_VERSION = 24;   // 2: villager friendships, 3: events
                                           // 22: museum donations
                                           // 23: fish ponds
                                           // 24: rings, boots, hat
+                                          // 25: backpack size
 
 namespace {
 struct W {
@@ -1617,6 +1658,7 @@ bool Game::save(const std::string& path) const {
     for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
+    w.i32(invSlots);
     for (auto& e : equip) w.slot(e);
     for (auto& b : buildings) { w.i32(b.pondFish); w.i32(b.pondPop); w.i32(b.pondDays); w.i32(b.pondOut); w.i32(b.pondOutN); }
     // item quality: inventory, shipped, then each chest / machine in order
@@ -1962,6 +2004,7 @@ bool Game::load(const std::string& path, std::string* err) {
     museumDonated.clear();
     museumOpen = false;
     for (auto& e : equip) e = Slot();
+    invSlots = INV_SIZE;   // saves from before backpacks keep all their room
     if (version >= 21 && r.ok) {
         furniture.clear();
         uint32_t nf = r.u32();
@@ -1974,6 +2017,7 @@ bool Game::load(const std::string& path, std::string* err) {
             uint32_t nm = r.u32();
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
+        if (version >= 25 && r.ok) invSlots = std::max(12, std::min((int)INV_SIZE, r.i32()));
         if (version >= 24 && r.ok)
             for (auto& e : equip) e = r.slot();
         if (version >= 23 && r.ok)

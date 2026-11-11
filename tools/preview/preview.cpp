@@ -725,6 +725,21 @@ int main(int argc, char** argv) {
         printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
                tot[3] / N, tot[4] / N);
         shot(c, g, ui, "where_" + whereMap);
+        if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
+            g.mailbox.push_back("Robin");
+            auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];
+            g.teleport("Farm", b.first, b.second + 1);
+            g.facing = FACE_UP;
+            step(g, ui, none, 30);
+            shot(c, g, ui, "bin_lid");
+            g.addItem(24, 5); g.addItem(190, 3);
+            g.openBin(b.first, b.second);
+            for (int k = 0; k < INV_SIZE; k++) if (g.inv[k].type == SLOT_OBJECT) g.chestTransfer(true, k);
+            step(g, ui, none, 5);
+            shot(c, g, ui, "bin_open");
+            g.closeChest();
+            printf("  shipped stacks: %zu, backpack %d\n", g.shipped.size(), g.invSlots);
+        }
         if (const char* who = getenv("TALK"))   // TALK=Name: say hi to someone here
             for (auto& n : g.npcs)
                 if (n.def->name == who && n.loc == whereMap) {

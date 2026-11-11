@@ -263,6 +263,7 @@ def import_save(save_path, root):
             out.append(["profession", int(v.text or 0)])
     out.append(["maxstamina", num(p, "maxStamina", 270)])
     out.append(["maxhealth", num(p, "maxHealth", 100)])
+    out.append(["backpack", num(p, "maxItems", 12)])
     items = p.find("items")
     if items is not None:
         for slot, it in enumerate(items):

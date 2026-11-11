@@ -224,15 +224,16 @@ int Game::itemBasePrice(const Slot& s) const {
 bool Game::addSlot(Slot add) {
     if (add.empty() || add.count <= 0) return true;
     if (add.type == SLOT_TOOL) {
-        for (auto& s : inv)
-            if (s.empty()) { s = add; return true; }
+        for (int i = 0; i < invSlots; i++)
+            if (inv[i].empty()) { inv[i] = add; return true; }
         say("Inventory full");
         return false;
     }
     // check there's room for all of it first
     int room = 0;
-    for (auto& s : inv) {
-        if (s.empty()) room += 999;
+    for (int i = 0; i < INV_SIZE; i++) {
+        Slot& s = inv[i];
+        if (s.empty()) room += i < invSlots ? 999 : 0;
         else if (s.stacksWith(add)) room += 999 - s.count;
     }
     if (room < add.count) {
@@ -246,9 +247,9 @@ bool Game::addSlot(Slot add) {
             add.count -= n;
             if (!add.count) return true;
         }
-    for (auto& s : inv)
-        if (s.empty()) {
-            s = add;
+    for (int i = 0; i < invSlots; i++)
+        if (inv[i].empty()) {
+            inv[i] = add;
             return true;
         }
     return true;
@@ -506,6 +507,7 @@ void Game::machinesDayStart() {
 
 Placed* Game::openChest() {
     if (!chestOpen) return nullptr;
+    if (binOpen) return &binBox;
     Placed* p = placedAt(chestX, chestY);
     if (!p || !isChest(*p)) {
         chestOpen = false;
@@ -521,6 +523,10 @@ void Game::chestTransfer(bool toChest, int index) {
         if (index < 0 || index >= INV_SIZE) return;
         Slot& s = inv[index];
         if (s.empty() || s.type == SLOT_TOOL) return;
+        if (binOpen) {
+            if (itemPrice(s) <= 0) { say("That can't be sold."); return; }
+            sfx("Ship");
+        }
         for (auto& d : c->items)
             if (d.stacksWith(s) && d.count < 999) {
                 int n = std::min(999 - d.count, s.count);
@@ -530,7 +536,7 @@ void Game::chestTransfer(bool toChest, int index) {
             }
         for (auto& d : c->items)
             if (d.empty()) { d = s; s = Slot(); return; }
-        say("Chest is full");
+        say(binOpen ? "The bin is full" : "Chest is full");
     } else {
         if (index < 0 || index >= (int)c->items.size()) return;
         Slot& s = c->items[index];

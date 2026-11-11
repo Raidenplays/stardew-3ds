@@ -413,7 +413,16 @@ public:
     int chestX = 0, chestY = 0;
     Placed* openChest();
     void chestTransfer(bool toChest, int index);   // whole stack
-    void closeChest() { chestOpen = false; }
+    void closeChest();
+    // the shipping bin: the same screen; what's inside sells overnight, and you can take things back out
+    bool binOpen = false;
+    Placed binBox;
+    float binLid = 0;          // 0 shut .. 1 open (opens as you walk up)
+    int binX = 0, binY = 0;
+    void openBin(int x, int y);
+    // backpack: 12 slots to start, 24 and 36 from Pierre's
+    int invSlots = 12;
+    float packAsk = 0;         // seconds left to confirm buying the next pack
 
     // ---- mail (game_mail.cpp) ----
     std::vector<std::string> mailbox;        // unread letters, oldest first
