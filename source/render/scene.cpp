@@ -203,7 +203,7 @@ static int hoeDirtIndex(int sum) {
 // The farmer is layered: body, pants (tinted), shirt, arms, hair (tinted).
 // (sx, sy) is the feet; scale > 1 draws it bigger, pixel-sharp.
 static void drawFarmerAs(Canvas& c, const Game& g, const Outfit& o, float sx, float sy, int facing, bool moving,
-                         float walkTime, int frameOverride, float k = 1.0f) {
+                         float walkTime, int frameOverride, float k = 1.0f, bool carrying = false) {
     float dx = std::floor(sx - 8 * k), dy = std::floor(sy - 30 * k);
     static const int dirRow[4] = {0, 1, 2, 1};   // down, right, up, left(=right flipped)
     bool flip = facing == FACE_LEFT;
@@ -230,7 +230,9 @@ static void drawFarmerAs(Canvas& c, const Game& g, const Outfit& o, float sx, fl
         int shx = (o.shirt % 16) * 8, shy = (o.shirt / 16) * 32 + shirtRow[facing & 3] * 8;
         img("Characters_Farmer_shirts", shx, shy, 8, 8, 4, 15 + bob, false, 0);
     }
-    if (c.texWidth(base) >= 192) img(base, fx + 96, fy, 16, 32, 0, 0, flip, 0);
+    // arms: the normal set at +96; when carrying something, the raised set at +192 (walk rows only)
+    bool carryArms = carrying && frame < 24 && c.texWidth(base) >= 288;
+    if (c.texWidth(base) >= 192) img(base, fx + (carryArms ? 192 : 96), fy, 16, 32, 0, 0, flip, 0);
     int hs = o.hair;
     img("Characters_Farmer_hairstyles", (hs % 8) * 16, (hs / 8) * 96 + dirRow[facing & 3] * 32, 16, 32, 0, bob, flip,
         RGBA(o.hairR, o.hairG, o.hairB));
@@ -269,7 +271,22 @@ static bool swingTool(const Game& g, const ToolDef*& td) {
 static void drawPlayerWithTool(Canvas& c, const Game& g, float sx, float sy) {
     const ToolDef* td = nullptr;
     if (!swingTool(g, td)) {
-        drawFarmer(c, g, sx, sy, g.facing, g.moving, g.walkTime, -1);
+        // holding an item or machine: carried over the head, bobbing with each step
+        const Slot& s = g.inv[g.selected];
+        bool carry = g.toolTimer <= 0 && !g.charging && !g.fishingActive() && (s.type == SLOT_OBJECT || s.type == SLOT_BIG);
+        drawFarmerAs(c, g, g.me.outfit, sx, sy, g.facing, g.moving, g.walkTime, -1, 1.0f, carry);
+        if (carry) {
+            int frame = (g.facing & 3) == FACE_UP ? 12 : (g.facing & 3) == FACE_DOWN ? 0 : 6;
+            if (g.moving) {
+                static const int cycle[4] = {0, 1, 0, 2};
+                frame += cycle[(int)(g.walkTime * 8) & 3];
+            }
+            float bob = (float)g.data.bob(frame);
+            Slot one = s;
+            one.count = 1;
+            if (s.type == SLOT_BIG) slotIcon(c, g, one, std::floor(sx - 8), std::floor(sy - 49 + bob));
+            else slotIcon(c, g, one, std::floor(sx - 8), std::floor(sy - 41 + bob));
+        }
         return;
     }
     float k = 1.0f - g.toolTimer / TOOL_SWING;                 // 0 -> 1 through the swing

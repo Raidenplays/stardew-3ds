@@ -620,6 +620,7 @@ bool Game::tryInteract(int tx, int ty) {
             const CropDef* c = data.cropForSeed(s.seed);
             int n = c->harvestMin;
             if (!addItem(c->harvestId, n)) return true;
+            itemFlies(c->harvestId, tx * TILE + 8.0f, ty * TILE + 6.0f, n);   // pops out of the soil to you
             sfx("harvest");
             const ObjectDef* o = data.object(c->harvestId);
             if (o) gainXp(SK_FARMING, (int)std::lround(16.0 * std::log(0.018 * std::max(0, o->price) + 1.0)));
