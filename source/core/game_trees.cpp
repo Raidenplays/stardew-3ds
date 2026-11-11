@@ -121,7 +121,7 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
     sfx("axchop");
     if (t->stage < TREE_GROWN && !t->stump) {   // saplings come out in one go
         const TreeDef* d = data.trees.count(t->type) ? &data.trees.at(t->type) : nullptr;
-        if (t->stage > 0 && d && d->seed >= 0) addItem(d->seed, 1);
+        if (t->stage > 0 && d && d->seed >= 0 && addItem(d->seed, 1)) itemFlies(d->seed, t->x * TILE + 8.0f, (t->y + 1) * TILE - 4.0f);
         cur->trees.erase(cur->trees.begin() + (t - &cur->trees[0]));
         return true;
     }
@@ -137,16 +137,16 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
     if (!t->stump) {
         int wood = 10 + (int)(rand32() % 3);
         if (has(PR_FORESTER)) wood = wood * 5 / 4;
-        addItem(OBJ_WOOD_T, wood);
+        if (addItem(OBJ_WOOD_T, wood)) itemFlies(OBJ_WOOD_T, cx + (cx >= px ? 24.0f : -24.0f), base, wood);
         std::string msg = "+" + std::to_string(wood) + " Wood";
         if (has(PR_LUMBERJACK) && rand32() % 4 == 0 && data.object(709)) {
-            addItem(709, 1);
+            if (addItem(709, 1)) itemFlies(709, cx, base);
             msg += ", +1 Hardwood";
         }
         const TreeDef* d = data.trees.count(t->type) ? &data.trees.at(t->type) : nullptr;
         if (d && d->seed >= 0 && rand32() % 4 != 0) {
             int n = 1 + (int)(rand32() % 2);
-            addItem(d->seed, n);
+            if (addItem(d->seed, n)) itemFlies(d->seed, cx, base, n);
             const ObjectDef* so = data.object(d->seed);
             if (so) msg += ", +" + std::to_string(n) + " " + so->name;
         }
@@ -169,8 +169,11 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
         t->health = STUMP_HEALTH;
         return true;
     }
-    addItem(OBJ_WOOD_T, 1 + (int)(rand32() % 2));
-    if (data.object(OBJ_SAP)) addItem(OBJ_SAP, 1);
+    {
+        int w = 1 + (int)(rand32() % 2);
+        if (addItem(OBJ_WOOD_T, w)) itemFlies(OBJ_WOOD_T, t->x * TILE + 8.0f, (t->y + 1) * TILE - 4.0f, w);
+    }
+    if (data.object(OBJ_SAP) && addItem(OBJ_SAP, 1)) itemFlies(OBJ_SAP, t->x * TILE + 8.0f, (t->y + 1) * TILE - 4.0f);
     gainXp(SK_FORAGING, 1);
     cur->trees.erase(cur->trees.begin() + (t - &cur->trees[0]));
     return true;

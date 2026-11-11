@@ -690,6 +690,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
 
     // effects: bits flying off what a tool hit, a felled tree toppling
     for (const Game::Effect& e : g.effects) {
+        if (e.kind == Game::Effect::ITEM) {
+            const ObjectDef* od = g.data.object(e.item);
+            float ix = std::floor(e.x - camX - 8), iy = std::floor(e.y - camY - 8);
+            if (od) itemIcon(c, od, ix, iy);
+            else objectIcon(c, e.item, ix, iy);
+            continue;
+        }
         if (e.kind == Game::Effect::FALLING_TREE) {
             float k = std::min(1.0f, e.t / 1.0f);
             float ang = e.dir * 1.5708f * k * k;      // speeds up as it goes over
@@ -873,6 +880,24 @@ static void drawHud(Canvas& c, Game& g) {
         std::string n = slotName(g, sel);
         if (sel.type == SLOT_OBJECT) n += " x" + std::to_string(sel.count);
         c.text(6 + hs, TOP_H - 18, 0.45f, COL_WHITE, n);
+    }
+    // pickup pop-ups, newest at the bottom: slide in, sit, slide out
+    {
+        float y = TOP_H - 44;
+        for (int i = (int)g.notices.size() - 1; i >= 0; i--) {
+            const Game::Notice& n = g.notices[i];
+            const ObjectDef* od = g.data.object(n.id);
+            std::string label = od ? od->name : std::string("Item");
+            if (n.count > 1) label += " x" + std::to_string(n.count);
+            float w = 26 + c.textWidth(label, 0.42f) + 6;
+            float in = std::min(1.0f, (3.5f - n.t) / 0.15f), out = std::min(1.0f, n.t / 0.3f);
+            float x = 4 - (1.0f - std::min(in, out)) * (w + 8) + hs;
+            box(c, x, y, w, 22, COL_PANEL, COL_BORDER);
+            if (od) itemIcon(c, od, x + 4, y + 3);
+            else objectIcon(c, n.id, x + 4, y + 3);
+            c.text(x + 24, y + 4, 0.42f, COL_TEXT, label);
+            y -= 25;
+        }
     }
     if (g.toastTime > 0 && !g.toast.empty()) {
         // centred in the space left of the clock

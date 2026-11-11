@@ -433,7 +433,8 @@ public:
     // what a tool hits, leaves dropping from a shaken tree, a felled tree
     // toppling over. Positions are world pixels.
     struct Effect {
-        enum Kind { BIT, FALLING_TREE } kind = BIT;
+        enum Kind { BIT, FALLING_TREE, ITEM } kind = BIT;
+        int item = -1;                        // ITEM: object id (drawn like its icon)
         std::string tex;
         int sx = 0, sy = 0, sw = 0, sh = 0;   // source rect
         float x = 0, y = 0, vx = 0, vy = 0;   // BIT: centre; FALLING_TREE: trunk base
@@ -446,6 +447,11 @@ public:
     // n bits of a sprite (each `piece` px square) burst out from world (x, y)
     void burst(const std::string& tex, int sx, int sy, int sw, int sh, float x, float y, int n, int piece = 4);
     void updateEffects(float dt);
+    // an item pops out of (x, y) world px, bounces, then flies into the farmer
+    void itemFlies(int objId, float x, float y, int count = 1);
+    // "Wood x3" pop-ups at the bottom left (same item stacks onto one)
+    struct Notice { int id = 0; int count = 0; float t = 0; };
+    std::vector<Notice> notices;
     void sfx(const char* cue) { sounds.emplace_back(cue); }
     int selected = 0;
     Slot inv[INV_SIZE];

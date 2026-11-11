@@ -540,6 +540,11 @@ int main(int argc, char** argv) {
         e.sw = 48; e.sh = 96;
         e.x = g.px + 60; e.y = g.py - 4; e.dir = 1; e.life = 1.4f;
         g.effects.push_back(e);
+        g.addItem(390, 1);   // stone
+        g.itemFlies(390, g.px + 20, g.py);
+        g.addItem(388, 3);   // wood
+        g.itemFlies(388, g.px + 60, g.py - 4, 3);
+        g.addItem(388, 2);
         for (int k = 0; k < 4; k++) {
             shot(c, g, ui, "effects_" + std::to_string(k));
             g.updateEffects(0.3f);
