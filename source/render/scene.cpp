@@ -782,15 +782,47 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
 static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     if (!g.map().outdoors) return;
     if (g.raining) {
-        uint32_t col = RGBA(0xA0, 0xB8, 0xFF, 0x90);
+        // the game's raindrops (TileSheets/rain): a falling streak, then a 3-frame splash
+        bool sprite = c.texWidth("TileSheets_rain") >= 64;
         float sh = c.shift(2.0f);
-        for (int i = 0; i < 60; i++) {
-            uint32_t h = (uint32_t)i * 2654435761u;
-            float x = (float)((h >> 7) % 440) - ((timeMs / 6 + i * 37) % 240) * 0.35f + sh;
-            float y = (float)(((h >> 3) + timeMs / 3) % 260) - 10;
-            c.line(x, y, x - 4, y + 10, col, 1.0f);
+        const int N = g.stormy ? 90 : 60;
+        for (int i = 0; i < N; i++) {
+            uint32_t h0 = (uint32_t)(i + 1) * 2654435761u;
+            uint32_t period = 520 + (h0 >> 20) % 360;               // ms per drop cycle
+            uint32_t tt = timeMs + (h0 >> 4) % period;
+            uint32_t cycle = tt / period, ph = tt % period;
+            uint32_t h = (cycle * 40503u + (uint32_t)i * 2246822519u) * 2654435761u;
+            float x0 = (float)(h % 480) - 20 + sh, y0 = (float)((h >> 9) % 220) - 40;
+            uint32_t fallMs = period - 240;
+            int row = (h >> 3) & 1;
+            if (ph < fallMs) {
+                float k = ph / (float)fallMs;
+                float x = x0 + 30 - k * 30, y = y0 + k * 60;
+                if (sprite) c.image("TileSheets_rain", 0, row * 16, 16, 16, x, y);
+                else c.line(x + 8, y, x + 4, y + 10, RGBA(0xA0, 0xB8, 0xFF, 0x90), 1.0f);
+            } else if (sprite) {
+                int f = 1 + std::min(2, (int)((ph - fallMs) / 80));
+                c.image("TileSheets_rain", f * 16, row * 16, 16, 16, x0, y0 + 60);
+            }
         }
-        c.rect(0, 0, TOP_W, TOP_H, RGBA(0x20, 0x30, 0x50, 0x30));
+        c.rect(0, 0, TOP_W, TOP_H, RGBA(0x20, 0x30, 0x50, g.stormy ? 0x48 : 0x30));   // wet, grey light
+    }
+    if (g.snowing) {
+        // soft flakes drifting down and swaying
+        float sh = c.shift(2.0f);
+        for (int i = 0; i < 70; i++) {
+            uint32_t h = (uint32_t)(i + 1) * 2654435761u;
+            float speed = 0.012f + ((h >> 22) & 63) * 0.0002f;
+            float x = std::fmod((float)((h >> 5) % 440) + std::sin(timeMs * 0.0015f + i) * 10.0f - g.px * 0.6f, 440.0f);
+            float y = std::fmod((float)((h >> 13) % 280) + timeMs * speed - g.py * 0.6f, 280.0f);
+            if (x < 0) x += 440.0f;
+            if (y < 0) y += 280.0f;
+            x -= 20;
+            y -= 20;
+            int sz = 1 + ((h >> 3) % 3 == 0);
+            c.rect(x + sh, y, (float)sz + 1, (float)sz + 1, RGBA(0xFF, 0xFF, 0xFF, 0xE0));
+            if (sz > 1) c.rect(x + sh - 1, y + 1, (float)sz + 3, (float)sz - 1, RGBA(0xFF, 0xFF, 0xFF, 0x70));
+        }
     }
     if (g.windy && g.season != WINTER) {
         // blowing petals (spring) / leaves (fall): Cursors row 1184/1200/1216, 4-frame flutter
@@ -809,11 +841,11 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
             x -= 30;
             y -= 20;
             y += std::sin(timeMs * 0.003f + i) * 6.0f;                // flutter
-            int frame = ((int)(timeMs / 140) + i) & 3;
-            int variant = (h >> 9) & 1;
-            c.image("LooseSprites_Cursors", 352 + variant * 64 + frame * 16, row, 16, 16, x + sh, y);
+            int frame = ((int)(timeMs / 90) + i) % 11;   // an 11-frame tumble (Cursors x 352-512)
+            c.image("LooseSprites_Cursors", 352 + frame * 16, row, 16, 16, x + sh, y);
         }
     }
+    if (g.lightning > 0) c.rect(0, 0, TOP_W, TOP_H, RGBA(0xFF, 0xFF, 0xFF, (uint8_t)(g.lightning * 200)));
     int t = g.timeOfDay;
     if (t > 18 * 60) {
         float k = std::min(1.0f, (t - 18 * 60) / 120.0f);
@@ -844,10 +876,9 @@ static void drawHud(Canvas& c, Game& g) {
         }
         // weather and season icons in the dial's middle row
         int wx = 341;                                   // sunny
-        if (g.raining) wx = 365;                        // rain
-        else if (g.season == 3) wx = 401;               // snow
-        else if (g.season == 2) wx = 389;               // falling leaves
-        else if (g.season == 0) wx = 353;               // spring breeze
+        if (g.raining) wx = g.stormy ? 377 : 365;       // storm / rain
+        else if (g.snowing) wx = 401;                   // snow
+        else if (g.windy) wx = g.season == FALL ? 389 : 353;   // falling leaves / spring breeze
         c.image(UI_TEX, wx, 421, 12, 8, x + 29, y + 17);
         c.image(UI_TEX, 406, 441 + 8 * (g.season & 3), 12, 8, x + 54, y + 17);
         c.image(UI_TEX, 340, 472, 65, 17, x + 4, y + DH + 1);

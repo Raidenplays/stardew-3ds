@@ -873,6 +873,15 @@ void Game::updateEffects(float dt) {
 
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
+    if (lightning > 0) lightning = std::max(0.0f, lightning - dt * 2.5f);
+    if (stormy && raining && cur && cur->map.outdoors && !cutscene.active) {
+        nextLightning -= dt;
+        if (nextLightning <= 0) {
+            lightning = 1.0f;
+            sfx("thunder");
+            nextLightning = 8.0f + (float)(rand32() % 1400) / 100.0f;
+        }
+    }
     updateEffects(dt);
     for (auto& t : cur->trees)
         if (t.shake > 0) t.shake -= dt;
@@ -1086,6 +1095,8 @@ bool Game::goToBed() {
 
     raining = (day > 3 && season != WINTER && rand32() % 100 < 18);
     windy = !raining && day > 2 && (season == SPRING || season == FALL) && rand32() % 100 < 15;
+    stormy = raining && rand32() % 100 < (season == SUMMER ? 40 : 15);
+    snowing = season == WINTER && day > 1 && rand32() % 100 < 25;
     if (raining)
         for (auto& s : farm->soils)
             if (s.tilled) s.watered = true;
@@ -1165,7 +1176,8 @@ bool Game::save(const std::string& path) const {
     w.i32(m.width());
     w.i32(m.height());
     w.i32(day); w.i32(season); w.i32(year);
-    w.i32(money); w.i32(water); w.u8(raining);
+    w.i32(money); w.i32(water);
+    w.u8((uint8_t)(raining | (stormy << 1) | (snowing << 2) | (windy << 3)));   // weather bits
     w.u32(rngState);
     w.i32(selected);
     for (auto& s : inv) { w.u8(s.type); w.i32(s.id); w.i32(s.count); }
@@ -1279,7 +1291,14 @@ bool Game::load(const std::string& path, std::string* err) {
         return false;
     }
     day = r.i32(); season = r.i32() & 3; year = r.i32();
-    money = r.i32(); water = r.i32(); raining = r.u8() != 0;
+    money = r.i32(); water = r.i32();
+    {
+        uint8_t wb = r.u8();
+        raining = wb & 1;
+        stormy = (wb & 2) != 0;
+        snowing = (wb & 4) != 0;
+        windy = (wb & 8) != 0;
+    }
     rngState = r.u32();
     selected = r.i32();
     if (selected < 0 || selected >= INV_SIZE) selected = 0;
