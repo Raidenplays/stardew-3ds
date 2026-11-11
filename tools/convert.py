@@ -1729,6 +1729,130 @@ def write_world_text(content, out_dir):
         for name, cd in load("Data/Characters.json").items():
             if isinstance(cd, dict) and cd.get("Gender"):
                 f.write(f"gender:{_flat(name)}\t{_flat(cd['Gender'])}\n")
+    # special orders (the town board): each order, and each seasonal / random variant, with its items resolved
+    objs = load("Data/Objects.json")
+    sostr = load("Strings/SpecialOrderStrings.json")
+
+    def so_text(s):
+        s = str(s or "")
+        m = re.match(r"^\[(.+)\]$", s)
+        return _flat(sostr.get(m.group(1), s) if m else s)
+
+    def norm(name):
+        return re.sub(r"[^a-z0-9._]+", "_", str(name).lower()).strip("_")
+
+    def term_ok(term, oid, o):
+        term = term.strip().lower()
+        if term.startswith("quality_") or term.startswith("preserve_sheet_index"):
+            return True
+        tags = _item_tags(oid, o or {})
+        cat = int((o or {}).get("Category", 0) or 0)
+        name = str((o or {}).get("Name", ""))
+        if term in tags or term == "item_" + norm(name):
+            return True
+        if term == "egg_item":
+            return cat == -5
+        if term == "trash_item":
+            return str(oid) in ("168", "169", "170", "171", "172")
+        if term == "bone_item":
+            return "bone" in name.lower() or "skeletal" in name.lower() or "skull" in name.lower() or "vertebra" in name.lower()
+        if term == "juice_item":
+            return str(oid) == "350"
+        if term == "forage_item":
+            return cat == -81
+        return False
+
+    def resolve(expr):
+        ids = []
+        for oid, o in objs.items():
+            ok = True
+            for part in str(expr).split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                neg = part.startswith("!")
+                hit = any(term_ok(t, oid, o) for t in part.lstrip("!").split("/"))
+                if hit == neg:
+                    ok = False
+                    break
+            if ok and ITEM_IDS.get(oid) is not None:
+                ids.append(ITEM_IDS.get(oid))
+        return ids[:60]
+
+    def by_name(name):
+        for oid, o in objs.items():
+            if str((o or {}).get("Name", "")).lower() == name.strip().lower():
+                return ITEM_IDS.get(oid)
+        return None
+
+    days = {"OneDay": 1, "ThreeDays": 3, "Week": 7, "TwoWeeks": 14, "Month": 28}
+    n_so = 0
+    with open(os.path.join(out_dir, "specialorders.dat"), "w", encoding="utf-8") as f:
+        for key, od in load("Data/SpecialOrders.json").items():
+            if not isinstance(od, dict) or od.get("OrderType"):
+                continue   # Qi's and the desert festival's have their own boards
+            variants = [(-1, {})]
+            for el in od.get("RandomizedElements") or []:
+                if el.get("Name") == "Text":
+                    continue
+                new = []
+                for val in el.get("Values") or []:
+                    season = -1
+                    for si, sn in enumerate(SEASONS):
+                        if "season_" + sn in str(val.get("RequiredTags", "")):
+                            season = si
+                    v = str(val.get("Value", ""))
+                    picks = [x.strip() for x in v[len("PICK_ITEM"):].split(",")] if v.startswith("PICK_ITEM") else [v]
+                    for pk in picks:
+                        new.append((season, {el["Name"]: pk}))
+                variants = new or variants
+            for vi, (season, sub) in enumerate(variants):
+                objectives, texts, ok = [], [], True
+                kinds = [o.get("Type") for o in od.get("Objectives") or []]
+                subname = ""
+                for o in od.get("Objectives") or []:
+                    t, data = o.get("Type"), o.get("Data") or {}
+                    if t == "Collect" and ("Donate" in kinds or "Ship" in kinds):
+                        continue   # gathering it is implied by handing it over
+                    tags = str(data.get("AcceptedContextTags", ""))
+                    target = str(data.get("TargetName", ""))
+                    ids = []
+                    m = re.search(r"\{(\w+):(\w+)\}", tags + " " + target)
+                    if m:
+                        pick = sub.get(m.group(1), "")
+                        if pick.startswith("Target|"):
+                            target = pick.split("|")[1]
+                            subname = target
+                        else:
+                            iid = by_name(pick)
+                            ids = [iid] if iid is not None else []
+                            subname = pick
+                    elif tags and tags != "placeholder":
+                        ids = resolve(tags)
+                    cnt = str(o.get("RequiredCount", "1"))
+                    cnt = int(cnt) if cnt.isdigit() else 5
+                    kind = {"Collect": "collect", "Donate": "donate", "Fish": "fish", "Deliver": "deliver", "Ship": "ship",
+                            "Slay": "slay", "ReachMineFloor": "floor"}.get(t)
+                    if not kind or (kind in ("collect", "donate", "fish", "deliver", "ship") and not ids):
+                        ok = False
+                        break
+                    objectives.append(f"{kind}:{cnt}:{_flat(target)}:{','.join(str(i) for i in ids)}")
+                    texts.append(re.sub(r"\{\w+:\w+\}", subname, so_text(o.get("Text")).replace("{0}", str(cnt)).replace("{1}", subname)).replace("  ", " "))
+                if not ok or not objectives:
+                    continue
+                money = 2000
+                for r in od.get("Rewards") or []:
+                    if r.get("Type") == "Money":
+                        amt = str((r.get("Data") or {}).get("Amount", "2000"))
+                        money = int(amt) if amt.isdigit() else 2500
+                name = so_text(od.get("Name")).replace("{0}", subname)
+                text = so_text(od.get("Text")).replace("{0}", subname).replace("{Crop:Text}", subname).replace("{FishType:Text}", subname)
+                text = re.sub(r"\{\w+:\w+\}", subname, text)
+                f.write("\t".join([f"{_flat(key)}#{vi}", _flat(od.get("Requester", "")), name, text,
+                                   str(days.get(str(od.get("Duration")), 7)), str(money), str(season),
+                                   "|".join(objectives), "|".join(texts), "1" if od.get("Repeatable") else "0"]) + "\n")
+                n_so += 1
+    print(f"  {n_so} special orders")
     with open(os.path.join(out_dir, "achievements.dat"), "w", encoding="utf-8") as f:
         for k, v in load("Data/Achievements.json").items():
             parts = str(v).split("^")

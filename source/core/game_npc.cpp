@@ -376,6 +376,13 @@ void Game::giveGift(NpcState& n, int slot) {
     Slot& sl = inv[slot];
     const ObjectDef* o = data.object(sl.id);
     if (!o) return;
+    if (orderWants(n.def->name, sl.id)) {       // a special order's delivery
+        int id = sl.id;
+        if (--sl.count <= 0) sl = Slot();
+        say(n.def->display + " takes it. \"Just what I asked for!\"");
+        orderEvent("deliver", id, 1, n.def->name);
+        return;
+    }
     if (questDelivered(n.def->name, sl.id)) {   // quest deliveries always go through
         n.friendship = std::min(friendshipCap(n), n.friendship + 150);
         if (--sl.count <= 0) sl = Slot();
@@ -440,6 +447,7 @@ void Game::dialogueChoose(int i) {
         if (worldChoice(what, ch.responseKey)) return;
         if (petChoice(what, ch.responseKey)) return;
         if (kidsChoice(what, ch.responseKey)) return;
+        if (ordersChoice(what, ch.responseKey)) return;
         if (what == "elevator" && ch.responseKey.rfind("mine:", 0) == 0) {
             int lv = atoi(ch.responseKey.c_str() + 5);
             if (lv <= 0) { sfx("stairsdown"); warpTo("Mine", 17, 4, false); }

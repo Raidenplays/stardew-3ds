@@ -100,7 +100,19 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
         if (data.object(item) && addItem(item, 1)) itemFlies(item, px, py - 16);
         return true;
     }
-    if (verb == "Billboard") {           // the calendar outside Pierre's
+    if (verb == "Billboard") {           // the boards outside Pierre's: the calendar, and special orders
+        if (ordersUnlocked() && unquote(rest) != "calendar") {
+            DialoguePage p;
+            p.text = "The town boards";
+            DialogueChoice c;
+            c.label = "Calendar"; c.responseKey = "board:calendar"; p.choices.push_back(c);
+            c.label = orderKey.empty() ? "Special orders" : "Special order: check in"; c.responseKey = "board:orders"; p.choices.push_back(c);
+            dialogue = DialogueBox();
+            dialogue.active = true;
+            dialogue.pages.push_back(p);
+            pendingChoice = "board";
+            return true;
+        }
         loadFestivals();
         std::string out = std::string("This ") + seasonName(season) + ":";
         for (auto& f : festivals)
@@ -196,6 +208,11 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
 }
 
 bool Game::worldChoice(const std::string& what, const std::string& key) {
+    if (what == "board") {
+        if (key == "board:orders") ordersBoard();
+        else if (key == "board:calendar") worldAction("Billboard", "calendar");
+        return true;
+    }
     if (what == "joja") {
         if (key == "joja:join") {
             if (money < 5000) { say("Not enough money"); return true; }

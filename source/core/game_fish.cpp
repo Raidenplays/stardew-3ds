@@ -119,6 +119,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                     f.t = 0;
                     addItem(f.fish, 1);
                 fishCaught[f.fish]++;
+                orderEvent("fish", f.fish, 1, "");
                     questItem(f.fish, 1);
                     const ObjectDef* o = data.object(f.fish);
                     say("Caught " + (o ? o->name : std::string("something")));
@@ -176,6 +177,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                 f.size = d.minSize + (int)(frand(rand32()) * (d.maxSize - d.minSize + 1));
                 addItem(f.fish, 1);
                 fishCaught[f.fish]++;
+                orderEvent("fish", f.fish, 1, "");
                 questItem(f.fish, 1);
                 const ObjectDef* o = data.object(f.fish);
                 say("Caught " + (o ? o->name : std::string("a fish")) + "! " + std::to_string(f.size) + " in" +

@@ -699,6 +699,30 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- special orders (game_orders.cpp) ----
+    struct OrderDef {
+        std::string key, requester, name, text;
+        int days = 7, money = 0, season = -1;
+        bool repeatable = false;
+        struct Objective { std::string kind, target, text; int count = 1; std::set<int> items; };
+        std::vector<Objective> objectives;
+    };
+    std::vector<OrderDef> orderDefs;
+    bool ordersLoaded = false;
+    std::string orderKey;                  // the one you've taken
+    int orderDays = 0;
+    std::vector<int> orderProgress;
+    void loadOrders();
+    const OrderDef* orderDef(const std::string& key);
+    bool ordersUnlocked() const;
+    std::vector<const OrderDef*> ordersOffered();
+    std::string orderStatus();
+    void ordersBoard();
+    bool ordersChoice(const std::string& what, const std::string& key);
+    void orderEvent(const std::string& kind, int item, int count, const std::string& target);
+    bool orderWants(const std::string& npc, int item);
+    bool orderCheckDone();
+    void ordersNight();
     // ---- collections and achievements (game_collect.cpp) ----
     std::map<int, int> shippedEver, fishCaught, cookedEver;   // item -> how many, ever
     std::set<int> craftedEver;

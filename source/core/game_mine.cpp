@@ -281,6 +281,7 @@ void Game::swingWeapon(const ToolDef& w) {
             for (auto& ch : t) if (ch == ' ') ch = '_';
             burst(t, 16, 0, 16, 24, mo.x, mo.y - 12, 8);
         }
+        orderEvent("slay", 0, 1, mo.kind);
         if (wearing("Vampire Ring")) health = std::min(maxHealth, health + 2);
         if (wearing("Soul Sapper Ring")) energy = std::min(MAX_ENERGY, energy + 4);
         if (wearing("Savage Ring")) speedBoost = 3.0f;
@@ -343,6 +344,7 @@ void Game::enterMine(int level) {
             if (loc->map.tile(L_BUILDINGS, x, y) == LADDER_UP) { sx = x; sy = y + 1; }
     sfx("stairsdown");
     warpTo(name, sx, sy, false);
+    orderEvent("floor", 0, level, "");
     say(skull ? "Skull Cavern, floor " + std::to_string(level - 120) : "Floor " + std::to_string(level));
     if (level > mineDeepest && !skull) {
         mineDeepest = level;
