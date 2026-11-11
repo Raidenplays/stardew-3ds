@@ -128,7 +128,9 @@ bool GameData::load(const std::string& root, std::string* err) {
         bigs[b.id] = b;
     }
     lines.clear();
-    readLines(root + "data/crafting.dat", lines);
+    for (int pass = 0; pass < 2; pass++) {   // crafting, then cooking
+    lines.clear();
+    readLines(root + (pass ? "data/cooking.dat" : "data/crafting.dat"), lines);
     for (auto& l : lines) {
         auto f = splitTabs(l);
         if (f.size() < 6) continue;
@@ -152,7 +154,9 @@ bool GameData::load(const std::string& root, std::string* err) {
         r.outId = atoi(f[3].c_str());
         r.outCount = std::max(1, atoi(f[4].c_str()));
         r.unlock = f[5];
-        recipes.push_back(r);
+        r.cooking = pass == 1;
+        (pass ? cookRecipes : recipes).push_back(r);
+    }
     }
     lines.clear();
     readLines(root + "data/trees.dat", lines);

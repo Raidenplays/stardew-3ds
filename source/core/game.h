@@ -559,6 +559,11 @@ public:
     void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
     int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
+    // The farmhouse: 0 one room, 1 kitchen, 2 nursery (maps FarmHouse, FarmHouse1, FarmHouse2)
+    int houseLevel = 0;
+    int houseUpgradeDays = 0;               // Robin's working on the next level
+    bool canCookHere() const { return cur && cur->name == "FarmHouse" && houseLevel >= 1; }
+    bool startHouseUpgrade();
     // Farm buildings and animals
     std::vector<FarmBuilding> buildings;
     std::vector<FarmAnimal> animals;

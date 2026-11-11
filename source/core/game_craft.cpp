@@ -70,7 +70,7 @@ static int skillIndex(const std::string& name) {
 }
 
 bool Game::recipeKnown(const Recipe& r) const {
-    if (mailReceived.count("craft:" + r.name)) return true;
+    if (mailReceived.count((r.cooking ? "cook:" : "craft:") + r.name)) return true;
     const std::string& u = r.unlock;
     if (u == "default") return true;
     char kind = u.empty() ? 0 : u[0];

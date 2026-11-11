@@ -1473,12 +1473,17 @@ static std::string categoryName(int cat) {
 }
 
 static void drawCraftTab(Canvas& c, Game& g, Ui& ui) {
-    const auto& rs = g.data.recipes;
+    if (!g.canCookHere()) ui.cooking = false;
+    const auto& rs = ui.cooking ? g.data.cookRecipes : g.data.recipes;
     int known = 0;
     for (auto& r : rs) known += g.recipeKnown(r);
     char buf[64];
     snprintf(buf, sizeof buf, "%d of %d recipes", known, (int)rs.size());
-    c.text(HOT_X, PANEL_Y + 3, 0.45f, COL_TEXT, "Crafting");
+    c.text(HOT_X, PANEL_Y + 3, 0.45f, COL_TEXT, ui.cooking ? "Cooking" : "Crafting");
+    if (g.canCookHere()) {   // the kitchen: switch between crafting and cooking
+        box(c, 112, PANEL_Y + 2, 76, 15, COL_PANEL_DARK, COL_BORDER, 1);
+        c.text(150, PANEL_Y + 2, 0.36f, COL_TEXT, ui.cooking ? "Crafting" : "Cook", ALIGN_CENTER);
+    }
     c.text(BOT_W - HOT_X, PANEL_Y + 4, 0.38f, COL_TEXT_SOFT, buf, ALIGN_RIGHT);
     if (rs.empty()) {
         c.text(BOT_W / 2, PANEL_Y + 60, 0.42f, COL_TEXT_SOFT, "No recipes - re-run the converter", ALIGN_CENTER);
@@ -1542,7 +1547,13 @@ static void drawCraftTab(Canvas& c, Game& g, Ui& ui) {
 }
 
 static void touchCraftTab(Game& g, Ui& ui, int tx, int ty) {
-    const auto& rs = g.data.recipes;
+    if (g.canCookHere() && hit(tx, ty, 112, PANEL_Y + 2, 76, 15)) {
+        ui.cooking = !ui.cooking;
+        ui.craftSel = 0;
+        ui.craftScroll = 0;
+        return;
+    }
+    const auto& rs = ui.cooking && g.canCookHere() ? g.data.cookRecipes : g.data.recipes;
     if (rs.empty()) return;
     int rows = ((int)rs.size() + CR_COLS - 1) / CR_COLS;
     if (hit(tx, ty, BOT_W - 17, CR_Y, 14, 38)) { ui.craftScroll = std::max(0, ui.craftScroll - 1); return; }
@@ -1913,12 +1924,25 @@ static void drawShopExtra(Canvas& c, Game& g, Ui& ui) {
     char buf[96];
     if (ui.shop == "Carpenter") {
         auto offers = buildOffers(g);
-        ui.shopScroll = std::max(0, std::min(ui.shopScroll, (int)offers.size() - OFFER_ROWS));
+        bool house = g.houseLevel < 2;   // the house upgrade sits on top of the list
+        int total = (int)offers.size() + (house ? 1 : 0);
+        ui.shopScroll = std::max(0, std::min(ui.shopScroll, total - OFFER_ROWS));
         for (int r = 0; r < OFFER_ROWS; r++) {
-            int i = ui.shopScroll + r;
+            int i = ui.shopScroll + r - (house ? 1 : 0);
+            float y = LIST_Y + r * OFFER_H;
+            if (i == -1) {
+                box(c, 4, y, BOT_W - 8, OFFER_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
+                c.text(10, y + 1, 0.45f, COL_TEXT, g.houseLevel == 0 ? "House upgrade: kitchen" : "House upgrade: nursery");
+                bool ok = g.houseUpgradeDays == 0 && (g.houseLevel == 0 ? g.money >= 10000 && g.countItem(388) >= 450
+                                                                         : g.money >= 65000 && g.countItem(709) >= 100);
+                c.text(10, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT,
+                       g.houseUpgradeDays > 0 ? "Robin is working on it" : g.houseLevel == 0 ? "10000g  450 Wood" : "65000g  100 Hardwood");
+                box(c, 252, y + 4, 58, 20, ok ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK, 1);
+                c.text(281, y + 6, 0.42f, COL_CREAM, "Build", ALIGN_CENTER);
+                continue;
+            }
             if (i >= (int)offers.size()) break;
             const BuildingType& t = *offers[i];
-            float y = LIST_Y + r * OFFER_H;
             box(c, 4, y, BOT_W - 8, OFFER_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
             c.text(10, y + 1, 0.45f, COL_TEXT, t.name + (t.upgradeFrom.empty() ? "" : " (upgrade)"));
             std::string mats = std::to_string(t.cost) + "g";
@@ -1974,7 +1998,11 @@ static bool touchShopExtra(Game& g, Ui& ui, int tx, int ty) {
         int i = ui.shopScroll + r;
         if (ui.shop == "Carpenter") {
             auto offers = buildOffers(g);
-            if (i < (int)offers.size() && g.startBuilding(offers[i]->name) && !g.placing.empty()) {
+            if (g.houseLevel < 2) {
+                if (i == 0) { g.startHouseUpgrade(); return true; }
+                i--;
+            }
+            if (i >= 0 && i < (int)offers.size() && g.startBuilding(offers[i]->name) && !g.placing.empty()) {
                 ui.shop.clear();   // off to the farm to pick a spot
                 ui.cart.clear();
             }

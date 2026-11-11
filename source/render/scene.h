@@ -31,6 +31,7 @@ struct Ui {
     int socialScroll = 0;
     int craftSel = 0;         // index into GameData::recipes
     int craftScroll = 0;      // first row shown
+    bool cooking = false;     // the craft tab shows kitchen recipes (in an upgraded farmhouse)
     int questSel = 0;         // journal: selected quest
     int questScroll = 0;
     int profSel = 0;          // level-up: highlighted profession card

@@ -104,6 +104,7 @@ struct Recipe {
     bool outBig = false;
     int outId = 0, outCount = 1;
     std::string unlock;              // "default", "s Farming 2", "f Name 5", "l 2", "null"
+    bool cooking = false;            // a kitchen recipe (Data/CookingRecipes)
 };
 
 // One way a machine can be used, flattened by the converter.
@@ -322,6 +323,7 @@ public:
     std::unordered_map<int, FurnitureDef> furniture;
     std::unordered_map<int, BigDef> bigs;
     std::vector<Recipe> recipes;
+    std::vector<Recipe> cookRecipes;
     std::vector<MachineRule> machineRules;
     std::unordered_map<int, TreeDef> trees;   // by type
     std::unordered_map<int, FishDef> fish;

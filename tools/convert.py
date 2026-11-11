@@ -1343,6 +1343,24 @@ def write_crafting(content, out_dir, objs):
                 fs[4].strip() or "null"]) + "\n")
             n += 1
     print(f"  crafting.dat: {n} recipes")
+    cp = os.path.join(content, "Data", "CookingRecipes.json")
+    if os.path.isfile(cp):
+        n = 0
+        with open(os.path.join(out_dir, "cooking.dat"), "w", encoding="utf-8") as f:
+            for name, raw in _load_json(content, "Data/CookingRecipes.json").items():
+                fs = str(raw).split("/")
+                if len(fs) < 4:
+                    continue
+                ing = _ing_list(fs[0])
+                out = fs[2].split()
+                oid = ITEM_IDS.get(out[0]) if out else None
+                if ing is None or oid is None:
+                    continue
+                cnt = int(out[1]) if len(out) > 1 and out[1].isdigit() else 1
+                f.write("\t".join(_clean(x) for x in [
+                    name, ",".join(f"{i}:{c}:{b}" for i, c, b in ing), 0, oid, cnt, fs[3].strip() or "null"]) + "\n")
+                n += 1
+        print(f"  cooking.dat: {n} recipes")
 
     # machines: flatten rules into explicit input lists
     tags = {ITEM_IDS.get(k): _item_tags(k, o or {}) for k, o in objs.items()}
