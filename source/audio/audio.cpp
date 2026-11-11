@@ -20,14 +20,24 @@ static bool endsWith(const std::string& s, const char* e) {
 bool Engine::init(const std::string& root, Backend* backend) {
     root_ = root;
     backend_ = backend;
-    std::string dir = root + "audio/";
+    // your XACT files: in audio/ (converter / setup), or the XACT folder
+    // dropped in as-is
     std::string err;
-    if (DIR* d = opendir(dir.c_str())) {
+    bool haveSoundBank = false;
+    std::vector<std::string> seen;
+    for (const char* sub : {"audio/", "XACT/", "Content/XACT/"}) {
+        std::string dir = root + sub;
+        DIR* d = opendir(dir.c_str());
+        if (!d) continue;
         std::vector<std::string> xwb, xsb;
         while (dirent* e = readdir(d)) {
-            std::string n = e->d_name;
-            if (endsWith(n, ".xwb")) xwb.push_back(n);
-            else if (endsWith(n, ".xsb")) xsb.push_back(n);
+            std::string n = e->d_name, low = n;
+            for (char& ch : low) ch = (char)tolower((unsigned char)ch);
+            bool dup = false;
+            for (auto& s2 : seen) dup |= s2 == low;
+            if (dup) continue;
+            if (endsWith(n, ".xwb")) { xwb.push_back(n); seen.push_back(low); }
+            else if (endsWith(n, ".xsb") && !haveSoundBank) { xsb.push_back(n); seen.push_back(low); }
         }
         closedir(d);
         for (auto& n : xwb) {
@@ -36,12 +46,11 @@ bool Engine::init(const std::string& root, Backend* backend) {
             else log.push_back(n + ": " + err);
         }
         for (auto& n : xsb) {
-            if (sound_.load(dir + n, err)) log.push_back("sound bank: " + std::to_string(sound_.cues.size()) + " cues");
+            if (sound_.load(dir + n, err)) { haveSoundBank = true; log.push_back("sound bank: " + std::to_string(sound_.cues.size()) + " cues"); }
             else log.push_back(n + ": " + err);
         }
-    } else {
-        log.push_back("no audio folder");
     }
+    if (!haveSoundBank) log.push_back("no sound bank (put your XACT folder in the stardew3ds folder)");
     // mod audio (Data/AudioChanges): id \t category \t looped \t path under the root
     std::vector<std::string> lines;
     if (sv::readTextLines(root + "data/audio.dat", lines)) {

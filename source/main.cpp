@@ -80,7 +80,7 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
             if (down & KEY_START) return false;
             if (down & KEY_A) {
                 if (view == SetupView::NeedFiles) {
-                    if (su.haveContent()) { prepare(); view = SetupView::Confirm; }
+                    if (su.locateGame()) { prepare(); view = SetupView::Confirm; }
                 } else if (view == SetupView::Confirm) {
                     su.begin();
                     aptSetSleepAllowed(false);

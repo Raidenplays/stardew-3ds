@@ -58,14 +58,14 @@ void drawSetupTop(Canvas& c, const setup::Setup& su, SetupView v, float t) {
         float y = window(c, X, 30, W, 170, "Welcome!");
         y = wrap(c, TX, y, TW, 0.45f, TXT, "This game plays with your own copy of Stardew Valley.", 15) + 4;
         y = wrap(c, TX, y, TW, 0.42f, TXT,
-                 "1. On your PC, open the Stardew Valley folder (Steam: right-click the game, Manage, "
+                 "1. On your PC, find your Stardew Valley folder (Steam: right-click the game, Manage, "
                  "Browse local files).", 13) + 2;
-        y = wrap(c, TX, y, TW, 0.42f, TXT, "2. Copy the whole Content folder onto your SD card here:", 13);
-        c.text(TX + 10, y, 0.42f, RED, "sdmc:/3ds/stardew3ds/Content/", ALIGN_LEFT);
+        y = wrap(c, TX, y, TW, 0.42f, TXT, "2. Copy that whole folder onto your SD card, into:", 13);
+        c.text(TX + 10, y, 0.42f, RED, "sdmc:/3ds/stardew3ds/", ALIGN_LEFT);
         y += 15;
         y = wrap(c, TX, y, TW, 0.42f, TXT,
-                 "3. Optional: put Stardew Valley Expanded and Ridgeside Village in "
-                 "sdmc:/3ds/stardew3ds/mods/", 13) + 2;
+                 "Mods like Stardew Valley Expanded and Ridgeside Village come along if they're in its Mods "
+                 "folder.", 13) + 2;
         wrap(c, TX, y, TW, 0.42f, SOFT, "Then put the SD card back in and press A.", 13);
         break;
     }

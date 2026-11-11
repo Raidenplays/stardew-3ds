@@ -25,6 +25,11 @@ public:
     bool installed() const;
     // The player's Content folder copied over?
     bool haveContent() const;
+    // Finds your game wherever it was copied: the whole Steam "Stardew Valley"
+    // folder (Windows/Linux, or the Mac app's Contents/Resources), or just its
+    // Content folder. Sets the Content and Mods folders. Call again to re-check.
+    bool locateGame();
+    std::string modsDir() const { return mods_; }
     // Where the player should put things (for the instructions screen).
     std::string contentDir() const { return content_; }
 
@@ -47,7 +52,7 @@ private:
     void queueTextures();
     void finish();
 
-    std::string root_, content_;
+    std::string root_, content_, mods_;
     std::vector<Job> jobs_;
     size_t next_ = 0;
     float doneWeight_ = 0, totalWeight_ = 0;
