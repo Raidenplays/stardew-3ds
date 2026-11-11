@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
     assert(d.recipes.size() == 4 && d.bigs.size() == 3 && d.machineRules.size() == 2);
     Game g(d);
     assert(g.newGame(7, &err));
+    g.invSlots = 36;   // the tests want the full backpack
 
     // recipes: default ones known, skill ones locked until Farming 1
     const Recipe* chest = recipe(d, "Chest");
@@ -239,6 +240,7 @@ int main(int argc, char** argv) {
     {
         Game gf(d);
         assert(gf.newGame(9, &err));
+        gf.invSlots = 36;   // the tests want the full backpack
         gf.teleport("Farm", 10, 10);
         // find a land tile next to water, facing the water
         int wx = -1, wy = -1, fx = 0, fy = 0, fdir = 0;
@@ -297,6 +299,7 @@ int main(int argc, char** argv) {
     {
         Game gq(d);
         assert(gq.newGame(11, &err));
+        gq.invSlots = 36;   // the tests want the full backpack
         assert(gq.quests.size() == 2);
         auto find = [&](const std::string& id) -> QuestState* {
             for (auto& q : gq.quests) if (q.id == id) return &q;
@@ -334,6 +337,7 @@ int main(int argc, char** argv) {
     {
         Game gm(d);
         assert(gm.newGame(5, &err));
+        gm.invSlots = 36;   // the tests want the full backpack
         assert(gm.mailbox.empty());
         gm.passedOut = true;
         gm.goToBed();
@@ -362,6 +366,7 @@ int main(int argc, char** argv) {
     {
         Game gp(d);
         assert(gp.newGame(3, &err));
+        gp.invSlots = 36;   // the tests want the full backpack
         auto c5 = gp.professionChoices(SK_FARMING, 5);
         assert(c5.size() == 2 && c5[0] == PR_RANCHER && c5[1] == PR_TILLER);
         Slot parsnip; parsnip.type = SLOT_OBJECT; parsnip.id = 24; parsnip.count = 1;
@@ -384,6 +389,7 @@ int main(int argc, char** argv) {
         who.outfit.hair = 5;
         who.farmType = 0;
         assert(go.newGame(21, who, &err) && go.farmerName() == "Sam");
+        go.invSlots = 36;
         assert(go.startOpening() && go.cutscene.active && go.location().name == "BusStop");
         Input none;
         for (int i = 0; i < 60 * 120 && go.cutscene.active; i++) {
