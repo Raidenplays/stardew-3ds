@@ -241,6 +241,10 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         enterMine(1);
         return true;
     }
+    if (verb == "Gunther") {          // the museum counter
+        museumOpen = true;
+        return true;
+    }
     if (verb == "MineElevator") {
         if (mineDeepest < 5) say("The elevator stops every 5 floors. Reach floor 5 first.");
         else openElevator();
@@ -294,6 +298,8 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
     houseLevel = houseUpgradeDays = 0;
     furniture = data.layout.furniture;
+    museumDonated.clear();
+    museumOpen = false;
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -1090,7 +1096,7 @@ void Game::update(float dt, const Input& in) {
         moving = false;   // the UI advances pages (it knows about long-page scrolling)
         return;
     }
-    if (bundleView >= 0) {           // looking at the bundles
+    if (bundleView >= 0 || museumOpen) {   // looking at the bundles / the museum
         moving = false;
         return;
     }
@@ -1349,7 +1355,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 21;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 22;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1368,6 +1374,7 @@ static const uint32_t SAVE_VERSION = 21;   // 2: villager friendships, 3: events
                                           // 19: house upgrades
                                           // 20: dating, engagement, marriage
                                           // 21: furniture
+                                          // 22: museum donations
 
 namespace {
 struct W {
@@ -1551,6 +1558,8 @@ bool Game::save(const std::string& path) const {
     for (auto& d : dating) w.str(d);
     w.u32((uint32_t)furniture.size());
     for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
+    w.u32((uint32_t)museumDonated.size());
+    for (int id : museumDonated) w.i32(id);
     // item quality: inventory, shipped, then each chest / machine in order
     for (auto& s : inv) w.u8(s.quality);
     w.u32((uint32_t)shipped.size());
@@ -1891,6 +1900,8 @@ bool Game::load(const std::string& path, std::string* err) {
         for (uint32_t k = 0; k < nd && r.ok && k < 100; k++) dating.insert(r.str());
     }
     furniture = data.layout.furniture;
+    museumDonated.clear();
+    museumOpen = false;
     if (version >= 21 && r.ok) {
         furniture.clear();
         uint32_t nf = r.u32();
@@ -1898,6 +1909,10 @@ bool Game::load(const std::string& path, std::string* err) {
             FurniturePlacement fp;
             fp.map = r.str(); fp.id = r.i32(); fp.x = r.i32(); fp.y = r.i32();
             furniture.push_back(fp);
+        }
+        if (version >= 22 && r.ok) {
+            uint32_t nm = r.u32();
+            for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
     } else if (houseLevel > 0) {   // older saves: the starting furniture, moved into the bigger house's first room
         int ox, oy, nx, ny;

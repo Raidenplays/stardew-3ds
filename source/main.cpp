@@ -364,6 +364,7 @@ int main() {
         else if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
         if (!ui.shop.empty() && (kDown & KEY_B)) { ui.shop.clear(); ui.cart.clear(); }
         if (game.bundleView >= 0 && (kDown & KEY_B)) game.bundleView--;   // back a page (closes from the rooms)
+        if (game.museumOpen && (kDown & KEY_B)) game.museumOpen = false;
         if (game.chestOpen && (kDown & KEY_B)) game.closeChest();
         if (game.letterOpen) {
             if (kDown & (KEY_A | KEY_B)) { game.closeLetter(); if (kDown & KEY_A) game.openMail(); }

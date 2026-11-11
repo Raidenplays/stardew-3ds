@@ -227,6 +227,8 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             FurniturePlacement fp;
             fp.map = f[1]; fp.id = I(f, 2); fp.x = I(f, 3); fp.y = I(f, 4);
             if (data.furniture.count(fp.id)) furniture.push_back(fp);
+        } else if (k == "museum" && f.size() > 1) {
+            museumDonated.insert(I(f, 1));
         } else if (k == "drop" && f.size() > 4) {   // an egg or forage lying there
             Location* L = locFor(f[1]);
             if (!L || !data.object(I(f, 4))) continue;
@@ -254,6 +256,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             }
         }
     }
+    museumRewardsCheck(false);   // rewards you already got on the PC
     ensureGreenhouse();
     farm->spawnDay = absoluteDay();
     if (summary) {

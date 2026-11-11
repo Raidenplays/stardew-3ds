@@ -708,6 +708,42 @@ def write_data(content, out_dir):
             n += 1
     print(f"  objects.dat: {n} objects")
     write_buildings_animals(content, out_dir)
+    # the museum: what Gunther takes (artifacts A, minerals M) and the rewards for donating
+    with open(os.path.join(out_dir, "museum.dat"), "w", encoding="utf-8") as f:
+        for oid, o in objs.items():
+            t = str(o.get("Type") or "")
+            iid = ITEM_IDS.get(oid)
+            if iid is not None and t in ("Arch", "Minerals"):
+                f.write(f"item\t{iid}\t{'A' if t == 'Arch' else 'M'}\n")
+        mr = os.path.join(content, "Data", "MuseumRewards.json")
+        if os.path.isfile(mr):
+            for key, r in _load_json(content, "Data/MuseumRewards.json").items():
+                reqs = []
+                for tg in r.get("TargetContextTags") or []:
+                    tag, n = str(tg.get("Tag") or ""), int(tg.get("Count", 1) or 1)
+                    if tag.startswith("id_o_"):
+                        rid = ITEM_IDS.get(tag[5:])
+                        if rid is None:
+                            reqs = None
+                            break
+                        reqs.append(f"id={rid}:{n}")
+                    elif tag == "item_type_arch":
+                        reqs.append(f"arch:{n}")
+                    elif tag == "item_type_minerals":
+                        reqs.append(f"min:{n}")
+                    else:
+                        reqs.append(f"all:{n}")
+                if reqs is None:
+                    continue
+                rid = str(r.get("RewardItemId") or "")
+                kind, rv = "-", "0"
+                if rid.startswith("(O)"):
+                    kind, rv = ("R" if r.get("RewardItemIsRecipe") else "O"), str(ITEM_IDS.get(rid[3:]) if ITEM_IDS.get(rid[3:]) is not None else -1)
+                elif rid.startswith("(BC)"):
+                    kind, rv = "B", str(BIG_IDS.get(rid[4:], -1)) if BIG_IDS else rid[4:]
+                elif rid.startswith("(F)"):
+                    kind, rv = "F", rid[3:]
+                f.write(f"reward\t{_clean(key)}\t{kind}\t{rv}\t{int(r.get('RewardItemCount', 1) or 1)}\t{' '.join(reqs)}\n")
     # Community Center bundles, raw ("Pantry/0" -> "Spring Crops/O 465 20/24 1 0 .../0///Spring Crops")
     bp = os.path.join(content, "Data", "Bundles.json")
     if os.path.isfile(bp):
