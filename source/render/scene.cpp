@@ -540,6 +540,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 if (t.stump) {
                     c.image(tex, 32, 96, 16, 32, bx, by - 32);
                 } else if (t.stage >= TREE_GROWN) {
+                    c.image(tex, 32, 96, 16, 32, bx, by - 32);   // roots: the stump under the trunk
                     c.image(tex, 0, 0, 48, 96, bx - 16 + wob + c.shift(1.0f), by - 96 + 8);
                 } else if (t.stage >= 3) {
                     c.image(tex, 0, 96, 16, 32, bx + wob, by - 32);
@@ -581,6 +582,17 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                         std::floor(n.x - 8 - camX), std::floor(n.y - 30 - camY));
                 break;
             }
+        }
+    }
+
+    // effects: bits flying off what a tool hit, a felled tree toppling
+    for (const Game::Effect& e : g.effects) {
+        if (e.kind == Game::Effect::FALLING_TREE) {
+            float k = std::min(1.0f, e.t / 1.0f);
+            float ang = e.dir * 1.5708f * k * k;      // speeds up as it goes over
+            c.imageRotated(e.tex, e.sx, e.sy, e.sw, e.sh, 24, 88, e.x - camX, e.y - camY, ang);
+        } else {
+            c.image(e.tex, e.sx, e.sy, e.sw, e.sh, std::floor(e.x - camX - e.sw / 2.0f), std::floor(e.y - camY - e.sh / 2.0f));
         }
     }
 

@@ -666,6 +666,7 @@ void Game::useSelected(int tx, int ty) {
                     s.tilled = true;
                     s.watered = raining;
                     sfx("hoeHit");
+                    burst("TerrainFeatures_hoeDirt", 0, 0, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 5, 3);
                 } else {
                     sfx("woodyHit");
                 }
@@ -689,6 +690,8 @@ void Game::useSelected(int tx, int ty) {
                 if (chopTree(tx, ty, t->upgrade)) break;
                 sfx("axchop");
                 if (deb == DEB_TWIG) {
+                    int v = debrisVariant(tx, ty) & 1, idx = v ? 295 : 294;   // Maps/springobjects twigs
+                    burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 7);
                     deb = DEB_NONE;
                     addItem(OBJ_WOOD, 1);
                     gainXp(SK_FORAGING, 1);
@@ -699,6 +702,9 @@ void Game::useSelected(int tx, int ty) {
                 if (WorldObject* o = objectAt(tx, ty)) {
                     if (o->ore) {
                         sfx("stoneCrack");
+                        if (const ObjectDef* nd = data.object(o->itemId))
+                            burst(nd->texture, (nd->spriteIndex % 24) * 16, (nd->spriteIndex / 24) * 16, 16, 16,
+                                  tx * TILE + 8.0f, ty * TILE + 10.0f, 7);
                         int drop = oreNodeDrop(o->itemId);
                         int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
                         if (has(PR_MINER) && drop != 390) n++;
@@ -710,6 +716,8 @@ void Game::useSelected(int tx, int ty) {
                         if (od) say("+" + std::to_string(n) + " " + od->name);
                     }
                 } else if (deb == DEB_STONE) {
+                    int v = debrisVariant(tx, ty) & 1, idx = v ? 450 : 343;   // Maps/springobjects stones
+                    burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 7);
                     deb = DEB_NONE;
                     sfx("stoneCrack");
                     addItem(OBJ_STONE, 1);
@@ -721,6 +729,8 @@ void Game::useSelected(int tx, int ty) {
             case TOOL_SCYTHE:
                 sfx("swordswipe");
                 if (deb == DEB_WEED) {
+                    int v = debrisVariant(tx, ty) & 1, idx = v ? 675 : 674;   // Maps/springobjects weeds
+                    burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 6);
                     deb = DEB_NONE;
                     sfx("cut");
                     if (rand32() % 2) addItem(OBJ_FIBER, 1);
@@ -760,8 +770,49 @@ void Game::useSelected(int tx, int ty) {
     eatSlot(selected);
 }
 
+void Game::burst(const std::string& tex, int sx, int sy, int sw, int sh, float x, float y, int n, int piece) {
+    if (effects.size() > 80) return;
+    for (int i = 0; i < n; i++) {
+        Effect e;
+        e.tex = tex;
+        e.sw = e.sh = piece;
+        e.sx = sx + (int)(rand32() % (uint32_t)std::max(1, sw - piece));
+        e.sy = sy + (int)(rand32() % (uint32_t)std::max(1, sh - piece));
+        float a = (float)(rand32() % 1000) / 1000.0f * 3.14159f;   // upward half-circle
+        float sp = 40.0f + (float)(rand32() % 60);
+        e.x = x + (float)((int)(rand32() % 9) - 4);
+        e.y = y - 4;
+        e.vx = std::cos(a) * sp;
+        e.vy = -std::sin(a) * sp - 30.0f;
+        e.groundY = y + 6 + (float)(rand32() % 6);
+        e.vrot = (float)((int)(rand32() % 21) - 10);
+        e.life = 0.6f + (float)(rand32() % 30) / 100.0f;
+        effects.push_back(e);
+    }
+}
+
+void Game::updateEffects(float dt) {
+    for (auto& e : effects) {
+        e.t += dt;
+        if (e.kind == Effect::FALLING_TREE) continue;   // angle comes from t when drawn
+        e.vy += 420.0f * dt;
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        e.rot += e.vrot * dt;
+        if (e.y > e.groundY) {   // land and skid to a stop
+            e.y = e.groundY;
+            e.vy = e.vy > 60 ? -e.vy * 0.3f : 0;
+            e.vx *= 0.5f;
+            e.vrot *= 0.5f;
+        }
+    }
+    effects.erase(std::remove_if(effects.begin(), effects.end(), [](const Effect& e) { return e.t >= e.life; }),
+                  effects.end());
+}
+
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
+    updateEffects(dt);
     for (auto& t : cur->trees)
         if (t.shake > 0) t.shake -= dt;
     if (fade > 0) fade = std::max(0.0f, fade - dt * 3.0f);

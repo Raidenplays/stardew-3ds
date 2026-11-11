@@ -5,6 +5,8 @@
 
 #include "game.h"
 
+static const int TILE = 16;
+
 namespace sv {
 
 static const int OBJ_WOOD_T = 388;
@@ -62,6 +64,13 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
         return true;
     }
     t->health -= (int8_t)(1 + axeLevel);
+    const TreeDef* tdef = data.trees.count(t->type) ? &data.trees.at(t->type) : nullptr;
+    const std::string tex = tdef ? tdef->texture[season & 3] : std::string();
+    float cx = t->x * TILE + 8.0f, base = (t->y + 1) * TILE - 4.0f;
+    if (!tex.empty()) {
+        if (t->stump) burst(tex, 32, 104, 16, 24, cx, base, 5);                  // wood chips
+        else burst(tex, 16, 112, 16, 16, cx, base - 40, 3, 6);                    // a few leaves drop
+    }
     if (t->health > 0) return true;
     if (!t->stump) {
         int wood = 10 + (int)(rand32() % 3);
@@ -81,6 +90,18 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
         }
         say(msg);
         sfx("treecrack");
+        if (!tex.empty()) {   // the top topples away from you (the stump stays)
+            Effect e;
+            e.kind = Effect::FALLING_TREE;
+            e.tex = tex;
+            e.sx = 0; e.sy = 0; e.sw = 48; e.sh = 96;
+            e.x = cx;
+            e.y = base - 8;
+            e.dir = cx >= px ? 1 : -1;
+            e.life = 1.4f;
+            effects.push_back(e);
+            for (int k = 0; k < 4; k++) burst(tex, 16, 112, 16, 16, cx + e.dir * (20 + k * 14), base - 6, 3, 6);
+        }
         gainXp(SK_FORAGING, 12);
         t->stump = true;
         t->health = STUMP_HEALTH;
