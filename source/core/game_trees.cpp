@@ -109,15 +109,16 @@ int Game::clumpAt(int tx, int ty) const {
 }
 
 // Sprite of a clump on Maps/springobjects (2x2 tiles).
-int clumpSprite(int kind) { return kind == 1 ? 602 : kind == 2 ? 672 : 600; }
+int clumpSprite(int kind) { return kind == 1 ? 602 : kind == 2 ? 672 : kind == 3 ? 622 : 600; }
 
 // An axe or pickaxe hitting a big stump, log or boulder. True if there was one.
 bool Game::hitClump(int tx, int ty, ToolKind kind, int level) {
     int i = clumpAt(tx, ty);
     if (i < 0) return false;
     Location::Clump& cl = cur->clumps[i];
-    bool rock = cl.kind == Location::CLUMP_BOULDER;
-    int need = cl.kind == Location::CLUMP_STUMP ? 1 : 2;      // copper axe; steel axe / pickaxe
+    bool meteor = cl.kind == Location::CLUMP_METEOR;
+    bool rock = cl.kind == Location::CLUMP_BOULDER || meteor;
+    int need = cl.kind == Location::CLUMP_STUMP ? 1 : meteor ? 3 : 2;   // copper axe; steel axe / pickaxe; gold pickaxe
     int idx = clumpSprite(cl.kind);
     float cx = cl.x * TILE + 16.0f, cy = cl.y * TILE + 20.0f;
     cl.shake = 0.3f;
@@ -128,6 +129,7 @@ bool Game::hitClump(int tx, int ty, ToolKind kind, int level) {
     if (level < need) {
         sfx(rock ? "clank" : "axe");
         static const char* tools[3] = {"", "a Copper Axe", "a Steel tool"};
+        if (meteor) { say("This meteorite needs a Gold Pickaxe."); return true; }
         say(std::string(rock ? "This boulder" : cl.kind == Location::CLUMP_LOG ? "This log" : "This stump") +
             " needs " + (rock ? "a Steel Pickaxe" : tools[need]) + ".");
         return true;
@@ -138,6 +140,13 @@ bool Game::hitClump(int tx, int ty, ToolKind kind, int level) {
     if (cl.health > 0) return true;
     sfx(rock ? "boulderBreak" : "stumpCrack");
     burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 32, 32, cx, cy, 14, 6);
+    if (meteor) {   // iridium, stone and a couple of geodes
+        for (auto& dr : {std::pair<int, int>{386, 6}, {390, 6}, {535, 2}})
+            if (data.object(dr.first) && addItem(dr.first, dr.second)) itemFlies(dr.first, cx, cy, dr.second);
+        gainXp(SK_MINING, 50);
+        cur->clumps.erase(cur->clumps.begin() + i);
+        return true;
+    }
     int item = rock ? 390 : 709;                     // stone / hardwood
     int n = rock ? 15 : cl.kind == Location::CLUMP_LOG ? 8 : 2;
     if (addItem(item, n)) itemFlies(item, cx, cy, n);

@@ -104,7 +104,7 @@ struct Location {
     // Big 2x2 obstacles placed when the farm is made (Paths 19 log, 20 boulder,
     // 21 stump): they need an upgraded tool.
     struct Clump { int16_t x = 0, y = 0; uint8_t kind = 0; int8_t health = 0; float shake = 0; };
-    enum { CLUMP_STUMP = 0, CLUMP_LOG = 1, CLUMP_BOULDER = 2 };
+    enum { CLUMP_STUMP = 0, CLUMP_LOG = 1, CLUMP_BOULDER = 2, CLUMP_METEOR = 3 };
     std::vector<Clump> clumps;
     std::vector<FruitTree> fruitTrees;
     struct Monster {
@@ -641,6 +641,11 @@ public:
     bool farmBuildingInteract(int tx, int ty);
     bool pondInteract(FarmBuilding& b);
     void pondsNight();
+    void nightEvents();
+    bool hasEvent(const std::string& loc, const std::string& id) const;
+    bool farmSpotFree(int x, int y, int w, int h) const;
+    bool randomFarmSpot(int w, int h, int& ox, int& oy);
+    std::string morningNote;   // what the night left behind: shown when you wake up
     std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
     int countItem(int id) const;
     bool applyImport(const std::string& path, std::string* summary);   // a PC save via tools/saveimport.py
