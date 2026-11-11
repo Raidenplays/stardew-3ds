@@ -665,6 +665,7 @@ int main(int argc, char** argv) {
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
         g.teleport(whereMap, 10, 10);
         ui.mapCache = mapCacheArg;
+        if (getenv("HOUSE")) { for (int lv = 0; lv < atoi(getenv("HOUSE")); lv++) { g.houseUpgradeDays = 1; g.teleport("FarmHouse", 9, 8); g.goToBed(); } }
         if (dayArg > 0) { g.season = (dayArg - 1) / 28; g.day = (dayArg - 1) % 28 + 1; }
         g.teleport(whereMap, atX >= 0 ? atX : g.map().width() / 2, atY >= 0 ? atY : g.map().height() / 2);
         if (timeArg >= 0) {
