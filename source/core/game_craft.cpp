@@ -27,6 +27,7 @@ int Game::skillLevel(int skill) const {
 // XP counts up during the day; the level itself only goes up overnight,
 // like the game, and that's when new recipes unlock.
 void Game::gainXp(int skill, int xp) {
+    secretNoteChance(skill);
     if (skill < 0 || skill >= SK_COUNT || xp <= 0) return;
     skillXp[skill] += xp;
 }
@@ -362,6 +363,7 @@ bool Game::interactPlaced(Placed& p) {
         return true;
     }
     if (!p.big) return false;
+    if (p.id == 163) return caskInteract(p);
     if (machineReady(p)) {
         Slot out = p.held;
         if (!addSlot(out)) return true;
@@ -491,6 +493,7 @@ void Game::sprinklersWater() {
 }
 
 void Game::machinesDayStart() {
+    casksAge();
     // auto machines whose output was taken restart; nothing else to do because
     // timers are absolute minutes and keep running overnight
     for (auto& kv : placed)

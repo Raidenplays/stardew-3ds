@@ -772,6 +772,15 @@ int main(int argc, char** argv) {
             step(g, ui, none, 2);
             shot(c, g, ui, "kids");
         }
+        if (getenv("FIXES")) {   // FIXES=1: the mended bridge / the cellar trapdoor, wherever --where is
+            g.mailReceived.insert("beachBridgeFixed");
+            if (whereMap == "FarmHouse") g.houseLevel = 3;
+            g.applyMapFixes();
+            printf("  trapdoor %d,%d\n", g.cellarX, g.cellarY);
+            if (whereMap == "FarmHouse" && g.cellarX >= 0) g.teleport("FarmHouse", g.cellarX + 1, g.cellarY + 1);
+            step(g, ui, none, 5);
+            shot(c, g, ui, "fixes");
+        }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");
             auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];

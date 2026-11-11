@@ -606,11 +606,12 @@ bool Game::farmBuildingInteract(int tx, int ty) {
 
 // Robin's house upgrades: a kitchen (10,000g + 450 wood), then a nursery (65,000g + 100 hardwood).
 bool Game::startHouseUpgrade() {
-    if (houseLevel >= 2) { say("Your house is as big as it gets (for now)."); return false; }
+    if (houseLevel >= 3) { say("Your house is as big as it gets."); return false; }
     if (houseUpgradeDays > 0) { say("Robin is already working on your house."); return false; }
     for (auto& b : buildings)
         if (b.daysLeft > 0) { say("Robin is already busy with a building."); return false; }
-    int cost = houseLevel == 0 ? 10000 : 65000, mat = houseLevel == 0 ? 388 : 709, n = houseLevel == 0 ? 450 : 100;
+    int cost = houseLevel == 0 ? 10000 : houseLevel == 1 ? 65000 : 100000, mat = houseLevel == 0 ? 388 : 709,
+        n = houseLevel == 0 ? 450 : houseLevel == 1 ? 100 : 0;   // the cellar is gold only
     if (money < cost) { say("Not enough money"); return false; }
     if (countItem(mat) < n) {
         const ObjectDef* o = data.object(mat);

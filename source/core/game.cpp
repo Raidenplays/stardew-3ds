@@ -165,6 +165,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     }
 
     if (cur != prev) caveNight();   // Demetrius's cave fills up while you're away
+    applyMapFixes();
     const TileMap& m = cur->map;
     tx = std::max(0, std::min(tx, m.width() - 1));
     ty = std::max(0, std::min(ty, m.height() - 1));
@@ -493,6 +494,7 @@ void Game::startDay() {
     festivalActive = -1;
     festivalDone = false;
     worldMorning();
+    cartMorning();
     petMorning();
     kidsMorning();
     if (const Festival* fe = festivalToday())
@@ -771,6 +773,7 @@ bool Game::eatSlot(int i) {
     if (i < 0 || i >= INV_SIZE) return false;
     Slot& sl = inv[i];
     const ObjectDef* o = sl.type == SLOT_OBJECT ? data.object(sl.id) : nullptr;
+    if (o && sl.id == 79) return readSecretNote(i);
     if (!o || o->edibility <= 0 || o->edibility == -300) return false;
     int gain = (int)std::ceil(o->edibility * 2.5f);
     energy = std::min(MAX_ENERGY, energy + gain);
@@ -784,6 +787,7 @@ bool Game::eatSlot(int i) {
 
 std::vector<ShopEntry> Game::shopStock(const std::string& shop) const {
     std::vector<ShopEntry> out;
+    if (shop == "Traveler") return cartStock;   // today's cart
     auto it = data.shops.find(shop);
     if (it != data.shops.end()) {
         for (auto& si : it->second) {
@@ -873,6 +877,18 @@ bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap;
 bool Game::tryInteract(int tx, int ty) {
     if (mineInteract(tx, ty)) return true;
     if (farmBuildingInteract(tx, ty) || hopperInteract(tx, ty) || animalInteract(tx, ty)) return true;
+    if (cur->name == "Forest" && cartHere() && tx >= 26 && tx <= 31 && ty >= 10 && ty <= 14) {
+        if (timeOfDay >= 20 * 60) say("The merchant has packed up for the night.");
+        else openShop = "Traveler";
+        return true;
+    }
+    if (cur->name == "FarmHouse" && cellarX >= 0 && tx == cellarX && ty == cellarY) {
+        sfx("stairsdown");
+        Location* c = loadLocation("Cellar");
+        const Warp* w = c ? c->map.warpTo("FarmHouse") : nullptr;
+        warpTo("Cellar", w ? w->x : 3, w ? w->y + 1 : 3, false);
+        return true;
+    }
     if (petInteract(tx, ty)) return true;
     if (kidInteract(tx, ty)) return true;
     if (!cur->fruitTrees.empty() && shakeFruitTree(tx, ty)) return true;
@@ -1474,7 +1490,8 @@ bool Game::goToBed() {
                 if (fp.map == "FarmHouse") { fp.x += nx - ox; fp.y += ny - oy; }
         houseLevel++;
         locations.erase("FarmHouse");   // the bigger house loads next time
-        say(houseLevel == 1 ? "Robin finished your house: you have a kitchen now!" : "Robin finished your house upgrade!");
+        say(houseLevel == 1 ? "Robin finished your house: you have a kitchen now!" : houseLevel == 3 ? "Robin dug out your cellar. The casks are ready." : "Robin finished your house upgrade!");
+        if (houseLevel == 3) stockCellar();
     }
     growSoils(*farm, newSeason, false);
     riding = false;

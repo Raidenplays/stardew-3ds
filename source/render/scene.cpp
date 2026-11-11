@@ -179,6 +179,7 @@ std::string shopTitle(const std::string& id) {
     if (id == "Blacksmith") return "Blacksmith";
     if (id == "Carpenter") return "Carpenter's Shop";
     if (id == "Wizard") return "The Wizard's Book";
+    if (id == "Traveler") return "Travelling Cart";
     if (id == "AnimalShop") return "Marnie's Ranch";
     if (id == "Saloon") return "The Stardrop Saloon";
     if (id == "FishShop") return "Fish Shop";
@@ -609,6 +610,9 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
     if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
     if (!g.riding && g.horseLoc == here.name) items.push_back({g.horseY, 19, 0, 0});
+    if (here.name == "Forest" && g.cartHere()) items.push_back({14.0f * TILE, 22, 0, 0});
+    if (here.name == "Beach" && g.mailReceived.count("beachBridgeFixed")) items.push_back({13.0f * TILE - 2, 23, 0, 0});
+    if (here.name == "FarmHouse" && g.cellarX >= 0) items.push_back({g.cellarY * (float)TILE, 24, 0, 0});
     if (here.name == "FarmHouse")
         for (size_t i = 0; i < g.kids.size(); i++) items.push_back({g.kids[i].y + (g.kidStage(g.kids[i]) <= 1 ? 40.0f : g.kids[i].state == 2 ? 70.0f : 0.0f), 21, (int)i, 0});
     for (size_t i = 0; i < g.pets.size(); i++)
@@ -950,6 +954,31 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     const ObjectDef* fo = g.data.object(d->fruit);
                     for (int k = 0; k < t.fruit && k < 3; k++) itemIcon(c, fo, tx + fx[k], ty + fy[k]);
                 }
+                break;
+            }
+            case 22: {   // the travelling cart (LooseSprites/Cursors) with its pig
+                float cx = 24 * TILE - camX, cy = 10 * TILE - camY;
+                if (c.texWidth("LooseSprites_Cursors") > 0) {
+                    c.image("LooseSprites_Cursors", 142, 1382, 109, 70, std::floor(cx), std::floor(cy));
+                } else c.rect(cx, cy + 20, 109, 50, RGBA(0x8A, 0x4A, 0x9A));
+                break;
+            }
+            case 23:   // the mended beach bridge
+                for (int bx = 58; bx <= 61; bx++) {
+                    float x = bx * TILE - camX, y = 13 * TILE - camY;
+                    c.rect(x, y + 1, TILE, 14, RGBA(0x8A, 0x5A, 0x30));
+                    c.rect(x, y + 1, TILE, 2, RGBA(0xB0, 0x7A, 0x44));
+                    c.rect(x + 7, y + 1, 1, 14, RGBA(0x5A, 0x38, 0x1C));
+                    c.rect(x, y + 13, TILE, 2, RGBA(0x5A, 0x38, 0x1C));
+                }
+                break;
+            case 24: {   // the trapdoor down to the cellar
+                float x = g.cellarX * TILE - camX, y = g.cellarY * TILE - camY;
+                c.rect(x + 1, y + 2, 14, 12, RGBA(0x5A, 0x38, 0x1C));
+                c.rect(x + 2, y + 3, 12, 10, RGBA(0x2A, 0x1A, 0x10));
+                c.rect(x + 2, y + 6, 12, 1, RGBA(0x5A, 0x38, 0x1C));
+                c.rect(x + 2, y + 9, 12, 1, RGBA(0x5A, 0x38, 0x1C));
+                c.rect(x + 11, y + 7, 2, 2, RGBA(0xC8, 0xA0, 0x40));
                 break;
             }
             case 21: {   // a child: Baby sheet (22px frames: asleep, sitting up in the crib, crawling), then Toddler (16x32)
@@ -1540,7 +1569,7 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
     }
     c.text(16, iy + 19, 0.38f, COL_TEXT_SOFT, info);
 
-    const char* labels[3] = {"Trash", g.equipKind(sel) >= 0 ? "Wear" : "Eat", "Sleep"};
+    const char* labels[3] = {"Trash", g.equipKind(sel) >= 0 ? "Wear" : sel.type == SLOT_OBJECT && sel.id == 79 ? "Read" : "Eat", "Sleep"};
     for (int i = 0; i < 3; i++) {
         float bx = 10 + i * 68;
         box(c, bx, iy + 42, 64, 26, COL_PANEL_DARK, COL_BORDER);
@@ -2065,7 +2094,7 @@ static void drawShopExtra(Canvas& c, Game& g, Ui& ui) {
     char buf[96];
     if (ui.shop == "Carpenter" || ui.shop == "Wizard") {
         auto offers = buildOffers(g, ui.shop == "Wizard");
-        bool house = g.houseLevel < 2 && ui.shop == "Carpenter";   // the house upgrade sits on top of the list
+        bool house = g.houseLevel < 3 && ui.shop == "Carpenter";   // the house upgrade sits on top of the list
         int total = (int)offers.size() + (house ? 1 : 0);
         ui.shopScroll = std::max(0, std::min(ui.shopScroll, total - OFFER_ROWS));
         for (int r = 0; r < OFFER_ROWS; r++) {
@@ -2073,11 +2102,11 @@ static void drawShopExtra(Canvas& c, Game& g, Ui& ui) {
             float y = LIST_Y + r * OFFER_H;
             if (i == -1) {
                 box(c, 4, y, BOT_W - 8, OFFER_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
-                c.text(10, y + 1, 0.45f, COL_TEXT, g.houseLevel == 0 ? "House upgrade: kitchen" : "House upgrade: nursery");
+                c.text(10, y + 1, 0.45f, COL_TEXT, g.houseLevel == 0 ? "House upgrade: kitchen" : g.houseLevel == 1 ? "House upgrade: nursery" : "House upgrade: cellar");
                 bool ok = g.houseUpgradeDays == 0 && (g.houseLevel == 0 ? g.money >= 10000 && g.countItem(388) >= 450
-                                                                         : g.money >= 65000 && g.countItem(709) >= 100);
+                                                      : g.houseLevel == 1 ? g.money >= 65000 && g.countItem(709) >= 100 : g.money >= 100000);
                 c.text(10, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT,
-                       g.houseUpgradeDays > 0 ? "Robin is working on it" : g.houseLevel == 0 ? "10000g  450 Wood" : "65000g  100 Hardwood");
+                       g.houseUpgradeDays > 0 ? "Robin is working on it" : g.houseLevel == 0 ? "10000g  450 Wood" : g.houseLevel == 1 ? "65000g  100 Hardwood" : "100000g  (33 casks included)");
                 box(c, 252, y + 4, 58, 20, ok ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK, 1);
                 c.text(281, y + 6, 0.42f, COL_CREAM, "Build", ALIGN_CENTER);
                 continue;
@@ -2151,7 +2180,7 @@ static bool touchShopExtra(Game& g, Ui& ui, int tx, int ty) {
         int i = ui.shopScroll + r;
         if (ui.shop == "Carpenter" || ui.shop == "Wizard") {
             auto offers = buildOffers(g, ui.shop == "Wizard");
-            if (g.houseLevel < 2 && ui.shop == "Carpenter") {
+            if (g.houseLevel < 3 && ui.shop == "Carpenter") {
                 if (i == 0) { g.startHouseUpgrade(); return true; }
                 i--;
             }

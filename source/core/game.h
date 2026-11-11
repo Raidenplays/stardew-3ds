@@ -667,6 +667,18 @@ public:
     bool worldChoice(const std::string& what, const std::string& key);
     void worldMorning();
     bool ccDone() const;
+    // the travelling cart (Forest, Fridays and Sundays), the beach bridge, the cellar, secret notes, Joja
+    std::vector<ShopEntry> cartStock;
+    bool cartHere() const { return weekday() == 4 || weekday() == 6; }
+    void cartMorning();
+    void applyMapFixes();                    // things you've repaired, on the map you're on
+    void stockCellar();
+    bool caskInteract(Placed& p);
+    void casksAge();
+    void secretNoteChance(int skill);
+    bool readSecretNote(int slot);
+    void jojaDesk();
+    int cellarX = -1, cellarY = -1;          // the way down, in the farmhouse
     // ---- festivals (game_festival.cpp) ----
     std::vector<Festival> festivals;
     bool festivalsLoaded = false;

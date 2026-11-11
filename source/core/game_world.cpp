@@ -170,6 +170,17 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
         warpTo("BusStop", 22, 11, false);
         return true;
     }
+    if (verb == "BrokenBeachBridge") {
+        if (mailReceived.count("beachBridgeFixed")) return false;
+        if (countItem(388) < 300) { say("The bridge is out. 300 wood would fix it."); return true; }
+        takeItem(388, 300);
+        mailReceived.insert("beachBridgeFixed");
+        applyMapFixes();
+        sfx("axchop");
+        say("You mended the bridge! The tide pools are open.");
+        return true;
+    }
+    if (verb == "JoinJoja" || verb == "JojaCD") { jojaDesk(); return true; }
     if (verb == "Jukebox") { say("The jukebox hums. (Songs you've heard play around the valley.)"); return true; }
     if (verb == "ColaMachine") {
         if (money < 75) { say("Joja Cola: 75g."); return true; }
@@ -185,6 +196,31 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
 }
 
 bool Game::worldChoice(const std::string& what, const std::string& key) {
+    if (what == "joja") {
+        if (key == "joja:join") {
+            if (money < 5000) { say("Not enough money"); return true; }
+            money -= 5000;
+            mailReceived.insert("JojaMember");
+            sfx("purchase");
+            say("Welcome to the Joja family! Come back to this desk to develop the town.");
+        } else if (key.rfind("joja:", 0) == 0) {
+            std::string rest = key.substr(5);
+            size_t colon = rest.find(':');
+            int cost = atoi(rest.substr(colon + 1).c_str());
+            if (money < cost) { say("Not enough money"); return true; }
+            money -= cost;
+            mailReceived.insert(rest.substr(0, colon));
+            mailReceived.insert("joja" + rest.substr(2, colon - 2));
+            if (!mailReceived.count("ccBulletin")) {   // the last one finishes the job
+                bool all = true;
+                for (const char* r : {"ccPantry", "ccCraftsRoom", "ccFishTank", "ccBoilerRoom", "ccVault"}) all &= mailReceived.count(r) != 0;
+                if (all) mailReceived.insert("ccBulletin");
+            }
+            sfx("purchase");
+            say("Joja crews will have it done by morning.");
+        }
+        return true;
+    }
     if (what == "cart" && key.rfind("cart:", 0) == 0) {
         std::string s = key.substr(5);
         size_t a = s.find(':'), b = s.rfind(':');
@@ -264,6 +300,174 @@ void Game::grandpaEvaluation() {
     }
     say("Grandpa's shrine: " + std::to_string(candles) + (candles == 1 ? " candle is" : " candles are") + " lit (" +
         std::to_string(pts) + " points)." + (candles == 4 ? " He couldn't be prouder." : ""));
+}
+
+// ---- the travelling cart: ten things from anywhere, at three to five times their worth
+void Game::cartMorning() {
+    cartStock.clear();
+    if (!cartHere()) return;
+    std::vector<int> pool;
+    for (auto& kv : data.objects) {
+        const ObjectDef& o = kv.second;
+        if (o.price > 0 && o.category != 0 && o.category != -999 && o.id >= 16 && o.id < 790) pool.push_back(o.id);
+    }
+    std::sort(pool.begin(), pool.end());   // the same stock whatever order the table loaded in
+    for (int k = 0; k < 10 && !pool.empty(); k++) {
+        size_t at = rand32() % pool.size();
+        const ObjectDef* o = data.object(pool[at]);
+        int price = std::max(100 + (int)(rand32() % 10) * 100, o->price * (3 + (int)(rand32() % 3)));
+        cartStock.push_back({o->id, price});
+        pool.erase(pool.begin() + at);
+    }
+    if (data.object(347) && rand32() % 100 < 40) cartStock.push_back({347, 1000});   // sometimes a rare seed
+}
+
+// ---- repairs that change the map you're standing on
+void Game::applyMapFixes() {
+    if (!cur) return;
+    if (cur->name == "Beach" && mailReceived.count("beachBridgeFixed"))
+        for (int x = 58; x <= 61; x++) cur->map.setFlags(x, 13, 0);   // planks over the gap
+    if (cur->name == "FarmHouse") {
+        cellarX = cellarY = -1;
+        if (houseLevel >= 3 && hasMap("Cellar")) {   // the trapdoor: the first clear floor left of the front door
+            int dx, dy;
+            if (houseDoor(houseLevel, dx, dy))
+                for (int k = 2; k < 12 && cellarX < 0; k++)
+                    for (int up = 2; up < 6 && cellarX < 0; up++)
+                        if (!tileSolid(dx - k, dy - up) && cur->map.tile(L_BACK, dx - k, dy - up) != NO_TILE && !cur->map.warpAt(dx - k, dy - up)) {
+                            bool taken = false;
+                            for (auto& fp : furniture)
+                                if (fp.map == "FarmHouse") {
+                                    auto fd = data.furniture.find(fp.id);
+                                    int fw = fd != data.furniture.end() ? fd->second.boxW : 1, fh = fd != data.furniture.end() ? fd->second.boxH : 1;
+                                    taken |= dx - k >= fp.x && dx - k < fp.x + fw && dy - up >= fp.y && dy - up < fp.y + fh;
+                                }
+                            if (!taken) { cellarX = dx - k; cellarY = dy - up; }
+                        }
+        }
+    }
+}
+
+// ---- the cellar comes with its casks
+void Game::stockCellar() {
+    if (!hasMap("Cellar") || !data.big(163)) return;
+    Location* c = loadLocation("Cellar");
+    if (!c) return;
+    auto& list = placed["Cellar"];
+    int n = 0;
+    for (auto& p : list) n += p.big && p.id == 163;
+    const TileMap& m = c->map;
+    for (int y = 2; y < m.height() - 1 && n < 33; y += 2)
+        for (int x = 1; x < m.width() - 1 && n < 33; x++) {
+            if (m.tile(L_BACK, x, y) == NO_TILE || m.tile(L_BUILDINGS, x, y) != NO_TILE || (m.flags(x, y) & CF_BLOCKED) || m.warpAt(x, y)) continue;
+            if (x % 6 == 0) continue;   // aisles to walk down
+            bool taken = false;
+            for (auto& p : list) taken |= p.x == x && p.y == y;
+            if (taken) continue;
+            Placed p;
+            p.x = x; p.y = y; p.big = true; p.id = 163;
+            list.push_back(p);
+            n++;
+        }
+}
+
+// Days in the cask to reach iridium (the wiki's figures); 0 = it doesn't age.
+static int caskDays(int item) {
+    switch (item) {
+        case 348: return 56;   // wine
+        case 303: return 34;   // pale ale
+        case 346: return 28;   // beer
+        case 459: return 28;   // mead
+        case 424: return 14;   // cheese
+        case 426: return 14;   // goat cheese
+        default: return 0;
+    }
+}
+
+bool Game::caskInteract(Placed& p) {
+    if (!p.held.empty()) {             // take it out, as good as it's got
+        Slot out = p.held;
+        if (!addSlot(out)) return true;
+        static const char* q[5] = {"", "silver ", "gold ", "", "iridium "};
+        say(std::string("Took the ") + q[std::min(4, (int)out.quality)] + itemName(out) + " out of the cask.");
+        p.held = Slot();
+        p.input = -1;
+        return true;
+    }
+    Slot& sl = inv[selected];
+    if (sl.type != SLOT_OBJECT || !caskDays(sl.id)) { say("Casks age wine, beer, pale ale, mead and cheese."); return true; }
+    if (!cur || cur->name != "Cellar") { say("Casks only work down in the cellar."); return true; }
+    if (sl.quality >= 4) { say("That's already as good as it gets."); return true; }
+    p.held = sl;
+    p.held.count = 1;
+    p.input = 0;                        // days aged
+    p.rule = -1;
+    if (--sl.count <= 0) sl = Slot();
+    sfx("Ship");
+    say("Left it to age. " + std::to_string(caskDays(p.held.id)) + " days to iridium.");
+    return true;
+}
+
+void Game::casksAge() {
+    for (auto& kv : placed)
+        for (auto& p : kv.second) {
+            if (!p.big || p.id != 163 || p.held.empty() || kv.first != "Cellar") continue;
+            int total = caskDays(p.held.id);
+            if (!total) continue;
+            p.input = std::max(0, p.input) + 1;
+            int q = p.input * 4 >= total * 4 ? 4 : p.input * 2 >= total ? 2 : p.input * 4 >= total ? 1 : 0;
+            if (q > p.held.quality) p.held.quality = (uint8_t)q;
+        }
+}
+
+// ---- secret notes: once you can find them, a small chance whenever you earn farming, foraging or mining experience
+void Game::secretNoteChance(int skill) {
+    if (skill == SK_FISHING || skill == SK_COMBAT || !data.object(79)) return;
+    if (!eventsSeen.count("520702") && !(year > 1 || season == WINTER)) return;   // the magnifying glass
+    if (rand32() % 1000 >= 12) return;
+    if (addItem(79, 1)) say("You found a secret note!");
+}
+
+bool Game::readSecretNote(int slot) {
+    std::vector<int> unread;
+    for (int n = 1; n <= 40; n++)
+        if (mapString("secret:" + std::to_string(n)) && !mailReceived.count("secretNote:" + std::to_string(n))) unread.push_back(n);
+    if (unread.empty()) { say("You've read every secret there is."); return false; }
+    int n = unread[rand32() % unread.size()];
+    mailReceived.insert("secretNote:" + std::to_string(n));
+    std::string text = *mapString("secret:" + std::to_string(n));
+    for (size_t at; (at = text.find('^')) != std::string::npos;) text.replace(at, 1, " ");
+    showMessage("Secret Note " + std::to_string(n) + ":#$b#" + text);
+    if (--inv[slot].count <= 0) inv[slot] = Slot();
+    return true;
+}
+
+// ---- Joja: a membership, then Morris sells the town's repairs one by one
+void Game::jojaDesk() {
+    if (ccDone() && !mailReceived.count("JojaMember")) { say("Morris has nothing to say to you."); return; }
+    DialoguePage p;
+    DialogueChoice c;
+    if (!mailReceived.count("JojaMember")) {
+        p.text = "Morris: A Joja membership is 5,000g. The old Community Center becomes a warehouse, and Joja develops the town for you.";
+        c.label = "Join (5,000g)"; c.responseKey = "joja:join"; p.choices.push_back(c);
+    } else {
+        struct { const char* flag; const char* name; int cost; } dev[] = {
+            {"ccVault", "Bus", 40000}, {"ccBoilerRoom", "Minecarts", 15000}, {"ccCraftsRoom", "Bridge", 25000},
+            {"ccPantry", "Greenhouse", 35000}, {"ccFishTank", "Panning", 20000}};
+        p.text = "Morris: The Joja Community Development Form. What shall we build?";
+        for (auto& d : dev)
+            if (!mailReceived.count(d.flag)) {
+                c.label = std::string(d.name) + " (" + std::to_string(d.cost) + "g)";
+                c.responseKey = std::string("joja:") + d.flag + ":" + std::to_string(d.cost);
+                p.choices.push_back(c);
+            }
+        if (p.choices.empty()) { say("Morris: Joja has developed everything. Thank you for your business!"); return; }
+    }
+    c.label = "Not today"; c.responseKey = ""; p.choices.push_back(c);
+    dialogue = DialogueBox();
+    dialogue.active = true;
+    dialogue.pages.push_back(p);
+    pendingChoice = "joja";
 }
 
 } // namespace sv

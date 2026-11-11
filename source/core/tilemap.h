@@ -54,6 +54,7 @@ public:
     uint16_t tile(int layer, int x, int y) const { return tiles[layer][y * w + x]; }
     uint8_t tileset(int layer, int x, int y) const { return tsIdx[layer][y * w + x]; }
     uint8_t flags(int x, int y) const { return inBounds(x, y) ? cellFlags[y * w + x] : (uint8_t)CF_BLOCKED; }
+    void setFlags(int x, int y, uint8_t f) { if (inBounds(x, y)) cellFlags[y * w + x] = f; }
 
     // Tile index to draw right now (resolves animations).
     uint16_t animatedTile(int ts, uint16_t t, uint32_t timeMs) const;
