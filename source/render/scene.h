@@ -54,6 +54,9 @@ extern float g_profMs[PROF_COUNT];
 extern double (*g_profClock)();   // milliseconds
 void drawBottom(Canvas& c, sv::Game& g, Ui& ui);
 void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath);
+// Options that stay set between launches (settings.txt next to the save)
+void loadUiSettings(Ui& ui, const std::string& path);
+void saveUiSettings(const Ui& ui, const std::string& path);
 void dialogueAdvance(sv::Game& g, Ui& ui);
 void summaryAdvance(sv::Game& g, Ui& ui);    // A / tap on the morning screens (level-ups first)
 void summaryMove(sv::Game& g, Ui& ui, int dir);   // left/right between profession cards
