@@ -291,6 +291,10 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
     houseLevel = houseUpgradeDays = 0;
+    spouse.clear();
+    engagedTo.clear();
+    dating.clear();
+    weddingDay = -1;
     bundleDefs.clear();
     bundleGiven.clear();
     bundleView = -1;
@@ -1235,6 +1239,13 @@ bool Game::goToBed() {
     bool newSeason = season != oldSeason;
     if (newSeason) refreshSeasonMaps();
 
+    if (!engagedTo.empty() && weddingDay >= 0 && absoluteDay() >= weddingDay) {   // the wedding day
+        spouse = engagedTo;
+        dating.erase(spouse);
+        engagedTo.clear();
+        weddingDay = -1;
+        say("You married " + spouse + "! They've moved into your house.");
+    }
     if (houseUpgradeDays > 0 && --houseUpgradeDays == 0) {
         houseLevel++;
         locations.erase("FarmHouse");   // the bigger house loads next time
@@ -1279,7 +1290,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 19;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 20;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1296,6 +1307,7 @@ static const uint32_t SAVE_VERSION = 19;   // 2: villager friendships, 3: events
                                           // 17: Community Center bundles
                                           // 18: item quality
                                           // 19: house upgrades
+                                          // 20: dating, engagement, marriage
 
 namespace {
 struct W {
@@ -1472,6 +1484,11 @@ bool Game::save(const std::string& path) const {
     }
     w.i32(houseLevel);
     w.i32(houseUpgradeDays);
+    w.str(spouse);
+    w.str(engagedTo);
+    w.i32(weddingDay);
+    w.u32((uint32_t)dating.size());
+    for (auto& d : dating) w.str(d);
     // item quality: inventory, shipped, then each chest / machine in order
     for (auto& s : inv) w.u8(s.quality);
     w.u32((uint32_t)shipped.size());
@@ -1799,6 +1816,17 @@ bool Game::load(const std::string& path, std::string* err) {
         houseLevel = r.i32();
         houseUpgradeDays = r.i32();
         locations.erase("FarmHouse");
+    }
+    spouse.clear();
+    engagedTo.clear();
+    weddingDay = -1;
+    dating.clear();
+    if (version >= 20 && r.ok) {
+        spouse = r.str();
+        engagedTo = r.str();
+        weddingDay = r.i32();
+        uint32_t nd = r.u32();
+        for (uint32_t k = 0; k < nd && r.ok && k < 100; k++) dating.insert(r.str());
     }
     if (version >= 18 && r.ok) {
         for (auto& s : inv) s.quality = r.u8();

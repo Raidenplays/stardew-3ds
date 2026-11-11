@@ -281,6 +281,11 @@ public:
     std::vector<ToolDef> tools;
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
     std::vector<NpcDef> npcs;
+    std::vector<std::string> romance;   // who can be dated and married (Data/Characters CanBeRomanced)
+    bool romanceable(const std::string& n) const {
+        for (auto& r : romance) if (r == n) return true;
+        return false;
+    }
     std::unordered_map<std::string, NpcAnim> npcAnims;
     std::unordered_map<std::string, MonsterDef> monsters;
     std::vector<BuildingType> buildingTypes;

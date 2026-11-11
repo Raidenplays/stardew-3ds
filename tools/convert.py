@@ -1573,6 +1573,17 @@ def write_npcs(content, out_dir, textures):
     rainy_path = os.path.join(content, "Characters", "Dialogue", "rainy.json")
     rainy = json.load(open(rainy_path, encoding="utf-8-sig")) if os.path.isfile(rainy_path) else {}
     n_sched = n_dia = n_spr = 0
+    # who can be dated and married (Data/Characters CanBeRomanced)
+    romance = set()
+    try:
+        for cname, cd in _load_json(content, "Data/Characters.json").items():
+            if isinstance(cd, dict) and cd.get("CanBeRomanced"):
+                romance.add(cname)
+    except Exception:
+        pass
+    with open(os.path.join(out_dir, "romance.dat"), "w", encoding="utf-8") as f:
+        for r in sorted(romance):
+            f.write(r + "\n")
     with open(os.path.join(out_dir, "npcs.dat"), "w", encoding="utf-8") as f:
         for name, d in sorted(defs.items()):
             parts = str(tastes.get(name, "")).split("/")
@@ -1597,6 +1608,13 @@ def write_npcs(content, out_dir, textures):
                 lines = json.load(open(dp, encoding="utf-8-sig"))
             if name in rainy:
                 lines["__rain"] = rainy[name]
+            # married life: the shared lines, then this spouse's own (prefixed "marriage:")
+            if name in romance:
+                for mp in (os.path.join(content, "Characters", "Dialogue", "MarriageDialogue.json"),
+                           os.path.join(content, "Characters", "Dialogue", "MarriageDialogue" + name + ".json")):
+                    if os.path.isfile(mp):
+                        for mk, mv in json.load(open(mp, encoding="utf-8-sig")).items():
+                            lines["marriage:" + mk] = mv
             if lines:
                 with open(os.path.join(out_dir, "dialogue", name + ".dat"), "w", encoding="utf-8") as g:
                     for k, v in lines.items():

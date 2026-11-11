@@ -455,6 +455,9 @@ bool GameData::load(const std::string& root, std::string* err) {
             buildingTypes.push_back(b);
         }
     lines.clear();
+    if (readLines(root + "data/romance.dat", lines))
+        for (auto& l : lines) if (!l.empty()) romance.push_back(l);
+    lines.clear();
     if (readLines(root + "data/bundles.dat", lines))
         for (auto& l : lines) {
             size_t t = l.find('\t');
