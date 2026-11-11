@@ -28,6 +28,7 @@ jobs:
           /tmp/audio_test /tmp/xact
       - name: Game rules
         run: |
+          pip install pillow numpy
           python3 tests/make_fake_content.py /tmp/fake
           python3 tools/convert.py "/tmp/fake/Content (unpacked)" /tmp/fakeout
           g++ -std=c++17 -O2 -Isource -Isource/core tests/craft_test.cpp source/core/*.cpp -o /tmp/craft_test
