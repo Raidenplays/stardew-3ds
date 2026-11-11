@@ -14,6 +14,7 @@
 #include "render/modscreen.h"
 #include "render/title.h"
 #include "render/setupscreen.h"
+#include "render/story.h"
 #include "setup/setup.h"
 #include "render/scene.h"
 
@@ -82,7 +83,8 @@ int main(int argc, char** argv) {
     bool fishDemo = false;
     bool mailDemo = false;
     bool titleDemo = false;   // title screen + character creation
-    bool setupDemo = false;   // first-launch setup screens (runs the real converter on <sd root>)
+    bool setupDemo = false;
+    bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
     int introFps = 10; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
@@ -98,6 +100,7 @@ int main(int argc, char** argv) {
         else if (a == "--intro-frames") introFrames = true;
         else if (a.rfind("--intro-frames=", 0) == 0) { introFrames = true; introFps = atoi(a.c_str() + 15); }
         else if (a == "--setup") setupDemo = true;
+        else if (a == "--story") storyDemo = true;
         else font = a;
     }
 
@@ -178,6 +181,34 @@ int main(int argc, char** argv) {
     Ui ui;
     sceneAfterUpdate(g, ui, g_save);
     Input none;
+
+    if (storyDemo) {
+        StoryUi st;
+        g.me.name = "Raiden";
+        g.me.farm = "Truro";
+        storyInit(st, data, g);
+        int n = 0;
+        float sinceA = 0;
+        while (!st.done && n < 4000) {
+            storyTick(st, 0.1f);
+            if (st.part == 5) { sinceA += 0.1f; if (sinceA > 4) { storyA(st); sinceA = 0; } }
+            c.resize(400, 480);
+            c.rect(0, 0, 400, 480, RGBA(0x18, 0x18, 0x1C));
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 240);
+            drawStoryTop(c, g, st);
+            c.setOrigin(40, 240);
+            c.setClip(40, 240, 320, 240);
+            drawStoryBottom(c, g, st);
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 480);
+            char path[512];
+            snprintf(path, sizeof path, "%s/s%04d.png", g_out.c_str(), n++);
+            c.writePng(path, 1);
+        }
+        printf("  %d frames\n", n);
+        return 0;
+    }
 
     if (introFrames) {
         TitleUi t;

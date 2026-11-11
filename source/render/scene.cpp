@@ -431,7 +431,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 }
                 if (a.emoteT > 0 && a.emote >= 0) {
                     int ef = a.emote + ((int)((1.0f - a.emoteT) * 8) & 3);
-                    c.image("LooseSprites_emotes", (ef % 4) * 16, (ef / 4) * 16, 16, 16, std::floor(ax - 8),
+                    c.image("TileSheets_emotes", (ef % 4) * 16, (ef / 4) * 16, 16, 16, std::floor(ax - 8),
                             std::floor(ay - 50));
                 }
                 if (a.bubbleT > 0 && !a.bubble.empty()) {

@@ -73,7 +73,11 @@ EXTRA_TEXTURES = [
     ("Buildings/houses", False),
     ("Buildings/Shipping Bin", False),
     ("LooseSprites/Cursors", False),
-    ("LooseSprites/emotes", False),
+    ("TileSheets/emotes", False),
+    ("Minigames/jojacorps", False),
+    ("Minigames/Intro", False),
+    ("LooseSprites/Fence1", False),
+    ("TerrainFeatures/tree1_spring", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
     ("Minigames/TitleButtons", False),
@@ -597,6 +601,7 @@ def write_data(content, out_dir):
     write_shops(content, out_dir, season_bits)
     write_location_names(content, out_dir)
     write_music(content, out_dir)
+    write_story(content, out_dir)
     write_spawns(content, out_dir, MODS_DIR[0])
     farmer_bob(content, out_dir)
     write_furniture(content, out_dir)
@@ -873,6 +878,21 @@ def write_mod_audio(content, out_root, mods_dir):
     with open(os.path.join(out_root, "data", "audio.dat"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + ("\n" if lines else ""))
     print(f"  audio.dat: {len(lines)} mod tracks" + (f" ({missing} files not found)" if missing else ""))
+
+
+def write_story(content, out_dir):
+    """Grandpa's story text (Strings/StringsFromCSFiles GrandpaStory.*) -> data/story.dat"""
+    p = os.path.join(content, "Strings", "StringsFromCSFiles.json")
+    if not os.path.isfile(p):
+        return
+    try:
+        d = json.load(open(p, encoding="utf-8-sig"))
+    except ValueError:
+        return
+    lines = [f"{k}\t{_clean(str(v))}" for k, v in d.items() if k.startswith("GrandpaStory.")]
+    with open(os.path.join(out_dir, "story.dat"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"  story.dat: {len(lines)} lines")
 
 
 def write_trees(content, out_dir):

@@ -12,6 +12,7 @@
 #include "render/modscreen.h"
 #include "render/scene.h"
 #include "render/setupscreen.h"
+#include "render/story.h"
 #include "setup/setup.h"
 #include "audio/audio.h"
 #include "core/music.h"
@@ -253,7 +254,36 @@ int main() {
         }
         canvas.dropTextures();
     }
-    if (ok && newFarm) game.startOpening();   // the arrival cutscenes
+    if (ok && newFarm) {
+        // Grandpa's story, the Joja office and the bus ride (START skips)
+        StoryUi story;
+        storyInit(story, data, game);
+        loadUiFonts(canvas, [&data](const std::string& rel) { return data.vfs.path(rel); });
+        u64 sLast = osGetTime();
+        sound.music("");
+        while (aptMainLoop() && !story.done) {
+            hidScanInput();
+            u64 sNow = osGetTime();
+            float sdt = std::min(0.1f, (sNow - sLast) / 1000.0f);
+            sLast = sNow;
+            u32 k = hidKeysDown();
+            if (k & (KEY_A | KEY_TOUCH)) storyA(story);
+            if (k & KEY_START) storySkip(story);
+            storyTick(story, sdt);
+            sound.update(sdt);
+            C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+            canvas.beginFrame();
+            C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
+            C2D_SceneBegin(top);
+            drawStoryTop(canvas, game, story);
+            C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 0xFF));
+            C2D_SceneBegin(bot);
+            drawStoryBottom(canvas, game, story);
+            C3D_FrameEnd(0);
+        }
+        canvas.dropTextures();
+        game.startOpening();   // then Robin meets you at the bus stop
+    }
     if (!ok) {
         fatalScreen(canvas, top,
                     "Couldn't load game files: " + err +
