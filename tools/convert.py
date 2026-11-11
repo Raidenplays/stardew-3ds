@@ -625,6 +625,24 @@ def write_data(content, out_dir):
             ]) + "\n")
             n += 1
     print(f"  objects.dat: {n} objects")
+    # what's inside each geode (Clint cracks them): geode id, then possible item ids
+    with open(os.path.join(out_dir, "geodes.dat"), "w", encoding="utf-8") as f:
+        for oid, o in objs.items():
+            drops = o.get("GeodeDrops") or []
+            if not drops and not o.get("GeodeDropsDefaultItems"):
+                continue
+            gid = ITEM_IDS.get(oid)
+            if gid is None:
+                continue
+            ids = []
+            for d in drops:
+                if d.get("Condition") or float(d.get("Chance", 1) or 0) < 0.5:
+                    continue
+                for it in (d.get("RandomItemId") or []) + ([d["ItemId"]] if d.get("ItemId") else []):
+                    v = ITEM_IDS.get(str(it).replace("(O)", ""))
+                    if v is not None and v >= 0:
+                        ids.append(str(v))
+            f.write(f"{gid}\t{1 if o.get('GeodeDropsDefaultItems') else 0}\t{' '.join(ids)}\n")
 
     write_shops(content, out_dir, season_bits)
     write_location_names(content, out_dir)

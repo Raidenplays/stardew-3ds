@@ -565,7 +565,8 @@ private:
     void monstersUpdate(float dt);
     void swingWeapon(const ToolDef& w);
     void hurtPlayer(int damage, float fromX, float fromY);
-    void openElevator();       // a new farm's debris from the map's markers
+    void openElevator();
+    bool crackGeode();          // Clint opens the geode you're holding (25g)       // a new farm's debris from the map's markers
     int clumpAt(int tx, int ty) const;
     bool shakeBush(int tx, int ty);      // index into cur->clumps covering the tile, or -1
     bool hitClump(int tx, int ty, ToolKind kind, int level);

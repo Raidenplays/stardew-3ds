@@ -409,6 +409,23 @@ bool GameData::load(const std::string& root, std::string* err) {
         }
     }
     lines.clear();
+    if (readLines(root + "data/geodes.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 3) continue;
+            GeodeDef g;
+            g.basics = atoi(f[1].c_str()) != 0;
+            const char* p = f[2].c_str();
+            while (*p) {
+                char* end;
+                long v = strtol(p, &end, 10);
+                if (end == p) break;
+                if (v > 0) g.items.push_back((int)v);
+                p = end;
+            }
+            geodes[atoi(f[0].c_str())] = g;
+        }
+    lines.clear();
     if (readLines(root + "data/monsters.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);

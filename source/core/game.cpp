@@ -234,6 +234,7 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
     if (verb == "OpenShop") {
         std::string id;
         ss >> id;
+        if (id == "Blacksmith" && crackGeode()) return true;   // holding a geode: Clint opens it
         openShop = id.empty() ? "SeedShop" : id;
         if (openShop == "Blacksmith") collectUpgrade();
         return true;
