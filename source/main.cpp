@@ -337,7 +337,15 @@ int main() {
         hidScanInput();
         u32 kDown = hidKeysDown(), kHeld = hidKeysHeld();
         u64 now = osGetTime();
-        float dt = std::min(0.05f, (now - last) / 1000.0f);
+        // frame time from the CPU tick counter (the millisecond clock alone makes steps of 16/17ms and
+        // movement judders), smoothed a little so one slow frame doesn't lurch the camera
+        static u64 lastTick = svcGetSystemTick();
+        static float smoothDt = 1.0f / 60.0f;
+        u64 tickNow = svcGetSystemTick();
+        float rawDt = std::min(0.05f, (float)((double)(tickNow - lastTick) / (double)SYSCLOCK_ARM11));
+        lastTick = tickNow;
+        smoothDt += (rawDt - smoothDt) * 0.35f;
+        float dt = smoothDt;
         last = now;
 
         Input in;
