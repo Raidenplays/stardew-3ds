@@ -292,6 +292,9 @@ struct FarmBuilding {
     int daysLeft = 0;             // still under construction
     std::string upgradingTo;      // an upgrade under way
     std::vector<uint8_t> troughs; // hay in each trough inside (map order)
+    // fish ponds
+    int pondFish = -1, pondPop = 0, pondDays = 0;
+    int pondOut = -1, pondOutN = 0;   // produce waiting in the bucket
 };
 
 struct FarmAnimal {
@@ -618,6 +621,8 @@ public:
     bool animalInteract(int tx, int ty);
     bool hopperInteract(int tx, int ty);
     bool farmBuildingInteract(int tx, int ty);
+    bool pondInteract(FarmBuilding& b);
+    void pondsNight();
     std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
     int countItem(int id) const;
     bool applyImport(const std::string& path, std::string* summary);   // a PC save via tools/saveimport.py

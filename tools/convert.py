@@ -592,7 +592,7 @@ TEXTURES_FROM_DATA = set()
 
 # Robin's buildings that the engine handles: animal houses, sheds, silos, wells.
 BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed",
-             "Greenhouse", "Stable"}
+             "Greenhouse", "Stable", "Fish Pond"}
 
 
 def write_buildings_animals(content, out_dir):
@@ -1420,6 +1420,31 @@ def write_crafting(content, out_dir, objs):
     # machines: flatten rules into explicit input lists
     tags = {ITEM_IDS.get(k): _item_tags(k, o or {}) for k, o in objs.items()}
     tags.pop(None, None)
+
+    # fish ponds: for each fish, its pond rules (the first Data/FishPondData entry whose tags it has)
+    fpp = os.path.join(content, "Data", "FishPondData.json")
+    if os.path.isfile(fpp):
+        ponds = sorted(_load_json(content, "Data/FishPondData.json"), key=lambda e: -int(e.get("Precedence", 0) or 0))
+        with open(os.path.join(out_dir, "fishponds.dat"), "w", encoding="utf-8") as f:
+            for oid, o in objs.items():
+                if int((o or {}).get("Category", 0) or 0) != -4:
+                    continue
+                iid = ITEM_IDS.get(oid)
+                t = tags.get(iid, set())
+                for e in ponds:
+                    if all(str(rt).lower() in t for rt in e.get("RequiredTags") or []):
+                        items = []
+                        for pi in e.get("ProducedItems") or []:
+                            rid = str(pi.get("ItemId") or "").replace("(O)", "")
+                            pid = ITEM_IDS.get(rid)
+                            if pid is None or pi.get("Condition"):
+                                continue
+                            items.append(f"{int(pi.get('RequiredPopulation', 0) or 0)}:{float(pi.get('Chance', 1) or 1)}:{pid}:"
+                                         f"{max(1, int(pi.get('MinStack', 1) or 1))}:{max(1, int(pi.get('MaxStack', 1) or 1))}")
+                        mp = int(e.get("MaxPopulation", -1) or -1)
+                        f.write(f"{iid}\t{mp if mp > 0 else 10}\t{int(e.get('SpawnTime', -1) or -1)}\t"
+                                f"{float(e.get('BaseMinProduceChance', 0.15))}\t{float(e.get('BaseMaxProduceChance', 0.95))}\t{' '.join(items)}\n")
+                        break
 
     def matches(req_id, req_tags):
         if req_id:

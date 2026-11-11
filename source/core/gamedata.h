@@ -63,6 +63,14 @@ struct BuildingType {
     int hopperX = -1, hopperY = -1;                // feed hopper inside
 };
 
+// Data/FishPondData, resolved per fish by the converter
+struct FishPondDef {
+    int fish = 0, maxPop = 10, spawn = -1;
+    float minChance = 0.15f, maxChance = 0.95f;
+    struct Out { int pop = 0; float chance = 1; int id = 0, mn = 1, mx = 1; };
+    std::vector<Out> items;
+};
+
 // Data/FruitTrees
 struct FruitTreeDef {
     int sapling = 0, fruit = 0;
@@ -306,6 +314,11 @@ public:
         auto it = objectIds.find(s);
         if (it != objectIds.end()) return it->second;
         return !s.empty() && (isdigit((unsigned char)s[0]) || s[0] == '-') ? atoi(s.c_str()) : -1;
+    }
+    std::vector<FishPondDef> fishPonds;
+    const FishPondDef* fishPond(int fish) const {
+        for (auto& f : fishPonds) if (f.fish == fish) return &f;
+        return nullptr;
     }
     const FruitTreeDef* fruitTreeForSapling(int id) const {
         for (auto& f : fruitTrees) if (f.sapling == id) return &f;
