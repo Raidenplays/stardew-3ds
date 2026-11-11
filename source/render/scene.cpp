@@ -516,6 +516,10 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         const Location::Bush& b = here.bushes[i];
         if (b.x >= x0 - 3 && b.x <= x1 && b.y >= y0 && b.y <= y1 + 3) items.push_back({(float)((b.y + 1) * TILE - 2), 11, (int)i, 0});
     }
+    for (size_t i = 0; i < here.clumps.size(); i++) {
+        const Location::Clump& b = here.clumps[i];
+        if (b.x >= x0 - 2 && b.x <= x1 && b.y >= y0 - 2 && b.y <= y1) items.push_back({(float)((b.y + 2) * TILE - 2), 12, (int)i, 0});
+    }
     const void* grassTex = c.texLookup("TerrainFeatures_grass");
     if (g.location().isFarm)
         for (size_t i = 0; i < g.data.layout.buildings.size(); i++) {
@@ -725,6 +729,14 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     float s = k & 1 ? sway : -sway;
                     c.imageTex(grassTex, "TerrainFeatures_grass", variant * 15, row, 15, 20, std::floor(tx + ox + s), ty + oy);
                 }
+                break;
+            }
+            case 12: {   // big stump / log / boulder: 32x32 on Maps/springobjects
+                const Location::Clump& b = here.clumps[it.a];
+                int idx = b.kind == 1 ? 602 : b.kind == 2 ? 672 : 600;
+                float wob = b.shake > 0 ? std::sin(b.shake * 70.0f) * 1.0f : 0.0f;
+                c.image("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 32, 32, std::floor(b.x * TILE - camX + wob),
+                        b.y * TILE - camY);
                 break;
             }
             case 11: {   // bushes from TileSheets/bushes: small 16x32, medium 32x32, large 48x48

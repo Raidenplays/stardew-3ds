@@ -23,6 +23,7 @@ static bool isPathsSheet(const std::string& tex) {
 // trees of type 1/2/3.
 void Game::treesFromMap(Location& loc) {
     loc.trees.clear();
+    loc.clumps.clear();
     const TileMap& m = loc.map;
     for (int y = 0; y < m.height(); y++)
         for (int x = 0; x < m.width(); x++) {
@@ -36,6 +37,15 @@ void Game::treesFromMap(Location& loc) {
                 b.y = (int16_t)y;
                 b.size = (uint8_t)(26 - t);
                 loc.bushes.push_back(b);
+                continue;
+            }
+            if (loc.isFarm && (t == 19 || t == 20 || t == 21)) {   // large log / boulder / stump (top-left)
+                Location::Clump cl;
+                cl.x = (int16_t)x;
+                cl.y = (int16_t)y;
+                cl.kind = t == 19 ? Location::CLUMP_LOG : t == 20 ? Location::CLUMP_BOULDER : Location::CLUMP_STUMP;
+                cl.health = 10;
+                loc.clumps.push_back(cl);
                 continue;
             }
             if (t == 22 || t == 36) {              // grass: 1-4 tufts
@@ -60,6 +70,52 @@ int Game::bushAt(int tx, int ty) const {
         if (ty == bs[i].y && tx >= bs[i].x && tx < bs[i].x + w) return (int)i;
     }
     return -1;
+}
+
+int Game::clumpAt(int tx, int ty) const {
+    const auto& cs = cur->clumps;
+    for (size_t i = 0; i < cs.size(); i++)
+        if (tx >= cs[i].x && tx < cs[i].x + 2 && ty >= cs[i].y && ty < cs[i].y + 2) return (int)i;
+    return -1;
+}
+
+// Sprite of a clump on Maps/springobjects (2x2 tiles).
+int clumpSprite(int kind) { return kind == 1 ? 602 : kind == 2 ? 672 : 600; }
+
+// An axe or pickaxe hitting a big stump, log or boulder. True if there was one.
+bool Game::hitClump(int tx, int ty, ToolKind kind, int level) {
+    int i = clumpAt(tx, ty);
+    if (i < 0) return false;
+    Location::Clump& cl = cur->clumps[i];
+    bool rock = cl.kind == Location::CLUMP_BOULDER;
+    int need = cl.kind == Location::CLUMP_STUMP ? 1 : 2;      // copper axe; steel axe / pickaxe
+    int idx = clumpSprite(cl.kind);
+    float cx = cl.x * TILE + 16.0f, cy = cl.y * TILE + 20.0f;
+    cl.shake = 0.3f;
+    if ((kind == TOOL_PICKAXE) != rock) {           // wrong tool: just a thunk
+        sfx(rock ? "clank" : "woodyHit");
+        return true;
+    }
+    if (level < need) {
+        sfx(rock ? "clank" : "axe");
+        static const char* tools[3] = {"", "a Copper Axe", "a Steel tool"};
+        say(std::string(rock ? "This boulder" : cl.kind == Location::CLUMP_LOG ? "This log" : "This stump") +
+            " needs " + (rock ? "a Steel Pickaxe" : tools[need]) + ".");
+        return true;
+    }
+    sfx(rock ? "hammer" : "axchop");
+    burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 32, 32, cx, cy, 5);
+    cl.health = (int8_t)(cl.health - (1 + level));
+    if (cl.health > 0) return true;
+    sfx(rock ? "boulderBreak" : "stumpCrack");
+    burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 32, 32, cx, cy, 14, 6);
+    int item = rock ? 390 : 709;                     // stone / hardwood
+    int n = rock ? 15 : cl.kind == Location::CLUMP_LOG ? 8 : 2;
+    if (addItem(item, n)) itemFlies(item, cx, cy, n);
+    questItem(item, n);
+    gainXp(rock ? SK_MINING : SK_FORAGING, rock ? 15 : 25);
+    cur->clumps.erase(cur->clumps.begin() + i);
+    return true;
 }
 
 int Game::grassAt(int tx, int ty) const {
@@ -99,7 +155,13 @@ void Game::growGrass() {
                 spread.push_back((int)i);
             }
         }
-    for (int i : spread) farm->grass[i] = 1;
+    for (int i : spread) {
+        int x = i % w, y = i / w;
+        bool under = false;
+        for (auto& c : farm->clumps)
+            if (x >= c.x && x < c.x + 2 && y >= c.y && y < c.y + 2) under = true;
+        if (!under) farm->grass[i] = 1;
+    }
 }
 
 Tree* Game::treeAt(int x, int y) {
