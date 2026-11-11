@@ -537,6 +537,7 @@ private:
     void treesGrow();
     bool chopTree(int tx, int ty, int axeLevel);
     int bushAt(int tx, int ty) const;        // index into location().bushes, or -1
+    bool debrisFromMap(uint32_t& r);       // a new farm's debris from the map's markers
     int clumpAt(int tx, int ty) const;      // index into cur->clumps covering the tile, or -1
     bool hitClump(int tx, int ty, ToolKind kind, int level);
     int grassAt(int tx, int ty) const;       // tufts on that tile (0 = none)
