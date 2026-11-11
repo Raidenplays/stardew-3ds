@@ -80,6 +80,7 @@ struct Location {
     std::string name;
     TileMap map;
     bool isFarm = false;
+    int mineLevel = 0;                 // UndergroundMine<n>: the floor number
     std::vector<Soil> soils;
     std::vector<uint8_t> debris, debrisVar;
     std::vector<WorldObject> objects;
@@ -503,6 +504,11 @@ public:
     void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
     int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
+    // The Mines
+    int mineDeepest = 0;                     // deepest floor reached
+    static int mineLevelOf(const std::string& name);   // "UndergroundMine12" -> 12, else 0
+    void enterMine(int level);               // 0 = back up to the entrance
+    std::string pendingChoice;               // a question the game asked ("elevator")
 private:
     void eventUpdate(float dt);
     bool eventStep(const std::string& cmd);   // false = wait before the next command
@@ -538,7 +544,11 @@ private:
     void treesGrow();
     bool chopTree(int tx, int ty, int axeLevel);
     int bushAt(int tx, int ty) const;        // index into location().bushes, or -1
-    bool debrisFromMap(uint32_t& r);       // a new farm's debris from the map's markers
+    bool debrisFromMap(uint32_t& r);
+    void mineGenerate(Location& loc);
+    bool mineInteract(int tx, int ty);
+    void mineRockBroken(int tx, int ty, int node);
+    void openElevator();       // a new farm's debris from the map's markers
     int clumpAt(int tx, int ty) const;
     bool shakeBush(int tx, int ty);      // index into cur->clumps covering the tile, or -1
     bool hitClump(int tx, int ty, ToolKind kind, int level);

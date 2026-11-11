@@ -333,6 +333,18 @@ void Game::dialogueChoose(int i) {
     DialoguePage& p = dialogue.pages[dialogue.page];
     if (i < 0 || i >= (int)p.choices.size()) return;
     DialogueChoice ch = p.choices[i];
+    if (!pendingChoice.empty()) {   // a question the game asked (the elevator)
+        std::string what = pendingChoice;
+        pendingChoice.clear();
+        p.choices.clear();
+        dialogueNext();
+        if (what == "elevator" && ch.responseKey.rfind("mine:", 0) == 0) {
+            int lv = atoi(ch.responseKey.c_str() + 5);
+            if (lv <= 0) { sfx("stairsdown"); warpTo("Mine", 17, 4, false); }
+            else enterMine(lv);
+        }
+        return;
+    }
     if (cutscene.active && cutscene.questionPending) {
         cutscene.forkFlag = (i == cutscene.forkWant);
         cutscene.questionPending = false;
