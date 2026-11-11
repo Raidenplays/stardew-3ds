@@ -2,6 +2,7 @@
 // visit; break rocks to find the ladder down. Every 5th floor has the elevator.
 #include "game.h"
 
+#include <cmath>
 #include <cstdlib>
 
 namespace sv {
@@ -76,6 +77,146 @@ void Game::mineGenerate(Location& loc) {
             }
             loc.objects.push_back(o);
         }
+    mineSpawnMonsters(loc);
+}
+
+// A few monsters per floor: slimes (green up top, frost jelly, red sludge deeper)
+// and bugs on the first section.
+void Game::mineSpawnMonsters(Location& loc) {
+    loc.monsters.clear();
+    int level = loc.mineLevel;
+    if (level % 5 == 0 || level >= 120) return;   // elevator / rest floors are quiet
+    const TileMap& m = loc.map;
+    int ux = -100, uy = -100;
+    for (int y = 0; y < m.height(); y++)
+        for (int x = 0; x < m.width(); x++)
+            if (m.tile(L_BUILDINGS, x, y) == LADDER_UP) { ux = x; uy = y; }
+    std::vector<std::pair<int, int>> open;
+    for (int y = 0; y < m.height(); y++)
+        for (int x = 0; x < m.width(); x++) {
+            if (m.tile(L_BACK, x, y) == NO_TILE || m.tile(L_BUILDINGS, x, y) != NO_TILE) continue;
+            if (m.tile(L_FRONT, x, y) != NO_TILE || (m.flags(x, y) & (CF_BLOCKED | CF_WATER))) continue;
+            if (std::abs(x - ux) + std::abs(y - uy) < 7) continue;   // not right where you come in
+            bool rock = false;
+            for (auto& o : loc.objects) if (o.x == x && o.y == y) { rock = true; break; }
+            if (!rock) open.push_back({x, y});
+        }
+    if (open.empty()) return;
+    int n = std::min(12, 2 + (int)open.size() / 60 + (level % 40) / 10);
+    for (int i = 0; i < n; i++) {
+        auto c = open[rand32() % open.size()];
+        Location::Monster mo;
+        bool bug = level < 40 && level > 1 && rand32() % 100 < 35;
+        mo.kind = bug ? "Bug" : level >= 80 ? "Sludge" : level >= 40 ? "Frost Jelly" : "Green Slime";
+        const MonsterDef* d = data.monster(mo.kind);
+        mo.hp = d ? d->health : 20;
+        mo.damage = d ? d->damage : 5;
+        mo.bug = bug;
+        mo.tint = mo.kind == "Sludge" ? 0xE0483CFFu : mo.kind == "Frost Jelly" ? 0x64C8FFFFu : 0x60E048FFu;
+        mo.x = c.first * TILE + 8.0f;
+        mo.y = c.second * TILE + 14.0f;
+        mo.think = (rand32() % 100) / 100.0f;
+        if (bug) {
+            static const float dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            int k = rand32() % 4;
+            mo.vx = dirs[k][0] * 40;
+            mo.vy = dirs[k][1] * 40;
+        }
+        loc.monsters.push_back(mo);
+    }
+}
+
+void Game::monstersUpdate(float dt) {
+    if (invuln > 0) invuln -= dt;
+    if (!cur || cur->monsters.empty() || cutscene.active || dialogue.active) return;
+    auto solidAt = [&](float x, float y) { return tileSolid((int)std::floor(x / TILE), (int)std::floor(y / TILE)); };
+    for (auto& mo : cur->monsters) {
+        mo.anim += dt;
+        if (mo.hurt > 0) mo.hurt -= dt;
+        float dx = px - mo.x, dy = py - mo.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (!mo.bug) {   // slimes hop at you when you're near
+            mo.think -= dt;
+            if (mo.think <= 0) {
+                if (dist < 8 * TILE && dist > 1) {
+                    const MonsterDef* d = data.monster(mo.kind);
+                    float sp = 22.0f + (d ? d->speed : 2) * 12.0f;
+                    mo.vx = dx / dist * sp;
+                    mo.vy = dy / dist * sp;
+                } else {
+                    float a = (rand32() % 628) / 100.0f;
+                    mo.vx = std::cos(a) * 15;
+                    mo.vy = std::sin(a) * 15;
+                }
+                mo.think = 0.9f + (rand32() % 60) / 100.0f;
+            } else if (mo.think < 0.4f) {
+                mo.vx *= 0.85f;   // settling between hops
+                mo.vy *= 0.85f;
+            }
+        }
+        float mx = (mo.vx + mo.kx) * dt, my = (mo.vy + mo.ky) * dt;
+        mo.kx *= std::pow(0.02f, dt);
+        mo.ky *= std::pow(0.02f, dt);
+        if (!solidAt(mo.x + mx + (mx > 0 ? 5 : -5), mo.y - 3)) mo.x += mx;
+        else { if (mo.bug) mo.vx = -mo.vx; mo.kx = 0; }
+        if (!solidAt(mo.x, mo.y + my + (my > 0 ? 1 : -6))) mo.y += my;
+        else { if (mo.bug) mo.vy = -mo.vy; mo.ky = 0; }
+        if (dist < 11 && invuln <= 0 && mo.hurt <= 0) hurtPlayer(mo.damage, mo.x, mo.y);
+    }
+}
+
+void Game::hurtPlayer(int damage, float fromX, float fromY) {
+    health -= std::max(1, damage);
+    invuln = 1.2f;
+    sfx("ow");
+    float dx = px - fromX, dy = py - fromY, d = std::sqrt(dx * dx + dy * dy);
+    if (d > 0.1f)
+        for (int k = 0; k < 12; k++) {   // shoved back, a little at a time so walls stop it
+            float nx = px + dx / d * 2, ny = py + dy / d * 2;
+            if (blockedPx(nx, ny)) break;
+            px = nx;
+            py = ny;
+        }
+    if (health <= 0) {
+        health = maxHealth / 2;
+        energy = std::max(energy, 20);
+        say("You were knocked out... and woke up at the mine entrance.");
+        enterMine(0);
+    }
+}
+
+void Game::swingWeapon(const ToolDef& w) {
+    sfx("swordswipe");
+    if (!cur) return;
+    static const int fx[4] = {0, 1, 0, -1}, fy[4] = {1, 0, -1, 0};
+    int f = facing & 3;
+    float hx = px + fx[f] * 14.0f, hy = py - 8 + fy[f] * 14.0f;
+    for (size_t i = 0; i < cur->monsters.size(); i++) {
+        Location::Monster& mo = cur->monsters[i];
+        float dx = mo.x - hx, dy = (mo.y - 8) - hy;
+        if (dx * dx + dy * dy > 20.0f * 20.0f || mo.hurt > 0.15f) continue;
+        int dmg = w.minDamage + (int)(rand32() % (uint32_t)std::max(1, w.maxDamage - w.minDamage + 1));
+        mo.hp -= std::max(1, dmg);
+        mo.hurt = 0.3f;
+        mo.kx = fx[f] * 160.0f;
+        mo.ky = fy[f] * 160.0f;
+        if (!mo.bug) mo.think = 0.6f;
+        sfx(mo.bug ? "hitEnemy" : "slimeHit");
+        if (mo.hp > 0) continue;
+        // defeated: a puff and its drops
+        const MonsterDef* d = data.monster(mo.kind);
+        sfx(mo.bug ? "monsterdead" : "slimedead");
+        if (mo.bug) burst("Characters_Monsters_Bug", 0, 0, 16, 16, mo.x, mo.y - 8, 8);
+        else burst("Characters_Monsters_Green_Slime", 0, 0, 16, 24, mo.x, mo.y - 10, 8);
+        if (d) {
+            for (auto& dr : d->drops)
+                if ((rand32() % 1000) / 1000.0f < dr.second && data.object(dr.first) && addItem(dr.first, 1))
+                    itemFlies(dr.first, mo.x, mo.y - 8);
+            gainXp(SK_COMBAT, d->xp);
+        }
+        cur->monsters.erase(cur->monsters.begin() + i);
+        i--;
+    }
 }
 
 void Game::enterMine(int level) {
@@ -96,11 +237,21 @@ void Game::enterMine(int level) {
             if (loc->map.tile(L_BUILDINGS, x, y) == LADDER_UP) { sx = x; sy = y + 1; }
     sfx("stairsdown");
     warpTo(name, sx, sy, false);
+    say("Floor " + std::to_string(level));
     if (level > mineDeepest) {
         mineDeepest = level;
         if (level % 5 == 0) say("Elevator unlocked: floor " + std::to_string(level));
     }
-    say("Floor " + std::to_string(level));
+    if (!eventsSeen.count("s3d_rustySword")) {   // Marlon's welcome: a sword the first time down
+        bool armed = false;
+        for (auto& sl : inv)
+            if (sl.type == SLOT_TOOL)
+                if (const ToolDef* t = data.tool(sl.id)) armed |= t->kind == TOOL_WEAPON;
+        if (armed || (data.toolByKey("Weapon_0") >= 0 && giveTool("Weapon_0"))) {
+            eventsSeen.insert("s3d_rustySword");
+            if (!armed) say("Marlon left you a Rusty Sword: there are monsters down here!");
+        }
+    }
 }
 
 void Game::openElevator() {

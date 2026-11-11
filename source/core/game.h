@@ -94,6 +94,17 @@ struct Location {
     struct Clump { int16_t x = 0, y = 0; uint8_t kind = 0; int8_t health = 0; float shake = 0; };
     enum { CLUMP_STUMP = 0, CLUMP_LOG = 1, CLUMP_BOULDER = 2 };
     std::vector<Clump> clumps;
+    struct Monster {
+        std::string kind;              // Data/Monsters name
+        float x = 0, y = 0;            // feet, map pixels
+        float vx = 0, vy = 0;          // own movement
+        float kx = 0, ky = 0;          // knockback
+        int hp = 1, damage = 1;
+        float hurt = 0, anim = 0, think = 0;
+        bool bug = false;              // flies straight, bounces off walls
+        uint32_t tint = 0;             // slimes are grey on the sheet
+    };
+    std::vector<Monster> monsters;
     std::vector<uint8_t> grass;        // per tile: tufts 0-4 (low bits), bit 3 = blue grass
     struct Rustle { int cell; float t; };
     std::vector<Rustle> rustles;       // grass swaying after you walk through it
@@ -506,6 +517,8 @@ public:
     int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
     // The Mines
     int mineDeepest = 0;                     // deepest floor reached
+    int health = 100, maxHealth = 100;       // knocked out at 0
+    float invuln = 0;                        // after a hit: a moment you can't be hurt again
     static int mineLevelOf(const std::string& name);   // "UndergroundMine12" -> 12, else 0
     void enterMine(int level);               // 0 = back up to the entrance
     std::string pendingChoice;               // a question the game asked ("elevator")
@@ -548,6 +561,10 @@ private:
     void mineGenerate(Location& loc);
     bool mineInteract(int tx, int ty);
     void mineRockBroken(int tx, int ty, int node);
+    void mineSpawnMonsters(Location& loc);
+    void monstersUpdate(float dt);
+    void swingWeapon(const ToolDef& w);
+    void hurtPlayer(int damage, float fromX, float fromY);
     void openElevator();       // a new farm's debris from the map's markers
     int clumpAt(int tx, int ty) const;
     bool shakeBush(int tx, int ty);      // index into cur->clumps covering the tile, or -1

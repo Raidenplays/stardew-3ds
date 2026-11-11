@@ -507,7 +507,30 @@ int main(int argc, char** argv) {
         g.enterMine(mineArg);
         step(g, ui, none, 30);
         shot(c, g, ui, "mine_" + std::to_string(mineArg));
-        printf("  floor %d: %zu rocks\n", mineArg, g.location().objects.size());
+        printf("  floor %d: %zu rocks, %zu monsters\n", mineArg, g.location().objects.size(), g.location().monsters.size());
+        {   // fight one: stand next to it, swing until it's gone
+            int sw = -1;
+            for (int i = 0; i < HOTBAR; i++)
+                if (g.inv[i].type == SLOT_TOOL && data.tool(g.inv[i].id)->kind == TOOL_WEAPON) sw = i;
+            printf("  sword in slot %d\n", sw);
+            if (sw >= 0 && !g.location().monsters.empty()) {
+                g.selectSlot(sw);
+                int before = (int)g.location().monsters.size();
+                for (int round = 0; round < 40 && (int)g.location().monsters.size() == before; round++) {
+                    const auto& mo = g.location().monsters.front();
+                    int mx = (int)(mo.x / 16), my = (int)(mo.y / 16);
+                    g.teleport(g.location().name, mx, my - 1);
+                    g.fade = 0;
+                    g.facing = FACE_DOWN;
+                    Input a; a.action = true;
+                    step(g, ui, a, 1);
+                    if (round == 0) shot(c, g, ui, "mine_fight");
+                    step(g, ui, none, 20);
+                }
+                printf("  monsters %d -> %zu, health %d\n", before, g.location().monsters.size(), g.health);
+                for (int i = 0; i < 36; i++) if (g.inv[i].type == SLOT_OBJECT) printf("    has %s x%d\n", g.itemName(g.inv[i]).c_str(), g.inv[i].count);
+            }
+        }
         int broken = 0;
         size_t pick = 0;
         while (pick < g.location().objects.size() && broken < 400) {
