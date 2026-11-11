@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <sstream>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -2518,6 +2519,123 @@ static void drawSummary(Canvas& c, Game& g) {
 }
 
 // --------------------------------------------------------------- entry points
+// ---------------------------------------------------------------- bundles
+static std::string bundleRewardText(const Game& g, const Bundle& b) {
+    std::istringstream rs(b.reward);
+    std::string kind, id;
+    int n = 1;
+    if (!(rs >> kind >> id)) return "";
+    rs >> n;
+    std::string name;
+    if (kind == "O") { const ObjectDef* o = g.data.object(g.data.objectIdFor(id)); name = o ? o->name : ""; }
+    else if (kind == "BO") { const BigDef* bd = g.data.big(atoi(id.c_str())); name = bd ? bd->name : ""; }
+    if (name.empty()) return "";
+    return (n > 1 ? std::to_string(n) + " " : "") + name;
+}
+// The Community Center's bundles: rooms -> a room's bundles -> one bundle's items.
+static const int BN_Y = 40, BN_H = 28;
+
+static void drawBundles(Canvas& c, Game& g) {
+    c.rect(0, 0, BOT_W, BOT_H, RGBA(0x2A, 0x3A, 0x22));
+    box(c, 4, 4, BOT_W - 8, 32, COL_PANEL, COL_BORDER);
+    box(c, BOT_W - 38, 7, 28, 26, COL_PANEL_DARK, COL_BORDER, 1);
+    if (g.bundleView == 0) c.text(BOT_W - 24, 10, 0.5f, COL_TEXT, "X", ALIGN_CENTER);
+    else c.text(BOT_W - 24, 13, 0.32f, COL_TEXT, "Back", ALIGN_CENTER);   // (the game font draws < as a heart)
+    char buf[96];
+    auto all = g.bundles();
+    if (g.bundleView == 0) {
+        c.text(10, 9, 0.52f, COL_TEXT, "Community Center");
+        auto rooms = Game::bundleRooms();
+        for (size_t i = 0; i < rooms.size(); i++) {
+            int n = 0, done = 0;
+            for (auto& b : all) if (b.room == rooms[i]) { n++; done += g.bundleDone(b); }
+            float y = BN_Y + i * BN_H;
+            bool fin = n > 0 && done == n;
+            box(c, 8, y, BOT_W - 16, BN_H - 3, fin ? RGBA(0x9C, 0xC8, 0x6A) : COL_SLOT, COL_SLOT_EDGE, 1);
+            c.text(16, y + 4, 0.48f, COL_TEXT, rooms[i]);
+            snprintf(buf, sizeof buf, fin ? "Restored!" : "%d / %d bundles", done, n);
+            c.text(BOT_W - 18, y + 5, 0.42f, COL_TEXT, buf, ALIGN_RIGHT);
+        }
+        if (all.empty()) c.text(160, 120, 0.45f, COL_CREAM, "No bundle data (re-run the converter).", ALIGN_CENTER);
+        return;
+    }
+    if (g.bundleView == 1) {
+        c.text(10, 9, 0.52f, COL_TEXT, g.bundleRoom);
+        int r = 0;
+        for (auto& b : all) {
+            if (b.room != g.bundleRoom) continue;
+            float y = BN_Y + r * BN_H;
+            bool fin = g.bundleDone(b);
+            box(c, 8, y, BOT_W - 16, BN_H - 3, fin ? RGBA(0x9C, 0xC8, 0x6A) : COL_SLOT, COL_SLOT_EDGE, 1);
+            c.text(16, y + 4, 0.46f, COL_TEXT, b.name + " Bundle");
+            snprintf(buf, sizeof buf, fin ? "Done" : "%d / %d", g.bundleGivenCount(b), b.needed);
+            c.text(BOT_W - 18, y + 5, 0.42f, COL_TEXT, buf, ALIGN_RIGHT);
+            r++;
+        }
+        return;
+    }
+    for (auto& b : all) {
+        if (b.index != g.bundleSel) continue;
+        c.text(10, 6, 0.48f, COL_TEXT, b.name + " Bundle");
+        snprintf(buf, sizeof buf, "%d of %d needed", g.bundleGivenCount(b), b.needed);
+        c.text(10, 21, 0.36f, COL_TEXT_SOFT, buf);
+        auto it = g.bundleGiven.find(b.index);
+        for (size_t i = 0; i < b.items.size() && i < 12; i++) {
+            const Bundle::Item& bi = b.items[i];
+            float x = 8 + (i % 2) * 154, y = BN_Y + (i / 2) * 32;
+            bool given = it != g.bundleGiven.end() && i < it->second.size() && it->second[i];
+            box(c, x, y, 150, 29, given ? RGBA(0x9C, 0xC8, 0x6A) : COL_SLOT, COL_SLOT_EDGE, 1);
+            const ObjectDef* o = bi.id >= 0 ? g.data.object(bi.id) : nullptr;
+            if (o) itemIcon(c, o, x + 4, y + 6);
+            std::string nm = bi.id == -1 ? std::to_string(bi.count) + "g" : o ? o->name : "Any (category)";
+            if (bi.count > 1 && bi.id != -1) nm += " x" + std::to_string(bi.count);
+            if (bi.quality > 0) nm += bi.quality >= 2 ? " (gold)" : " (silver)";
+            c.text(x + 24, y + 2, 0.36f, COL_TEXT, nm);
+            if (given) {
+                c.text(x + 24, y + 15, 0.36f, COL_GREEN_DARK, "Given");
+            } else {
+                int have = g.bundleHave(bi);
+                bool ok = have >= bi.count && !g.bundleDone(b);
+                snprintf(buf, sizeof buf, bi.id == -1 ? "you have %dg" : "have %d", have);
+                c.text(x + 24, y + 15, 0.34f, ok ? COL_GREEN : COL_TEXT_SOFT, buf);
+                box(c, x + 104, y + 6, 42, 18, ok ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK, 1);
+                c.text(x + 125, y + 7, 0.38f, COL_CREAM, "Give", ALIGN_CENTER);
+            }
+        }
+        if (bundleRewardText(g, b).size()) c.text(8, 220, 0.36f, COL_CREAM, "Reward: " + bundleRewardText(g, b));
+    }
+}
+
+static void touchBundles(Game& g, int tx, int ty) {
+    if (hit(tx, ty, BOT_W - 38, 7, 28, 26)) {   // close / back
+        g.bundleView = g.bundleView == 0 ? -1 : g.bundleView - 1;
+        return;
+    }
+    auto all = g.bundles();
+    if (g.bundleView == 0) {
+        auto rooms = Game::bundleRooms();
+        for (size_t i = 0; i < rooms.size(); i++)
+            if (hit(tx, ty, 8, BN_Y + i * BN_H, BOT_W - 16, BN_H - 3)) { g.bundleRoom = rooms[i]; g.bundleView = 1; return; }
+        return;
+    }
+    if (g.bundleView == 1) {
+        int r = 0;
+        for (auto& b : all) {
+            if (b.room != g.bundleRoom) continue;
+            if (hit(tx, ty, 8, BN_Y + r * BN_H, BOT_W - 16, BN_H - 3)) { g.bundleSel = b.index; g.bundleView = 2; return; }
+            r++;
+        }
+        return;
+    }
+    for (auto& b : all) {
+        if (b.index != g.bundleSel) continue;
+        for (size_t i = 0; i < b.items.size() && i < 12; i++) {
+            float x = 8 + (i % 2) * 154, y = BN_Y + (i / 2) * 32;
+            if (hit(tx, ty, x + 104, y + 6, 42, 18)) { g.bundleGive(b.index, (int)i); return; }
+        }
+    }
+}
+
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
     if (ui.showSummary) {
         if (!g.levelUps.empty()) drawLevelUp(c, g, ui);
@@ -2533,6 +2651,7 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
         return;
     }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
+    if (g.bundleView >= 0) { drawBundles(c, g); return; }
     if (g.fishingActive()) { drawFishing(c, g); return; }
     if (g.letterOpen) { drawLetter(c, g); return; }
     if (g.chestOpen) { drawChest(c, g); return; }
@@ -2555,6 +2674,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (g.dialogue.active) { touchDialogue(g, ui, tx, ty); return; }
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
+    if (g.bundleView >= 0) { touchBundles(g, tx, ty); return; }
     if (g.fishingActive()) return;   // handled by fishingTouch() as input
     if (g.letterOpen) { touchLetter(g, tx, ty); return; }
     if (g.chestOpen) { touchChest(g, tx, ty); return; }

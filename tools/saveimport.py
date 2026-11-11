@@ -291,8 +291,15 @@ def import_save(save_path, root):
                     out.append(["animalout", clean(txt(a, "type")), clean(txt(a, "name", "Friend")),
                                 num(a, "age"), num(a, "friendshipTowardFarmer"), clean(home)])
     # community center progress, kept for when bundles arrive
-    for k, v in dict_items(sg.find("netWorldState/Bundles") if sg.find("netWorldState") is not None else None):
-        extras.append(["bundle", k.text or "", " ".join("1" if (b.text or "").lower() == "true" else "0" for b in v.findall("boolean"))])
+    # the Community Center: this save's own bundles (remixed or not), and what's been given
+    for k, v in dict_items(sg.find("bundleData")):
+        if k.text and v.text:
+            out.append(["bundledef", clean(k.text), clean(v.text)])
+    nws = sg.find("netWorldState")
+    bundles_el = nws.find("Bundles") if nws is not None else None
+    for k, v in dict_items(bundles_el):
+        bits = "".join("1" if (b.text or "").lower() == "true" else "0" for b in v.findall("boolean"))
+        out.append(["bundle", k.text or "0", bits])
 
     dest = os.path.join(root, "import.txt")
     with open(dest, "w", encoding="utf-8") as f:

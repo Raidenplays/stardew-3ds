@@ -1,7 +1,9 @@
 // Game data loaded from the converted SD-card files (data/*.dat, layout.txt).
 // Pure C++ -- no 3DS dependencies, so it can be unit-tested on a PC.
 #pragma once
+#include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -282,6 +284,14 @@ public:
     std::unordered_map<std::string, MonsterDef> monsters;
     std::vector<BuildingType> buildingTypes;
     std::vector<FruitTreeDef> fruitTrees;
+    std::vector<std::pair<std::string, std::string>> bundles;   // Data/Bundles: "Pantry/0" -> raw definition
+    std::unordered_map<std::string, int> objectIds;             // the game's own item id -> ours
+    int objectIdFor(std::string s) const {                       // "24", "(O)24", "Mod.Item" -> id, or -1
+        if (s.rfind("(O)", 0) == 0) s = s.substr(3);
+        auto it = objectIds.find(s);
+        if (it != objectIds.end()) return it->second;
+        return !s.empty() && (isdigit((unsigned char)s[0]) || s[0] == '-') ? atoi(s.c_str()) : -1;
+    }
     const FruitTreeDef* fruitTreeForSapling(int id) const {
         for (auto& f : fruitTrees) if (f.sapling == id) return &f;
         return nullptr;

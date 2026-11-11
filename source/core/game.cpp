@@ -286,6 +286,9 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    bundleDefs.clear();
+    bundleGiven.clear();
+    bundleView = -1;
     buildings.clear();
     animals.clear();
     hay = 0;
@@ -762,7 +765,13 @@ bool Game::tryInteract(int tx, int ty) {
         goToBed();
         return true;
     }
-    return runMapAction(cur->map.action(tx, ty), false);
+    if (runMapAction(cur->map.action(tx, ty), false)) return true;
+    if (cur->name.rfind("CommunityCenter", 0) == 0) {   // the junimos' bundles
+        bundleView = 0;
+        sfx("bigSelect");
+        return true;
+    }
+    return false;
 }
 
 void Game::useSelected(int tx, int ty) {
@@ -1019,6 +1028,10 @@ void Game::update(float dt, const Input& in) {
         moving = false;   // the UI advances pages (it knows about long-page scrolling)
         return;
     }
+    if (bundleView >= 0) {           // looking at the bundles
+        moving = false;
+        return;
+    }
     if (!placing.empty()) {          // choosing where Robin builds
         moving = false;
         updatePlacing(in, dt);
@@ -1245,7 +1258,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 16;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 17;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1259,6 +1272,7 @@ static const uint32_t SAVE_VERSION = 16;   // 2: villager friendships, 3: events
                                           // 14: deepest mine floor
                                           // 15: farm buildings and animals
                                           // 16: fruit trees, soil inside buildings (greenhouse)
+                                          // 17: Community Center bundles
 
 namespace {
 struct W {
@@ -1425,6 +1439,14 @@ bool Game::save(const std::string& path) const {
     }
     w.u32((uint32_t)farm->fruitTrees.size());
     for (auto& t : farm->fruitTrees) { w.i32(t.x); w.i32(t.y); w.i32(t.sapling); w.i32(t.daysLeft); w.i32(t.fruit); }
+    w.u32((uint32_t)bundleDefs.size());
+    for (auto& kv : bundleDefs) { w.str(kv.first); w.str(kv.second); }
+    w.u32((uint32_t)bundleGiven.size());
+    for (auto& kv : bundleGiven) {
+        w.i32(kv.first);
+        w.u32((uint32_t)kv.second.size());
+        for (uint8_t v : kv.second) w.u8(v);
+    }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1716,6 +1738,25 @@ bool Game::load(const std::string& path, std::string* err) {
             FruitTree t;
             t.x = r.i32(); t.y = r.i32(); t.sapling = r.i32(); t.daysLeft = r.i32(); t.fruit = r.i32();
             farm->fruitTrees.push_back(t);
+        }
+    }
+    bundleDefs.clear();
+    bundleGiven.clear();
+    bundleView = -1;
+    if (version >= 17 && r.ok) {
+        uint32_t nd = r.u32();
+        for (uint32_t k = 0; k < nd && r.ok && k < 1000; k++) {
+            std::string a = r.str();
+            std::string b = r.str();
+            bundleDefs.push_back({a, b});
+        }
+        uint32_t ng = r.u32();
+        for (uint32_t k = 0; k < ng && r.ok && k < 1000; k++) {
+            int idx = r.i32();
+            uint32_t n = r.u32();
+            std::vector<uint8_t> v;
+            for (uint32_t j = 0; j < n && r.ok && j < 64; j++) v.push_back(r.u8());
+            bundleGiven[idx] = v;
         }
     }
     for (auto& c : farm->clumps)     // nothing grows under them
