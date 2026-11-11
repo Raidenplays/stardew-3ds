@@ -7,3 +7,6 @@ fake/
 __pycache__/
 tools/preview/preview
 shots/
+tools/native/*.so
+tools/native/*.dll
+tools/native/*.dylib
