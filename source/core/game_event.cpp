@@ -610,6 +610,7 @@ bool Game::eventStep(const std::string& raw) {
             warpTo(loc, (int)(cs.camX / TILE), (int)(cs.camY / TILE));   // events stay active
             cs.location = loc;
             fade = 0;
+            cs.fadeTarget = 0;   // a "fade" before the move clears on arrival, like the game
         }
         return true;
     }
