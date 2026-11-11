@@ -115,6 +115,7 @@ void HostCanvas::blend(int x, int y, uint32_t c) {
     if (!a) return;
     uint32_t& d = fb[(size_t)y * W + x];
     if (a == 255) { d = c | 0xFF; return; }
+    if (inCache && (d & 0xFF) == 0) { d = c; return; }   // onto see-through cache: keep its alpha
     auto ch_ = [&](int sh) {
         uint32_t s = (c >> sh) & 0xFF, dd = (d >> sh) & 0xFF;
         return ((s * a + dd * (255 - a)) / 255) << sh;
@@ -256,4 +257,40 @@ bool HostCanvas::writePng(const std::string& path, int scale) const {
             out[i + 2] = (c >> 8) & 0xFF;
         }
     return stbi_write_png(path.c_str(), W * scale, H * scale, 3, out.data(), W * scale * 3) != 0;
+}
+
+void HostCanvas::cacheBegin() {
+    if (inCache) return;
+    const int S = CACHE_SIZE;
+    savedFb.swap(fb);
+    sW = W; sH = H; sox = ox; soy = oy; scx = cx; scy = cy; scw = cw; sch = ch;
+    fb.assign((size_t)S * S, 0);
+    W = H = S;
+    ox = oy = cx = cy = 0;
+    cw = ch = S;
+    inCache = true;
+}
+
+void HostCanvas::cacheEnd() {
+    if (!inCache) return;
+    cachePx.swap(fb);
+    fb.swap(savedFb);
+    W = sW; H = sH; ox = sox; oy = soy; cx = scx; cy = scy; cw = scw; ch = sch;
+    inCache = false;
+}
+
+void HostCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) {
+    draws++;
+    const int S = CACHE_SIZE;
+    if (cachePx.empty()) return;
+    int bx = (int)std::floor(dx), by = (int)std::floor(dy);
+    for (int y = 0; y < sh; y++) {
+        int ty = cacheFlipY ? sy + sh - 1 - y : sy + y;
+        if (ty < 0 || ty >= S) continue;
+        for (int x = 0; x < sw; x++) {
+            int tx = sx + x;
+            if (tx < 0 || tx >= S) continue;
+            blend(bx + x, by + y, cachePx[(size_t)ty * S + tx]);
+        }
+    }
 }

@@ -41,6 +41,10 @@ public:
     int texWidth(TexName tex) override;
     int texHeight(TexName tex) override;
     void dropTextures() override { cache.clear(); }
+    bool cacheSupported() override { return true; }
+    void cacheBegin() override;
+    void cacheEnd() override;
+    void cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) override;
 
     bool writePng(const std::string& path, int scale) const;
     int width() const { return W; }
@@ -56,4 +60,8 @@ private:
     std::map<std::string, HostTexture> cache;
     std::vector<unsigned char> font;
     int W = 0, H = 0, ox = 0, oy = 0, cx = 0, cy = 0, cw = 0, ch = 0;
+    // map cache: the screen state is parked while drawing into it
+    bool inCache = false;
+    std::vector<uint32_t> cachePx, savedFb;
+    int sW = 0, sH = 0, sox = 0, soy = 0, scx = 0, scy = 0, scw = 0, sch = 0;
 };

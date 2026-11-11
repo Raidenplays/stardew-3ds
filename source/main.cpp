@@ -406,8 +406,10 @@ int main() {
             canvas.eye = stereo ? (eye == 0 ? -slider : slider) * MAX_SHIFT : 0.0f;
             C2D_TargetClear(t, C2D_Color32(0, 0, 0, 0xFF));
             C2D_SceneBegin(t);
+            canvas.screen = t;
             drawTop(canvas, game, ui, timeMs);
         }
+        canvas.screen = nullptr;
         canvas.eye = 0;
         unsigned topDraws = canvas.draws;
         // The bottom screen mostly shows menus that don't move: redraw it when

@@ -15,6 +15,11 @@ public:
         (void)tex;
     }
     unsigned draws = 0;   // draw calls this frame (performance readout)
+    C3D_RenderTarget* screen = nullptr;   // the target being drawn now (set before drawTop)
+    bool cacheSupported() override;
+    void cacheBegin() override;
+    void cacheEnd() override;
+    void cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) override;
     explicit C2DCanvas(std::function<std::string(const std::string&)> resolve);
     ~C2DCanvas();
     void beginFrame();   // clears the text buffer; call once per frame
@@ -38,6 +43,9 @@ public:
 
 private:
     TexCache cache;
+    C3D_Tex cacheTex;
+    C3D_RenderTarget* cacheTarget = nullptr;
+    bool cacheTried = false, cacheFresh = false;
     C2D_TextBuf textBuf;
     // small memo of recent names: tile layers ask for the same sheets over and over
     static constexpr int RECENT = 8;

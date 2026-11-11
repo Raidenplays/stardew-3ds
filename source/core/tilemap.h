@@ -68,7 +68,16 @@ public:
     const std::string& prop(const std::string& key) const;
     // swap a tile, keeping the cell's tilesheet (DayTiles/NightTiles)
     void setTile(int layer, int x, int y, uint16_t index) {
-        if (inBounds(x, y) && layer >= 0 && layer < L_COUNT) tiles[layer][y * w + x] = index;
+        if (inBounds(x, y) && layer >= 0 && layer < L_COUNT && tiles[layer][y * w + x] != index) {
+            tiles[layer][y * w + x] = index;
+            rev++;
+        }
+    }
+    uint32_t rev = 0;   // bumps whenever a tile changes (cached drawings go stale)
+    bool isAnimated(int ts, uint16_t t) const {
+        if (ts < 0 || ts >= (int)tilesets.size()) return false;
+        const Tileset& s = tilesets[ts];
+        return t < s.animIndex.size() && s.animIndex[t] >= 0;
     }
     // apply "Layer x y index ..." (DayTiles / NightTiles)
     void applyTileSwaps(const std::string& list);

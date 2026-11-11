@@ -177,6 +177,14 @@ public:
     virtual int texWidth(TexName tex) = 0;   // 0 if missing
     virtual int texHeight(TexName tex) = 0;  // 0 if missing
     virtual void dropTextures() = 0;                    // free everything (map/season change)
+    // Map cache: a 512x512 offscreen image the still map layers are drawn into
+    // once, then shown as one picture instead of hundreds of tiles a frame.
+    static constexpr int CACHE_SIZE = 512;
+    bool cacheFlipY = false;        // show it upside down (in case the GPU stores it that way)
+    virtual bool cacheSupported() { return false; }
+    virtual void cacheBegin() {}    // draws go into the (cleared, see-through) cache...
+    virtual void cacheEnd() {}      // ...until this, back to the screen
+    virtual void cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) { (void)sx; (void)sy; (void)sw; (void)sh; (void)dx; (void)dy; }
 
     // Game fonts (set by loadUiFonts); backends use them when loaded.
     BitmapFont fontSmall, fontBold;

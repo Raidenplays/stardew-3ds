@@ -405,6 +405,7 @@ static void profEnd(int section) {   // time since the last mark goes to `sectio
 }
 
 static float g_camX = 0, g_camY = 0;   // the camera drawWorld used this frame
+static bool g_useMapCache = false;
 static void worldCamera(const Game&, float& x, float& y) { x = g_camX; y = g_camY; }
 
 static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
@@ -474,8 +475,75 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx + sh, d.dy);
     };
 
-    drawLayer(L_BACK, 0.0f);   // the whole world sits at one depth: objects split across
-                                  // layers (walls/roofs, trunks/leaves) must not come apart in 3D
+    // Map cache: Back + Buildings drawn once into an offscreen picture around the
+    // camera; each frame shows it as one image, plus the animated tiles live.
+    static struct { const TileMap* m = nullptr; std::string name; uint32_t rev = 0; int season = -1; int ox = 0, oy = 0; bool ok = false; } mc;
+    bool cached = g_useMapCache && c.cacheSupported();
+    if (!cached) mc.ok = false;
+    if (cached) {
+        const int CS = Canvas::CACHE_SIZE;
+        if (!mc.ok || mc.m != &m || mc.name != m.name || mc.rev != m.rev || mc.season != g.season || camX < mc.ox ||
+            camY < mc.oy || camX + TOP_W > mc.ox + CS || camY + TOP_H > mc.oy + CS) {
+            mc.m = &m;
+            mc.name = m.name;
+            mc.rev = m.rev;
+            mc.season = g.season;
+            mc.ox = (int)std::floor((camX - (CS - TOP_W) / 2) / TILE) * TILE;
+            mc.oy = (int)std::floor((camY - (CS - TOP_H) / 2) / TILE) * TILE;
+            mc.ok = true;
+            int cx0 = std::max(0, mc.ox / TILE), cy0 = std::max(0, mc.oy / TILE);
+            int cx1 = std::min(m.width() - 1, (mc.ox + CS) / TILE - 1), cy1 = std::min(m.height() - 1, (mc.oy + CS) / TILE - 1);
+            c.cacheBegin();
+            for (int layer : {L_BACK, L_BUILDINGS}) {
+                tileDraws.clear();
+                for (int y = cy0; y <= cy1; y++)
+                    for (int x = cx0; x <= cx1; x++) {
+                        uint16_t t = m.tile(layer, x, y);
+                        if (t == NO_TILE) continue;
+                        int ts = m.tileset(layer, x, y);
+                        int cols = tsCols[ts];
+                        if (cols <= 0 || m.isAnimated(ts, t)) continue;
+                        if (layer == L_BUILDINGS) {   // over a moving Back tile: drawn live with it
+                            uint16_t bt = m.tile(L_BACK, x, y);
+                            if (bt != NO_TILE && m.isAnimated(m.tileset(L_BACK, x, y), bt)) continue;
+                        }
+                        TileDraw d;
+                        d.sx = (uint16_t)((t % cols) * 16);
+                        d.sy = (uint16_t)((t / cols) * 16);
+                        d.ts = (uint8_t)ts;
+                        d.dx = (int16_t)(x * TILE - mc.ox);
+                        d.dy = (int16_t)(y * TILE - mc.oy);
+                        d.key = ((uint32_t)ts << 24) | ((uint32_t)(d.sy >> 8) << 12) | (uint32_t)(d.sx >> 8);
+                        tileDraws.push_back(d);
+                    }
+                std::sort(tileDraws.begin(), tileDraws.end(), [](const TileDraw& a, const TileDraw& b) { return a.key < b.key; });
+                for (const TileDraw& d : tileDraws) c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx, d.dy);
+            }
+            c.cacheEnd();
+        }
+        c.cacheDraw((int)camX - mc.ox, (int)camY - mc.oy, TOP_W, TOP_H, c.shift(0.0f), 0);
+        // the moving tiles (water...), and Buildings tiles sitting on moving Back tiles
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++) {
+                bool backMoves = false;
+                for (int layer : {L_BACK, L_BUILDINGS}) {
+                    uint16_t t = m.tile(layer, x, y);
+                    if (t == NO_TILE) continue;
+                    int ts = m.tileset(layer, x, y);
+                    int cols = tsCols[ts];
+                    if (cols <= 0) continue;
+                    bool moves = m.isAnimated(ts, t);
+                    if (layer == L_BACK) backMoves = moves;
+                    if (!moves && !(layer == L_BUILDINGS && backMoves)) continue;
+                    t = m.animatedTile(ts, t, timeMs);
+                    c.imageTex(tsHandle[ts], tsTex[ts], (t % cols) * 16, (t / cols) * 16, 16, 16, x * TILE - camX + c.shift(0.0f),
+                               y * TILE - camY);
+                }
+            }
+    } else {
+        drawLayer(L_BACK, 0.0f);   // the whole world sits at one depth: objects split across
+                                   // layers (walls/roofs, trunks/leaves) must not come apart in 3D
+    }
 
     // Tilled soil
     if (g.location().isFarm) {
@@ -499,7 +567,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
     }
 
-    drawLayer(L_BUILDINGS, 0.0f);
+    if (!cached) drawLayer(L_BUILDINGS, 0.0f);
     profEnd(PROF_MAP);
 
     static std::vector<DrawItem> items;
@@ -1073,7 +1141,8 @@ static void drawHud(Canvas& c, Game& g) {
 }
 
 void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
-    (void)ui;
+    g_useMapCache = ui.mapCache != 0;
+    c.cacheFlipY = ui.mapCache == 2;
     c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));
     drawWorld(c, g, timeMs);
     drawWeatherAndLight(c, g, timeMs);
@@ -1442,15 +1511,19 @@ static void drawOptionsTab(Canvas& c, Game& g, Ui& ui) {
         box(c, 40, PANEL_Y + 10 + i * 40, 240, 32, COL_PANEL_DARK, COL_BORDER);
         c.text(160, PANEL_Y + 17 + i * 40, 0.55f, COL_TEXT, labels[i], ALIGN_CENTER);
     }
-    box(c, 80, PANEL_Y + 130, 160, 22, COL_PANEL_DARK, COL_BORDER);
-    c.text(160, PANEL_Y + 134, 0.45f, COL_TEXT, ui.showPerf ? "Performance info: on" : "Performance info: off", ALIGN_CENTER);
+    box(c, 14, PANEL_Y + 130, 142, 22, COL_PANEL_DARK, COL_BORDER);
+    c.text(85, PANEL_Y + 134, 0.42f, COL_TEXT, ui.showPerf ? "Perf info: on" : "Perf info: off", ALIGN_CENTER);
+    static const char* mcText[3] = {"Fast map: off", "Fast map: on", "Fast map: flip"};
+    box(c, 164, PANEL_Y + 130, 142, 22, COL_PANEL_DARK, COL_BORDER);
+    c.text(235, PANEL_Y + 134, 0.42f, COL_TEXT, mcText[ui.mapCache % 3], ALIGN_CENTER);
     if (ui.statusTime > 0) c.text(160, PANEL_Y + 156, 0.5f, COL_TEXT, ui.status, ALIGN_CENTER);
     c.text(160, PANEL_Y + 172, 0.38f, COL_TEXT_SOFT, "The game also saves every time you sleep.", ALIGN_CENTER);
     (void)g;
 }
 
 static void touchOptionsTab(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
-    if (hit(tx, ty, 80, PANEL_Y + 130, 160, 22)) { ui.showPerf = !ui.showPerf; return; }
+    if (hit(tx, ty, 14, PANEL_Y + 130, 142, 22)) { ui.showPerf = !ui.showPerf; return; }
+    if (hit(tx, ty, 164, PANEL_Y + 130, 142, 22)) { ui.mapCache = (ui.mapCache + 1) % 3; return; }
     for (int i = 0; i < 3; i++)
         if (hit(tx, ty, 40, PANEL_Y + 10 + i * 40, 240, 32)) {
             if (i == 1) {
