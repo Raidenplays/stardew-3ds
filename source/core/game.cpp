@@ -921,6 +921,16 @@ bool Game::tryInteract(int tx, int ty) {
     }
     if (runMapAction(cur->map.action(tx, ty), false)) return true;
     if (cur->name.rfind("CommunityCenter", 0) == 0) {   // the junimos' bundles
+        bool can = mailReceived.count("canReadJunimoText") || eventsSeen.count("112");
+        for (auto& kv : bundleGiven) can |= !kv.second.empty();   // an older save already working on them
+        if (!can && hasEvent("WizardHouse", "112")) {
+            say("A golden scroll, written in a script you can't read...");
+            if (!mailReceived.count("seenJunimoNote")) {
+                mailReceived.insert("seenJunimoNote");
+                mailTomorrow.insert("wizardJunimoNote");
+            }
+            return true;
+        }
         bundleView = 0;
         sfx("bigSelect");
         return true;
@@ -1161,6 +1171,7 @@ void Game::updateEffects(float dt) {
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
     if (packAsk > 0) packAsk -= dt;
+    if (!morningNote.empty() && !cutscene.active && timeOfDay >= DAY_START + 10) { say(morningNote); morningNote.clear(); }
     {   // the shipping bin's lid swings open as you come near
         bool near = binOpen;
         if (cur && cur->isFarm)
@@ -1434,6 +1445,8 @@ bool Game::goToBed() {
     treesGrow();
     growGrass();
     animalsNight();
+    morningNote.clear();
+    nightEvents();
 
     uint32_t r = rand32();
     spawnDebris(6, r);

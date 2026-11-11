@@ -142,10 +142,36 @@ bool Game::eventConditionsMet(const std::string& key) const {
         } else if (code == "p") {
             const NpcState* n = w.size() > 1 ? npcByName(w[1]) : nullptr;
             ok = n && n->loc == cur->name;
-        } else if (code == "o" || code == "A" || code == "H") {
-            ok = true;   // not married / no special dialogue / we are the host
-        } else if (code == "O" || code == "D") {
-            ok = false;  // married / dating: not yet
+        } else if (code == "A" || code == "H" || code == "F" || code == "U" || code == "v") {
+            ok = true;   // no special dialogue / we are the host / no festival / visible
+        } else if (code == "o") {          // not married to them
+            ok = w.size() < 2 || spouse != w[1];
+        } else if (code == "O") {          // married to them
+            ok = w.size() > 1 && spouse == w[1];
+        } else if (code == "D") {          // dating them
+            ok = w.size() > 1 && dating.count(w[1]) != 0;
+        } else if (code == "L") {          // the farmhouse has been upgraded
+            ok = houseLevel >= 2;
+        } else if (code == "B") {          // a double bed
+            ok = houseLevel >= 1;
+        } else if (code == "c") {          // free bag slots
+            int freeSlots = 0;
+            for (int k = 0; k < invSlots; k++) freeSlots += inv[k].empty();
+            ok = w.size() > 1 && freeSlots >= atoi(w[1].c_str());
+        } else if (code == "C" || code == "X") {   // Community Center finished / not
+            bool done = mailReceived.count("ccPantry") && mailReceived.count("ccCraftsRoom") && mailReceived.count("ccFishTank") &&
+                        mailReceived.count("ccBoilerRoom") && mailReceived.count("ccBulletin") && mailReceived.count("ccVault");
+            ok = (code == "C") == done;
+        } else if (code == "J") {          // Joja's warehouse finished: there is no Joja route
+            ok = false;
+        } else if (code == "g") {
+            ok = w.size() > 1 && w[1] == "male";   // the farmer sprite is the male base
+        } else if (code == "b") {          // reached the bottom of the mines
+            ok = mineDeepest >= 120;
+        } else if (code == "m") {          // total earnings
+            ok = w.size() > 1 && totalEarned >= atoll(w[1].c_str());
+        } else if (code == "S") {
+            ok = w.size() > 1 && mailReceived.count("secretNote:" + w[1]) != 0;
         } else if (code == "j") {
             ok = w.size() > 1 && daysPlayed > atoi(w[1].c_str());
         } else if (code == "M") {
@@ -175,6 +201,14 @@ EventActor* Game::eventActor(const std::string& name) {
     for (auto& a : cutscene.actors)
         if (a.name == n) return &a;
     return nullptr;
+}
+
+bool Game::hasEvent(const std::string& loc, const std::string& id) const {
+    std::vector<std::pair<std::string, std::string>> evs;
+    if (!readEventFile(data.vfs, loc, evs)) return false;
+    for (auto& e : evs)
+        if (e.first.substr(0, e.first.find('/')) == id) return true;
+    return false;
 }
 
 bool Game::checkEvents() {
@@ -258,6 +292,8 @@ void Game::endEvent() {
     if (!cs.active) return;
     cs.active = false;
     eventsSeen.insert(cs.id);
+    if (cs.id == "112") mailReceived.insert("canReadJunimoText");      // the Wizard's forest magic
+    if (cs.id == "611439") mailReceived.insert("ccDoorUnlock");
     if (cs.after == "beginGame") {   // the arrival is over: wake up at home, day 1
         timeOfDay = DAY_START;
         clockAcc = 0;

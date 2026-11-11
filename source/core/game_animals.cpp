@@ -583,4 +583,124 @@ void Game::ensureGreenhouse() {
     buildings.push_back(b);
 }
 
+// ---------------------------------------------------------------- things that happen in the night
+// Rare farm events while you sleep (chances as the wiki lists them): the crop fairy, the witch over
+// the coop, a meteorite, the strange capsule, a stone owl. The railroad earthquake on Summer 3, year 1.
+
+bool Game::farmSpotFree(int x, int y, int w, int h) const {
+    if (!farm) return false;
+    const TileMap& m = farm->map;
+    for (int ty = y; ty < y + h; ty++)
+        for (int tx = x; tx < x + w; tx++) {
+            if (!m.inBounds(tx, ty) || m.tile(L_BACK, tx, ty) == NO_TILE || m.tile(L_BUILDINGS, tx, ty) != NO_TILE) return false;
+            uint8_t f = m.flags(tx, ty);
+            if ((f & CF_WATER) || (f & CF_BLOCKED) || m.warpAt(tx, ty)) return false;
+            size_t i = (size_t)ty * m.width() + tx;
+            if (farm->soils[i].tilled || (i < farm->debris.size() && farm->debris[i] != DEB_NONE)) return false;
+            for (auto& t : farm->trees) if (t.x == tx && t.y == ty) return false;
+            for (auto& t : farm->fruitTrees) if (t.x == tx && t.y == ty) return false;
+            for (auto& c : farm->clumps) if (tx >= c.x && tx < c.x + 2 && ty >= c.y && ty < c.y + 2) return false;
+            for (auto& b : buildings)
+                if (const BuildingType* bt = typeOf(b))
+                    if (tx >= b.x && tx < b.x + bt->w && ty >= b.y - 1 && ty < b.y + bt->h + 1) return false;
+            for (auto& b : data.layout.buildings)
+                if (tx >= b.tileX - 1 && tx <= b.tileX + b.footW && ty >= b.tileY - 1 && ty <= b.tileY + b.footH + 1) return false;
+            auto it = placed.find("Farm");
+            if (it != placed.end())
+                for (auto& p : it->second) if (p.x == tx && p.y == ty) return false;
+        }
+    return true;
+}
+
+bool Game::randomFarmSpot(int w, int h, int& ox, int& oy) {
+    if (!farm) return false;
+    for (int tries = 0; tries < 300; tries++) {
+        int x = 3 + (int)(rand32() % (uint32_t)std::max(1, farm->map.width() - 6));
+        int y = 8 + (int)(rand32() % (uint32_t)std::max(1, farm->map.height() - 12));
+        if (farmSpotFree(x - 1, y - 1, w + 2, h + 2)) { ox = x; oy = y; return true; }
+    }
+    return false;
+}
+
+void Game::nightEvents() {
+    if (!farm) return;
+    // the strange capsule cracks open three nights after it lands
+    if (mailReceived.count("Got_Capsule") && !mailReceived.count("s3d_capsuleOpen")) {
+        int n = 1;
+        while (n <= 3 && mailReceived.count("s3d_capsuleNight" + std::to_string(n))) n++;
+        if (n <= 3) mailReceived.insert("s3d_capsuleNight" + std::to_string(n));
+        else {
+            mailReceived.insert("s3d_capsuleOpen");
+            for (auto& kv : placed)
+                for (auto& p : kv.second)
+                    if (p.big && p.id == 96 && data.big(98)) p.id = 98;   // empty now... whatever was inside is gone
+        }
+    }
+    if (year == 1 && season == SUMMER && day == 3 && !mailReceived.count("s3d_earthquake")) {
+        mailReceived.insert("s3d_earthquake");
+        morningNote = "There was an earthquake in the night... the way to the railroad is open.";
+        return;
+    }
+    if (absoluteDay() < 5) return;
+    uint32_t roll = rand32() % 1000;
+    int x, y;
+    if (roll < 10 && season != WINTER) {                    // crop fairy: 1%
+        std::vector<size_t> growing;
+        int fw = farm->map.width();
+        for (size_t i = 0; i < farm->soils.size(); i++) {
+            const Soil& s = farm->soils[i];
+            const CropDef* c = s.seed >= 0 ? data.cropForSeed(s.seed) : nullptr;
+            if (c && !s.dead && s.phase < c->phaseDays.size()) growing.push_back(i);
+        }
+        if (growing.empty()) return;
+        size_t at = growing[rand32() % growing.size()];
+        int cx = (int)(at % fw), cy = (int)(at / fw);
+        for (size_t i : growing) {
+            int tx = (int)(i % fw), ty = (int)(i / fw);
+            if (std::abs(tx - cx) > 2 || std::abs(ty - cy) > 2) continue;
+            Soil& s = farm->soils[i];
+            s.phase = (uint8_t)data.cropForSeed(s.seed)->phaseDays.size();
+            s.dayInPhase = 0;
+        }
+        morningNote = "A crop fairy visited in the night! Some of your crops grew all at once.";
+    } else if (roll < 20) {                                 // the witch: 1%, needs a coop with hens in it
+        for (auto& b : buildings) {
+            const BuildingType* t = typeOf(b);
+            if (!t || t->interior.find("Coop") == std::string::npos || b.daysLeft > 0) continue;
+            bool lived = false;
+            for (auto& a : animals) lived |= a.home == b.id;
+            Location* in = lived ? loadLocation(interiorName(b)) : nullptr;
+            int ox, oy;
+            if (!in || !data.object(305) || !openSpot(*this, *in, rand32(), ox, oy)) continue;
+            WorldObject o;
+            o.x = ox; o.y = oy; o.itemId = 305;             // a void egg
+            in->objects.push_back(o);
+            morningNote = "You heard cackling over the farm in the night... something was left in the coop.";
+            break;
+        }
+    } else if (roll < 30) {                                 // a meteorite: 1%
+        if (randomFarmSpot(2, 2, x, y)) {
+            Location::Clump c;
+            c.x = (int16_t)x; c.y = (int16_t)y; c.kind = Location::CLUMP_METEOR; c.health = 20;
+            farm->clumps.push_back(c);
+            morningNote = "An explosion shook the house in the night! Something fell on the farm.";
+        }
+    } else if (roll < 38 && year > 1 && !mailReceived.count("Got_Capsule") && data.big(96)) {   // strange capsule: 0.8%
+        if (randomFarmSpot(1, 1, x, y)) {
+            Placed p;
+            p.x = x; p.y = y; p.big = true; p.id = 96;
+            placed["Farm"].push_back(p);
+            mailReceived.insert("Got_Capsule");
+            morningNote = "A strange sound woke you in the night... like something landing outside.";
+        }
+    } else if (roll < 43 && data.big(95)) {                 // stone owl: 0.5%
+        if (randomFarmSpot(1, 1, x, y)) {
+            Placed p;
+            p.x = x; p.y = y; p.big = true; p.id = 95;
+            placed["Farm"].push_back(p);
+            morningNote = "You heard an owl hooting in the night...";
+        }
+    }
+}
+
 } // namespace sv

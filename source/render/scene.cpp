@@ -989,7 +989,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
             case 12: {   // big stump / log / boulder: 32x32 on Maps/springobjects
                 const Location::Clump& b = here.clumps[it.a];
-                int idx = b.kind == 1 ? 602 : b.kind == 2 ? 672 : 600;
+                int idx = b.kind == 1 ? 602 : b.kind == 2 ? 672 : b.kind == 3 ? 622 : 600;
                 float wob = b.shake > 0 ? std::sin(b.shake * 70.0f) * 1.0f : 0.0f;
                 c.image("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 32, 32, std::floor(b.x * TILE - camX + wob),
                         b.y * TILE - camY);
