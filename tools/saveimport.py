@@ -250,7 +250,11 @@ def import_save(save_path, root):
             if il:
                 out.append(["inv", slot] + il)
     for k, v in dict_items(p.find("friendshipData")):
-        out.append(["friend", clean(k.text or ""), num(v, "Points")])
+        who = clean(k.text or "")
+        out.append(["friend", who, num(v, "Points")])
+        status = txt(v, "Status").lower()
+        if status in ("dating", "engaged", "married"):
+            out.append([status if status != "married" else "spouse", who])
     for tag, key in (("mailReceived", "mail"), ("eventsSeen", "event")):
         e = p.find(tag)
         if e is not None:
@@ -258,7 +262,9 @@ def import_save(save_path, root):
                 if s.text:
                     out.append([key, clean(s.text)])
     out.append(["mine", num(p, "deepestMineLevel")])
-    for tag in ("houseUpgradeLevel", "spouse", "caveChoice", "dateStringForSaveGame"):
+    if txt(p, "spouse"):
+        out.append(["spouse", clean(txt(p, "spouse"))])
+    for tag in ("caveChoice",):
         if p.find(tag) is not None and txt(p, tag):
             extras.append([tag, clean(txt(p, tag))])
     for tag, key in (("craftingRecipes", "craftrecipe"), ("cookingRecipes", "cookrecipe")):

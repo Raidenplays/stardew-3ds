@@ -559,6 +559,13 @@ public:
     void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
     int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
+    // Romance: dating (a bouquet at 8 hearts), engaged (the mermaid's pendant at 10), married
+    std::string spouse, engagedTo;
+    std::set<std::string> dating;
+    int weddingDay = -1;
+    int friendshipCap(const NpcState& n) const;
+    bool romanceGift(NpcState& n, int slot);    // bouquet / pendant handled; true if it was one
+    void marriageTalk(NpcState& n, std::vector<DialoguePage>& pages);
     // The farmhouse: 0 one room, 1 kitchen, 2 nursery (maps FarmHouse, FarmHouse1, FarmHouse2)
     int houseLevel = 0;
     int houseUpgradeDays = 0;               // Robin's working on the next level

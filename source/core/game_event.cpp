@@ -293,7 +293,7 @@ void Game::skipEvent() {
         if (w.empty()) continue;
         if (w[0] == "friendship" && w.size() > 2) {
             for (auto& n : npcs)
-                if (n.def->name == w[1]) n.friendship = std::max(0, std::min(2500, n.friendship + atoi(w[2].c_str())));
+                if (n.def->name == w[1]) n.friendship = std::max(0, std::min(friendshipCap(n), n.friendship + atoi(w[2].c_str())));
         } else if ((w[0] == "mail" || w[0] == "addMailReceived") && w.size() > 1) {
             mailReceived.insert(w[1]);
         } else if (w[0] == "end" && w.size() > 1) {
@@ -527,7 +527,7 @@ bool Game::eventStep(const std::string& raw) {
     }
     if (c == "friendship") {
         for (auto& n : npcs)
-            if (n.def->name == arg(1)) n.friendship = std::max(0, std::min(2500, n.friendship + iarg(2)));
+            if (n.def->name == arg(1)) n.friendship = std::max(0, std::min(friendshipCap(n), n.friendship + iarg(2)));
         return true;
     }
     if (c == "mail") {              // a letter for tomorrow morning

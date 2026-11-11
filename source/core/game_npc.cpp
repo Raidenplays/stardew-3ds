@@ -56,6 +56,26 @@ void Game::npcsStartDay() {
         n.talkedToday = false;
         n.giftsToday = 0;
         if (weekday() == 0) n.giftsWeek = 0;
+        if (n.def->name == spouse && hasMap("FarmHouse")) {   // your spouse lives with you now
+            Location* h = loadLocation("FarmHouse");
+            const Warp* w = h ? h->map.warpTo("Farm") : nullptr;
+            n.loc = "FarmHouse";
+            int sx = w ? w->x - 3 : 5, sy = w ? w->y - 4 : 5;
+            if (h) {   // nearest open floor
+                const TileMap& m = h->map;
+                bool found = false;
+                for (int r = 0; r < 8 && !found; r++)
+                    for (int dy = -r; dy <= r && !found; dy++)
+                        for (int dx = -r; dx <= r && !found; dx++) {
+                            int x = sx + dx, y = sy + dy;
+                            if (m.inBounds(x, y) && m.tile(L_BACK, x, y) != NO_TILE && !(m.flags(x, y) & CF_BLOCKED) &&
+                                m.tile(L_BUILDINGS, x, y) == NO_TILE) { sx = x; sy = y; found = true; }
+                        }
+            }
+            placeAt(n, sx, sy);
+            n.facing = FACE_DOWN;
+            n.sched.clear();
+        }
     }
 }
 
@@ -248,6 +268,68 @@ void Game::showDialogue(const NpcState& n, const std::vector<DialoguePage>& page
     dialogue.page = 0;
 }
 
+// ---------------------------------------------------------------- romance
+
+int Game::friendshipCap(const NpcState& n) const {
+    if (n.def->name == spouse) return 3500;                              // 14 hearts
+    if (data.romanceable(n.def->name) && !dating.count(n.def->name) && engagedTo != n.def->name) return 2000;   // 8 until dating
+    return 2500;
+}
+
+// A bouquet (8+ hearts) starts dating; the mermaid's pendant (10 hearts, dating, a bigger house) is a proposal.
+bool Game::romanceGift(NpcState& n, int slot) {
+    Slot& sl = inv[slot];
+    if (sl.type != SLOT_OBJECT || (sl.id != 458 && sl.id != 460)) return false;
+    const std::string& who = n.def->name;
+    DialoguePage p;
+    p.portrait = 1;
+    if (!data.romanceable(who)) {
+        p.text = "Um... that's sweet, but no.";
+        p.portrait = 2;
+    } else if (sl.id == 458) {   // bouquet
+        if (who == spouse || dating.count(who)) p.text = "We're already together, silly!";
+        else if (n.hearts() < 8) { p.text = "Oh... I don't think we know each other well enough for that."; p.portrait = 2; }
+        else {
+            dating.insert(who);
+            if (--sl.count <= 0) sl = Slot();
+            p.text = "Oh! You mean... you want to be more than friends? ...Yes. I'd like that.";
+            p.portrait = 4;
+            sfx("give_gift");
+        }
+    } else {                     // the pendant
+        if (!spouse.empty()) p.text = "...You're already married.";
+        else if (!dating.count(who) || n.hearts() < 10) { p.text = "That's... a big step. Maybe someday."; p.portrait = 2; }
+        else if (houseLevel < 1) p.text = "Yes! ...But where would we live? Your house needs to be bigger first.";
+        else {
+            engagedTo = who;
+            weddingDay = absoluteDay() + 3;
+            if (--sl.count <= 0) sl = Slot();
+            p.text = "Yes! Of course, yes! ...The wedding will be in three days. I'll take care of everything!";
+            p.portrait = 4;
+            sfx("give_gift");
+        }
+    }
+    showDialogue(n, {p});
+    return true;
+}
+
+// Married life: the spouse's lines (Characters/Dialogue/MarriageDialogue*), by weather, place and time.
+void Game::marriageTalk(NpcState& n, std::vector<DialoguePage>& pages) {
+    std::string mode = raining ? "Rainy_Day" : cur && cur->name == "FarmHouse" ? "Indoor_Day" : "Outdoor";
+    if (timeOfDay >= 18 * 60) mode = raining ? "Rainy_Night" : "Indoor_Night";
+    std::vector<const std::string*> pick;
+    for (auto& kv : n.def->dialogue) {
+        const std::string& k = kv.first;
+        std::string pre = "marriage:" + mode + "_";
+        if (k.rfind(pre, 0) != 0) continue;
+        std::string rest = k.substr(pre.size());
+        if (rest == n.def->name || (!rest.empty() && isdigit((unsigned char)rest[0]))) pick.push_back(&kv.second);
+    }
+    if (pick.empty()) return;
+    uint32_t h = (uint32_t)absoluteDay() * 2654435761u + (uint32_t)timeOfDay / 60;
+    pages = parseDialogue(*pick[h % pick.size()], me.name);
+}
+
 void Game::talkTo(NpcState& n) {
     // turn to face the player
     float dx = px - n.x, dy = py - n.y;
@@ -256,7 +338,8 @@ void Game::talkTo(NpcState& n) {
 
     std::string key = pickDialogueKey(*n.def, scheduleContext(n), n.introduced);
     std::vector<DialoguePage> pages;
-    if (!key.empty()) pages = parseDialogue(n.def->dialogue.at(key), me.name);
+    if (n.def->name == spouse) marriageTalk(n, pages);
+    if (pages.empty() && !key.empty()) pages = parseDialogue(n.def->dialogue.at(key), me.name);
     if (isBirthday(*n.def) && !n.talkedToday) {
         DialoguePage p;
         p.text = "It's my birthday today!";
@@ -268,7 +351,7 @@ void Game::talkTo(NpcState& n) {
         p.text = "Hi, " + me.name + ".";
         pages.push_back(p);
     }
-    if (!n.talkedToday) n.friendship = std::min(2500, n.friendship + 20);
+    if (!n.talkedToday) n.friendship = std::min(friendshipCap(n), n.friendship + 20);
     n.talkedToday = true;
     bool first = !n.introduced;
     n.introduced = true;
@@ -281,10 +364,11 @@ void Game::giveGift(NpcState& n, int slot) {
     const ObjectDef* o = data.object(sl.id);
     if (!o) return;
     if (questDelivered(n.def->name, sl.id)) {   // quest deliveries always go through
-        n.friendship = std::min(2500, n.friendship + 150);
+        n.friendship = std::min(friendshipCap(n), n.friendship + 150);
         if (--sl.count <= 0) sl = Slot();
         return;
     }
+    if (romanceGift(n, slot)) return;
     bool bday = isBirthday(*n.def);
     if (n.giftsToday >= 1) {
         say("You already gave " + n.def->display + " a gift today");
@@ -296,7 +380,7 @@ void Game::giveGift(NpcState& n, int slot) {
     }
     Taste t = giftTaste(data, *n.def, sl.id);
     int pts = giftPoints(t) * (bday ? 8 : 1);
-    n.friendship = std::max(0, std::min(2500, n.friendship + pts));
+    n.friendship = std::max(0, std::min(friendshipCap(n), n.friendship + pts));
     n.giftsToday++;
     n.giftsWeek++;
     n.introduced = true;
@@ -352,7 +436,7 @@ void Game::dialogueChoose(int i) {
     std::vector<DialoguePage> reply;
     for (auto& n : npcs)
         if (n.def->name == dialogue.npc) {
-            n.friendship = std::max(0, std::min(2500, n.friendship + ch.points));
+            n.friendship = std::max(0, std::min(friendshipCap(n), n.friendship + ch.points));
             if (!ch.responseKey.empty()) {
                 auto it = n.def->dialogue.find(ch.responseKey);
                 if (it != n.def->dialogue.end()) reply = parseDialogue(it->second, me.name);

@@ -122,7 +122,10 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             Slot s;
             if (slot >= 0 && slot < INV_SIZE && slotFrom(f, 2, s)) { inv[slot] = s; counts[0]++; }
         } else if (k == "friend" && f.size() > 1) {
-            for (auto& n : npcs) if (n.def && n.def->name == f[1]) n.friendship = std::min(2500, I(f, 2));
+            for (auto& n : npcs) if (n.def && n.def->name == f[1]) n.friendship = std::min(3500, I(f, 2));
+        } else if (k == "dating" && f.size() > 1) dating.insert(f[1]);
+        else if (k == "engaged" && f.size() > 1) { engagedTo = f[1]; weddingDay = absoluteDay() + 1; }
+        else if (k == "spouse" && f.size() > 1 && !f[1].empty()) { spouse = f[1]; dating.erase(spouse); 
         } else if (k == "mail" && f.size() > 1) mailReceived.insert(f[1]);
         else if (k == "event" && f.size() > 1) eventsSeen.insert(f[1]);
         else if (k == "mine") mineDeepest = I(f, 1);
