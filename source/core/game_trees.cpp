@@ -147,6 +147,31 @@ bool Game::hitClump(int tx, int ty, ToolKind kind, int level) {
     return true;
 }
 
+// Medium bushes fruit in season: salmonberries spring 15-18, blackberries fall 8-11.
+int Game::bushBerry(const Location::Bush& b) const {
+    if (b.size != 1 || b.pickedDay == absoluteDay() || !cur->map.outdoors) return -1;
+    if (season == SPRING && day >= 15 && day <= 18) return 296;
+    if (season == FALL && day >= 8 && day <= 11) return 410;
+    return -1;
+}
+
+bool Game::shakeBush(int tx, int ty) {
+    int i = bushAt(tx, ty);
+    if (i < 0) return false;
+    Location::Bush& b = cur->bushes[i];
+    b.shake = 0.4f;
+    sfx("leafrustle");
+    int berry = bushBerry(b);
+    if (berry < 0) return true;
+    b.pickedDay = absoluteDay();
+    int n = 1 + (int)(rand32() % 2) + (int)(skillLevel(SK_FORAGING) / 4);
+    float x = b.x * TILE + 16.0f, y = b.y * TILE;
+    if (addItem(berry, n)) itemFlies(berry, x, y, n);
+    gainXp(SK_FORAGING, 1);
+    questItem(berry, n);
+    return true;
+}
+
 int Game::grassAt(int tx, int ty) const {
     if (!cur->map.inBounds(tx, ty) || cur->grass.empty()) return 0;
     return cur->grass[(size_t)ty * cur->map.width() + tx] & 7;

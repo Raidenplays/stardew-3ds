@@ -619,6 +619,7 @@ bool Game::tryInteract(int tx, int ty) {
     }
     if (Placed* p = placedAt(tx, ty))
         if (interactPlaced(*p)) return true;
+    if (shakeBush(tx, ty)) return true;
     if (WorldObject* o = objectAt(tx, ty)) {
         if (!o->ore) {
             int id = o->itemId;

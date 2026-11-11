@@ -752,6 +752,9 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     static const int mx[4] = {0, 64, 0, 96}, my[4] = {96, 96, 64, 96};
                     sx = mx[season];
                     sy = my[season];
+                    int berry = g.bushBerry(b);
+                    if (berry == 296) { sx = 32; sy = 0; }        // salmonberries
+                    if (berry == 410) { sx = 32; sy = 64; }       // blackberries
                 } else {
                     sw = 16;
                     sh = 32;

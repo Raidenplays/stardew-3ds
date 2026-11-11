@@ -86,7 +86,7 @@ struct Location {
     std::vector<Tree> trees;
     // Bushes and grass come from the map's Paths layer markers (24/25/26 =
     // large/medium/small bush, 22 = grass, 36 = blue grass).
-    struct Bush { int16_t x = 0, y = 0; uint8_t size = 0; float shake = 0; };   // size 0 small, 1 medium, 2 large
+    struct Bush { int16_t x = 0, y = 0; uint8_t size = 0; float shake = 0; int pickedDay = -1; };   // size 0 small, 1 medium, 2 large
     std::vector<Bush> bushes;
     // Big 2x2 obstacles placed when the farm is made (Paths 19 log, 20 boulder,
     // 21 stump): they need an upgraded tool.
@@ -502,6 +502,7 @@ public:
     EventActor* eventActor(const std::string& name);
     void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
+    int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
 private:
     void eventUpdate(float dt);
     bool eventStep(const std::string& cmd);   // false = wait before the next command
@@ -538,7 +539,8 @@ private:
     bool chopTree(int tx, int ty, int axeLevel);
     int bushAt(int tx, int ty) const;        // index into location().bushes, or -1
     bool debrisFromMap(uint32_t& r);       // a new farm's debris from the map's markers
-    int clumpAt(int tx, int ty) const;      // index into cur->clumps covering the tile, or -1
+    int clumpAt(int tx, int ty) const;
+    bool shakeBush(int tx, int ty);      // index into cur->clumps covering the tile, or -1
     bool hitClump(int tx, int ty, ToolKind kind, int level);
     int grassAt(int tx, int ty) const;       // tufts on that tile (0 = none)
     bool cutGrass(int tx, int ty);           // scythe / hoe; true if there was grass
