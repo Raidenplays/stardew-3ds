@@ -2017,7 +2017,7 @@ bool Game::load(const std::string& path, std::string* err) {
             uint32_t nm = r.u32();
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
-        if (version >= 25 && r.ok) invSlots = std::max(12, std::min((int)INV_SIZE, r.i32()));
+        if (version >= 25 && r.ok) invSlots = std::max(12, std::min((int)INV_SIZE, (int)r.i32()));
         if (version >= 24 && r.ok)
             for (auto& e : equip) e = r.slot();
         if (version >= 23 && r.ok)
