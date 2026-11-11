@@ -88,7 +88,8 @@ int main(int argc, char** argv) {
     std::string whereMap, weatherArg;
     int atX = -1, atY = -1;
     bool swingDemo = false, setupDemo = false;
-    int timeArg = -1;   // HHMM: run the villagers' day up to then
+    int timeArg = -1;
+    int dayArg = -1;   // HHMM: run the villagers' day up to then
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
     int introFps = 10; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
@@ -111,6 +112,7 @@ int main(int argc, char** argv) {
         else if (a.rfind("--at=", 0) == 0) sscanf(a.c_str() + 5, "%d,%d", &atX, &atY);
         else if (a == "--story") storyDemo = true;
         else if (a.rfind("--time=", 0) == 0) timeArg = atoi(a.c_str() + 7);
+        else if (a.rfind("--day=", 0) == 0) dayArg = atoi(a.c_str() + 6);   // season*28 + day, e.g. 16 or 64
         else font = a;
     }
 
@@ -499,6 +501,7 @@ int main(int argc, char** argv) {
         // time the top screen at a location (centre of the map), per drawing stage
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
         g.teleport(whereMap, 10, 10);
+        if (dayArg > 0) { g.season = (dayArg - 1) / 28; g.day = (dayArg - 1) % 28 + 1; }
         g.teleport(whereMap, atX >= 0 ? atX : g.map().width() / 2, atY >= 0 ? atY : g.map().height() / 2);
         if (timeArg >= 0) {
             int until = (timeArg / 100) * 60 + timeArg % 100;
