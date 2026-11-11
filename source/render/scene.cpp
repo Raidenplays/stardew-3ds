@@ -777,6 +777,24 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     profEnd(PROF_OBJECTS);
     drawLayer(L_FRONT, 0.0f);
     drawLayer(L_ALWAYSFRONT, 0.0f);
+    // butterflies on fine spring/summer days (TileSheets/critters: 4-frame flaps, 20 columns)
+    if (m.outdoors && !g.raining && !g.windy && (g.season == SPRING || g.season == SUMMER) &&
+        g.timeOfDay < 18 * 60 && c.texWidth("TileSheets_critters") >= 320) {
+        static const int kinds[6] = {128, 132, 136, 148, 152, 156};
+        int n = std::min(16, m.width() * m.height() / 350);
+        for (int i = 0; i < n; i++) {
+            uint32_t h = (uint32_t)(i + 7) * 2654435761u ^ (uint32_t)m.width() * 40503u;
+            float ax = (float)((h >> 4) % (uint32_t)(m.width() * TILE)), ay = (float)((h >> 15) % (uint32_t)(m.height() * TILE));
+            float t = timeMs / 1000.0f + i * 3.7f;
+            float x = ax + std::sin(t * 0.37f) * 60 + std::sin(t * 1.3f) * 14 - camX;
+            float y = ay + std::sin(t * 0.29f + 1.0f) * 40 + std::sin(t * 2.1f) * 6 - camY;
+            if (x < -16 || y < -16 || x > TOP_W || y > TOP_H) continue;
+            static const int flap[6] = {0, 1, 2, 3, 2, 1};
+            int idx = kinds[(h >> 9) % 6] + flap[(int)(t * 12) % 6];
+            bool left = std::cos(t * 0.37f) < 0;
+            c.image("TileSheets_critters", (idx % 20) * 16, (idx / 20) * 16, 16, 16, std::floor(x), std::floor(y), left);
+        }
+    }
     profEnd(PROF_FRONT);
 
     if (g.fishingActive() && !cs.active) {
