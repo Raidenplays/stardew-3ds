@@ -72,6 +72,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
         s = Slot();
         if (k == "O" && data.object(I(f, i + 1))) {
             s.type = SLOT_OBJECT; s.id = I(f, i + 1); s.count = std::max(1, I(f, i + 2, 1));
+            s.quality = (uint8_t)std::max(0, std::min(4, I(f, i + 3)));
             return true;
         }
         if (k == "B" && data.big(I(f, i + 1))) {
@@ -112,7 +113,10 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             season = std::max(0, std::min(3, I(f, 1)));
             day = std::max(1, std::min(28, I(f, 2, 1)));
             year = std::max(1, I(f, 3, 1));
-        } else if (k == "xp" && I(f, 1) >= 0 && I(f, 1) < SK_COUNT) skillXp[I(f, 1)] = I(f, 2);
+        } else if (k == "xp" && I(f, 1) >= 0 && I(f, 1) < SK_COUNT) {
+            skillXp[I(f, 1)] = I(f, 2);
+            skillLevels[I(f, 1)] = xpLevel(I(f, 1));   // levels you already had: no level-up screens again
+        } else if (k == "profession") professions.insert(I(f, 1));
         else if (k == "inv") {
             int slot = I(f, 1);
             Slot s;
@@ -225,7 +229,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
                 if (slotFrom(f, 4, s)) { p->items.push_back(s); counts[6]++; }
             } else {
                 Slot s;
-                s.type = SLOT_OBJECT; s.id = I(f, 4); s.count = std::max(1, I(f, 5, 1));
+                s.type = SLOT_OBJECT; s.id = I(f, 4); s.count = std::max(1, I(f, 5, 1)); s.quality = (uint8_t)std::max(0, std::min(4, I(f, 6)));
                 if (!data.object(s.id)) continue;
                 for (size_t r = 0; r < data.machineRules.size(); r++)
                     if (data.machineRules[r].machine == p->id) { p->rule = (int)r; break; }
