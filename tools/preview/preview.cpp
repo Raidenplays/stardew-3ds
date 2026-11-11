@@ -195,7 +195,8 @@ int main(int argc, char** argv) {
     if (!g.newGame(42, &err)) { fprintf(stderr, "newGame: %s\n", err.c_str()); return 1; }
     HostCanvas c(g_root, font);
     c.resolveFn = [](const std::string& rel, void* ctx) {
-        if (rel == "tex/UiLogo_user.s3t" || rel == "tex/UiBadge_3ds.s3t") return std::string(REPO_ROMFS "/") + rel;
+        if (rel == "tex/UiLogo_user.s3t" || rel == "tex/UiBadge_3ds.s3t" ||
+            rel == "tex/Characters_Raiden.s3t" || rel == "tex/Portraits_Raiden.s3t") return std::string(REPO_ROMFS "/") + rel;
         return ((Vfs*)ctx)->path(rel);
     };
     c.resolveCtx = &data.vfs;
@@ -711,6 +712,22 @@ int main(int argc, char** argv) {
         printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
                tot[3] / N, tot[4] / N);
         shot(c, g, ui, "where_" + whereMap);
+        if (const char* who = getenv("TALK"))   // TALK=Name: say hi to someone here
+            for (auto& n : g.npcs)
+                if (n.def->name == who && n.loc == whereMap) {
+                    g.teleport(whereMap, n.tileX(), n.tileY() + 1);
+                    g.facing = FACE_UP;
+                    g.selectSlot(0);
+                    step(g, ui, none, 1);
+                    Input a1; a1.action = true;
+                    step(g, ui, a1, 1);
+                    step(g, ui, none, 60);
+                    shot(c, g, ui, std::string("talk1_") + who);
+                    step(g, ui, a1, 1);
+                    step(g, ui, none, 90);
+                    shot(c, g, ui, std::string("talk_") + who);
+                    break;
+                }
         if (panArg) {
             ui.tab = TAB_OPTIONS;
             shot(c, g, ui, "options_tab");

@@ -1718,6 +1718,55 @@ def write_npcs(content, out_dir, textures):
     print(f"  {len(defs)} villagers, {n_sched} schedules, {n_dia} dialogue files, {n_spr} sprites/portraits, {n_anim} animations")
 
 
+# ItsRaiden, the porter, sits in the Saloon playing his 3DS and tells you a Nintendo fact when you
+# say hi. Not a villager: no friendship, gifts or birthday. His sprite and portrait are his own art,
+# built into the app (romfs/tex/*_Raiden.s3t, from art/raiden/).
+RAIDEN_SPOT = ("Saloon", 19, 22, 2)
+RAIDEN_FACTS = [
+    "Nintendo started out in 1889 in Kyoto, making hanafuda playing cards.",
+    "Mario's first name was Jumpman. Back in Donkey Kong he was a carpenter, not a plumber.",
+    "Luigi started out as a palette swap of Mario so a second player could join in Mario Bros.",
+    "The 3DS came out in Japan on February 26, 2011.$h",
+    "The 3DS does 3D without glasses: a parallax barrier sends a different picture to each eye.",
+    "Mario Kart 7 was the first Mario Kart with gliders and underwater driving. ...Hang on, blue shell!",
+    "In Mario Kart 7 you can drive in first person and steer by tilting the system. Wild, right?$h",
+    "Rainbow Road in Mario Kart 7 is one giant lap, split into three sections.",
+    "The DS is Nintendo's best-selling system ever, at about 154 million units.",
+    "The 3DS family sold about 76 million. Including this one!$h",
+    "The original Game Boy and Game Boy Color sold over 118 million combined.",
+    "There's a Game Boy that survived a fire in the Gulf War. It still turned on, and Nintendo put it on display in New York.",
+    "Gunpei Yokoi designed the Game & Watch and the Game Boy. The D-pad came from his Game & Watch Donkey Kong.",
+    "The NES was called the Famicom in Japan. Short for Family Computer.",
+    "Kirby's working name was Popopo.",
+    "Shigeru Miyamoto based Zelda on exploring the fields, forests and caves near his home as a kid.",
+    "Link is called Link because he's the link between you and the game.",
+    "Wario first showed up in Super Mario Land 2, in 1992.",
+    "Bowser's name in Japan is Koopa. Same guy, same bad attitude.",
+    "Animal Crossing started on the Nintendo 64, only in Japan, in 2001.",
+    "Pokemon Red and Green came out in Japan in 1996.",
+    "The Wii was codenamed Revolution.",
+    "Super Mario 64 was a Nintendo 64 launch game, back in 1996.",
+    "Metroid surprised everyone in 1986: beat it fast enough and Samus takes off her helmet.",
+    "Before video games Nintendo tried a taxi company and instant rice. Good thing the games worked out.",
+    "StreetPass swapped Miis with other 3DS owners you walked by. I collected a ton at the bus stop.$h",
+    "The Virtual Boy, from 1995, only showed red and black.",
+]
+
+
+def write_raiden(data_dir):
+    loc, x, y, d = RAIDEN_SPOT
+    with open(os.path.join(data_dir, "npcs.dat"), "a", encoding="utf-8") as f:
+        f.write("\t".join(["Raiden", "Raiden", "-1", "0", loc, str(x), str(y), str(d), "0"]) + "\n")
+    with open(os.path.join(data_dir, "schedules", "Raiden.dat"), "w", encoding="utf-8") as f:
+        f.write(f"default\t600 {loc} {x} {y} {d} raiden_3ds\n")
+    with open(os.path.join(data_dir, "dialogue", "Raiden.dat"), "w", encoding="utf-8") as f:
+        for i, fact in enumerate(RAIDEN_FACTS):
+            f.write(f"fact_{i}\t{fact}\n")
+    with open(os.path.join(data_dir, "animations.dat"), "a", encoding="utf-8") as f:
+        f.write("raiden_3ds\t16\t16 17 18 19\t16\n")
+    print("  Raiden is at the Saloon")
+
+
 DEFAULT_LAYOUT = """\
 # stardew3ds farm layout -- editable, no rebuild needed.
 # Positions are in tiles. Lines starting with # are ignored.
@@ -2214,6 +2263,7 @@ def main():
     for name, w, h, err in sorted(done):
         print(f"  ! {name}: {err}" if err else f"  {name}  {w}x{h}")
     took("textures")
+    write_raiden(os.path.join(out_root, "data"))
     if pool:
         pool.shutdown()
 
