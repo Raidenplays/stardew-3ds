@@ -737,6 +737,12 @@ int main(int argc, char** argv) {
                 shot(c, g, ui, "festival");
             }
         }
+        if (getenv("PET")) {   // PET=1: the cat by the door
+            g.mailReceived.insert("hasPet");
+            g.teleport("Farm", g.petX() - 1, g.petY() + 1);
+            step(g, ui, none, 10);
+            shot(c, g, ui, "pet");
+        }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");
             auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];

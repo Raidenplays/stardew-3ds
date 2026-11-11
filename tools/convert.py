@@ -93,6 +93,7 @@ EXTRA_TEXTURES = [
     ("Characters/Monsters/Bug", False),
     ("Characters/Monsters/Bat", False),
     ("Animals/horse", False),
+    ("Animals/cat", False),
     ("Characters/Monsters/Frost Bat", False),
     ("Characters/Monsters/Lava Bat", False),
     ("Characters/Monsters/Dust Spirit", False),
@@ -1758,7 +1759,8 @@ def write_festivals(content, out_dir):
                 for k, v in d.items():
                     if k in ("name", "conditions") or not isinstance(v, str):
                         continue
-                    if k.startswith("set-up") or "/" in v and re.match(r"^(pause|playSound|globalFade|move|speak) ", v):
+                    if k.startswith("set-up") or k.startswith("mainEvent") or "/" in v and re.match(
+                            r"^(pause|playSound|globalFade|move|speak|viewport|playMusic|warpFarmers)\b", v):
                         f.write(f"script\t{_flat(k)}\t{_flat(v)}\n")
                     else:
                         f.write(f"line\t{_flat(k)}\t{_flat(v)}\n")

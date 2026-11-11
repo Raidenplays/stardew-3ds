@@ -164,6 +164,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
         locations.erase(old);
     }
 
+    if (cur != prev) caveNight();   // Demetrius's cave fills up while you're away
     const TileMap& m = cur->map;
     tx = std::max(0, std::min(tx, m.width() - 1));
     ty = std::max(0, std::min(ty, m.height() - 1));
@@ -865,6 +866,12 @@ bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap;
 bool Game::tryInteract(int tx, int ty) {
     if (mineInteract(tx, ty)) return true;
     if (farmBuildingInteract(tx, ty) || hopperInteract(tx, ty) || animalInteract(tx, ty)) return true;
+    if (cur->isFarm && hasPet() && tx == petX() && (ty == petY() || ty == petY() - 1)) {
+        petHeart = 1.5f;
+        sfx("cat");
+        if (!garbageToday.count("_pet")) { garbageToday.insert("_pet"); say("Your pet purrs. It loves you a little more."); }
+        return true;
+    }
     if (!cur->fruitTrees.empty() && shakeFruitTree(tx, ty)) return true;
     if (NpcState* n = npcAt(tx, ty)) {
         if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
@@ -1193,6 +1200,7 @@ void Game::updateEffects(float dt) {
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
     if (packAsk > 0) packAsk -= dt;
+    if (petHeart > 0) petHeart -= dt;
     if (!morningNote.empty() && !cutscene.active && timeOfDay >= DAY_START + 10) { say(morningNote); morningNote.clear(); }
     {   // the shipping bin's lid swings open as you come near
         bool near = binOpen;

@@ -447,6 +447,9 @@ void Game::dialogueChoose(int i) {
     if (cutscene.active && cutscene.questionPending) {
         cutscene.forkFlag = (i == cutscene.forkWant);
         cutscene.questionPending = false;
+        if (cutscene.special == "cave") mailReceived.insert(i == 0 ? "caveMushrooms" : "caveBats");
+        if (cutscene.special == "catQuestion") mailReceived.insert(i == 0 ? "hasPet" : "s3d_noPet");
+        cutscene.special.clear();
     }
     std::vector<DialoguePage> reply;
     for (auto& n : npcs)

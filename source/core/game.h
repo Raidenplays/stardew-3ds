@@ -229,6 +229,7 @@ struct Cutscene {
     float retX = 0, retY = 0;
     int retFacing = 0;
     std::string after;               // "newDay", "warpOut" ...
+    std::string special;             // a built-in question being asked ("cave", "catQuestion")
     std::string music = "continue"; // the script's track; "continue" = keep what's playing
     std::string aboveHead;           // itemAboveHead: "rod", "pan" or an object id held up
 };
@@ -680,6 +681,15 @@ public:
     void festivalMain();
     void festivalUpdate(float dt);
     void endFestival();
+    void festivalAfterScene();
+    void festivalOutcome();
+    void grandpaEvaluation();
+    void caveNight();
+    // the pet Marnie brings by (the cat): sits by the farmhouse door
+    bool hasPet() const { return mailReceived.count("hasPet") != 0; }
+    int petX() const { return data.layout.doorX + 2; }
+    int petY() const { return data.layout.doorY + 2; }
+    float petHeart = 0;
     bool visitFestival();                    // (previews, tests) start today and walk into its festival
     bool hasEvent(const std::string& loc, const std::string& id) const;
     bool farmSpotFree(int x, int y, int w, int h) const;

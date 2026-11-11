@@ -307,6 +307,11 @@ def import_save(save_path, root):
         for k, v in dict_items(p.find(tag)):
             out.append([key, clean(k.text or "")])
     out.append(["house", num(p, "houseUpgradeLevel")])
+    # a pet anywhere in the save
+    for el in sg.iter("NPC"):
+        if xtype(el) in ("Pet", "Cat", "Dog"):
+            out.append(["mail", "hasPet"])
+            break
 
     # museum donations (ArchaeologyHouse museumPieces)
     for loc in (sg.find("locations") if sg.find("locations") is not None else []):

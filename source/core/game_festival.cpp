@@ -145,8 +145,42 @@ bool Game::festivalTalk(NpcState& n) {
     return true;
 }
 
-// What each festival's main event comes to. The crowd scenes are told, not acted out.
+// Lewis says go: the festival's own "mainEvent" script plays with everyone in their MainEvent places,
+// then the outcome (festivalOutcome). Without a script the outcome comes straight away.
 void Game::festivalMain() {
+    if (festivalActive < 0) return;
+    const Festival& f = festivals[festivalActive];
+    int yr = year >= 2 && year % 2 == 0 && hasMap(f.map[1]) ? 1 : 0;
+    std::vector<std::string> lines;
+    data.vfs.readTable("data/festivals/" + f.key + ".dat", lines);
+    std::string script, actors, farmer;
+    for (int pass = yr; pass >= 0 && script.empty(); pass--)
+        for (auto& l : lines) {
+            auto p = tabs(l);
+            if (p[0] == "script" && p.size() > 2 && p[1] == (pass ? "mainEvent_y2" : "mainEvent")) script = p[2];
+        }
+    if (script.empty()) { festivalOutcome(); return; }
+    for (auto& l : lines) {
+        auto p = tabs(l);
+        if (p[0] == "actor" && p.size() > 6 && atoi(p[1].c_str()) == yr + 1 && p[2] == "MainEvent")
+            actors += " " + p[3] + " " + p[4] + " " + p[5] + " " + p[6];
+    }
+    size_t wf = script.find("warpFarmers ");
+    int fx = (int)(px / TILE), fy = (int)(py / TILE), fd = 2;
+    if (wf != std::string::npos) sscanf(script.c_str() + wf + 12, "%d %d %d", &fx, &fy, &fd);
+    std::string full = "continue/" + std::to_string(fx) + " " + std::to_string(fy) + "/farmer " + std::to_string(fx) + " " +
+                       std::to_string(fy) + " " + std::to_string(fd) + actors + "/" + script;
+    for (auto& n : npcs) n.loc = "_festival_away";   // the scene's own actors stand in for them
+    if (!startEvent(cur->name, "festival_" + f.key, full)) festivalOutcome();
+}
+
+void Game::festivalAfterScene() {
+    if (festivalActive < 0) return;
+    festivalOutcome();
+}
+
+// What each festival's main event comes to.
+void Game::festivalOutcome() {
     if (festivalActive < 0) return;
     const Festival& f = festivals[festivalActive];
     auto everyone = [&](int pts) {

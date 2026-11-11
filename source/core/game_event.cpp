@@ -170,6 +170,13 @@ bool Game::eventConditionsMet(const std::string& key) const {
             ok = mineDeepest >= 120;
         } else if (code == "m") {          // total earnings
             ok = w.size() > 1 && totalEarned >= atoll(w[1].c_str());
+        } else if (code == "h") {          // pet preference: the cat's event is the one that plays
+            ok = w.size() > 1 && w[1] == "cat" && !mailReceived.count("hasPet") && !mailReceived.count("s3d_noPet");
+        } else if (code == "Skill") {
+            static const char* names[SK_COUNT] = {"Farming", "Fishing", "Foraging", "Mining", "Combat"};
+            ok = false;
+            for (int k = 0; k < SK_COUNT && w.size() > 2; k++)
+                if (w[1] == names[k]) ok = skillLevel(k) >= atoi(w[2].c_str());
         } else if (code == "S") {
             ok = w.size() > 1 && mailReceived.count("secretNote:" + w[1]) != 0;
         } else if (code == "j") {
@@ -291,6 +298,12 @@ void Game::endEvent() {
     Cutscene& cs = cutscene;
     if (!cs.active) return;
     cs.active = false;
+    if (cs.id.rfind("festival_", 0) == 0) {   // a festival's main event: stay where the scene left you
+        if (EventActor* a = eventActor("farmer")) { px = a->x; py = a->y; facing = a->facing; }
+        fade = 0;
+        festivalAfterScene();
+        return;
+    }
     eventsSeen.insert(cs.id);
     if (cs.id == "112") mailReceived.insert("canReadJunimoText");      // the Wizard's forest magic
     if (cs.id == "611439") mailReceived.insert("ccDoorUnlock");
@@ -639,6 +652,62 @@ bool Game::eventStep(const std::string& raw) {
                 return true;
             }
         return true;
+    }
+    if (c == "cave" || c == "catQuestion") {   // Demetrius's cave, Marnie's stray
+        DialoguePage p;
+        DialogueChoice ch;
+        if (c == "cave") {
+            p.text = "What should Demetrius set up in your cave?";
+            ch.label = "Mushrooms"; p.choices.push_back(ch);
+            ch.label = "Fruit bats"; p.choices.push_back(ch);
+        } else {
+            p.text = "Adopt it? It looks like it needs a home.";
+            ch.label = "Yes"; p.choices.push_back(ch);
+            ch.label = "No"; p.choices.push_back(ch);
+        }
+        cs.special = c;
+        cs.forkWant = 0;
+        cs.forkFlag = false;
+        cs.questionPending = true;
+        dialogue.active = true;
+        dialogue.npc = "";
+        dialogue.pages = {p};
+        dialogue.page = 0;
+        return false;
+    }
+    if (c == "rustyKey") { mailReceived.insert("HasRustyKey"); return true; }
+    if (c == "gainSkill") { gainXp(std::max(0, std::min((int)SK_COUNT - 1, iarg(1))), 200); return true; }
+    if (c == "grandpaEvaluation" || c == "grandpaEvaluation2") { grandpaEvaluation(); return true; }
+    if (c == "splitSpeak") {   // one line or the other, by the answer just given
+        std::string text = arg(2);
+        size_t bar = text.find('~');
+        if (bar != std::string::npos) text = cs.forkFlag ? text.substr(0, bar) : text.substr(bar + 1);
+        auto pages = parseDialogue(text, me.name);
+        if (pages.empty()) return true;
+        dialogue.active = true;
+        dialogue.npc = arg(1);
+        dialogue.pages = pages;
+        dialogue.page = 0;
+        return false;
+    }
+    // festival scenes
+    if (c == "loadActors" || c == "waitForOtherPlayers" || c == "hideShadow" || c == "bgColor" || c == "stopAdvancedMoves" ||
+        c == "changeMapTile" || c == "removeObject" || c == "changeSprite" || c == "changePortrait" || c == "translateName" ||
+        c == "stopGlowing" || c == "farmerAnimation" || c == "hostMail" || c == "waitForTempSprite" || c == "grandpaCandles" ||
+        c == "beginSimultaneousCommand" || c == "endSimultaneousCommand" || c == "eggHuntWinner" || c == "iceFishingWinner" ||
+        c == "governorTaste" || c == "awardFestivalPrize2")
+        return true;
+    if (c == "warpFarmers") {   // the first spot is yours
+        if (EventActor* a = eventActor("farmer")) {
+            a->x = iarg(1) * TILE + TILE / 2.0f;
+            a->y = iarg(2) * TILE + TILE - 2.0f;
+            a->facing = toOurFacing(iarg(3));
+        }
+        return true;
+    }
+    if (c == "playerControl") {   // the scene hands over to you (the egg hunt, ice fishing)
+        endEvent();
+        return false;
     }
     if (c == "addQuest") { addQuest(arg(1)); return true; }
     if (c == "removeQuest") {

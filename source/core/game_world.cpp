@@ -206,4 +206,64 @@ void Game::worldMorning() {
     if (mineDeepest >= 120 && !mailReceived.count("HasSkullKey")) mailReceived.insert("HasSkullKey");
 }
 
+// The cave Demetrius set up: mushrooms every other day, or whatever fruit the bats drop.
+void Game::caveNight() {
+    bool mush = mailReceived.count("caveMushrooms"), bats = mailReceived.count("caveBats");
+    if ((!mush && !bats) || !cur || cur->name != "FarmCave") return;
+    // filled when you walk in, for the days since you last looked (up to four)
+    int last = -1;
+    for (auto it = mailReceived.begin(); it != mailReceived.end();)
+        if (it->rfind("s3d_caveDay:", 0) == 0) { last = atoi(it->c_str() + 12); it = mailReceived.erase(it); }
+        else ++it;
+    mailReceived.insert("s3d_caveDay:" + std::to_string(absoluteDay()));
+    int days = last < 0 ? 1 : std::min(4, absoluteDay() - last);
+    Location* cave = cur;
+    if (days <= 0 || cave->objects.size() >= 12) return;
+    static const int shrooms[] = {404, 420, 422, 257, 281}, fruit[] = {296, 410, 613, 634, 635, 636, 637, 638, 406};
+    int n = mush ? days * 2 : days + (int)(rand32() % 2);
+    const TileMap& m = cave->map;
+    for (int k = 0, tries = 0; k < n && tries < 200; tries++) {
+        int x = 2 + (int)(rand32() % (uint32_t)std::max(1, m.width() - 4)), y = 3 + (int)(rand32() % (uint32_t)std::max(1, m.height() - 5));
+        if (m.tile(L_BACK, x, y) == NO_TILE || m.tile(L_BUILDINGS, x, y) != NO_TILE || (m.flags(x, y) & CF_BLOCKED) || m.warpAt(x, y)) continue;
+        bool taken = false;
+        for (auto& o : cave->objects) taken |= o.x == x && o.y == y;
+        if (taken) continue;
+        WorldObject o;
+        o.x = x; o.y = y;
+        o.itemId = mush ? shrooms[rand32() % 5] : fruit[rand32() % 9];
+        if (!data.object(o.itemId)) continue;
+        cave->objects.push_back(o);
+        k++;
+    }
+}
+
+// Grandpa's shrine, the start of year 3: candles for how the farm has done.
+void Game::grandpaEvaluation() {
+    int pts = 0;
+    for (long long step : {50000LL, 100000LL, 200000LL, 300000LL, 500000LL, 1000000LL})
+        if (totalEarned >= step) pts++;
+    if (totalEarned >= 1000000) pts++;
+    int levels = 0;
+    for (int k = 0; k < SK_COUNT; k++) levels += skillLevel(k);
+    pts += levels >= 50 ? 2 : levels >= 30 ? 1 : 0;
+    int friends = 0;
+    for (auto& n : npcs) friends += n.friendship >= 2000;
+    pts += friends >= 10 ? 2 : friends >= 5 ? 1 : 0;
+    if (!spouse.empty() && houseLevel >= 2) pts++;
+    if (ccDone()) pts += 3;
+    if (mineDeepest >= 120) pts++;
+    if (mailReceived.count("HasRustyKey")) pts++;
+    if (museumDonated.size() >= 60) pts++;
+    int candles = pts >= 12 ? 4 : pts >= 8 ? 3 : pts >= 4 ? 2 : 1;
+    mailReceived.insert("s3d_grandpa" + std::to_string(candles));
+    if (candles == 4 && !mailReceived.count("s3d_perfectionStatue") && data.big(160)) {
+        mailReceived.insert("s3d_perfectionStatue");
+        Slot s;
+        s.type = SLOT_BIG; s.id = 160; s.count = 1;
+        addSlot(s);
+    }
+    say("Grandpa's shrine: " + std::to_string(candles) + (candles == 1 ? " candle is" : " candles are") + " lit (" +
+        std::to_string(pts) + " points)." + (candles == 4 ? " He couldn't be prouder." : ""));
+}
+
 } // namespace sv
