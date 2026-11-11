@@ -562,6 +562,13 @@ public:
     void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
     int bushBerry(const Location::Bush& b) const;   // salmonberry / blackberry ready on it, or -1
+    // Your horse (once there's a stable): waits by the stable each morning; A to ride, A again to get off
+    std::string horseLoc;                   // "" = no horse
+    float horseX = 0, horseY = 0;
+    int horseFacing = 0;
+    bool riding = false;
+    void horseMorning();
+    bool horseInteract(int tx, int ty);
     // Romance: dating (a bouquet at 8 hearts), engaged (the mermaid's pendant at 10), married
     std::string spouse, engagedTo;
     std::set<std::string> dating;
