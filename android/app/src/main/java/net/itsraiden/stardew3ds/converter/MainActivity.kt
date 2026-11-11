@@ -82,8 +82,10 @@ class MainActivity : AppCompatActivity() {
     private val pickModZips = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
             uris.forEach { try { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {} }
-            modZips = uris; modsUri = null
-            prefs.edit().putString("modZips", uris.joinToString("\n")).remove("mods").apply(); refresh()
+            // each pick adds to the list (pick several at once with a long-press, or one at a time);
+            // X clears it
+            modZips = (modZips + uris).distinct(); modsUri = null
+            prefs.edit().putString("modZips", modZips.joinToString("\n")).remove("mods").apply(); refresh()
         }
     }
     private val pickSaveTo = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
