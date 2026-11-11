@@ -937,6 +937,9 @@ def write_fish(content, out_dir):
             p = str(raw).split("/")
             if len(p) < 13 or p[1] == "trap":
                 continue
+            if not all(p[i].strip().lstrip("-").isdigit() for i in (1, 3, 4)):
+                print(f"  ! fish {fid}: unreadable entry, skipped")
+                continue
             iid = ITEM_IDS.get(fid)
             if iid is None:
                 continue
