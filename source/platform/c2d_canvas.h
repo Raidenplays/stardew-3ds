@@ -8,6 +8,12 @@
 
 class C2DCanvas : public Canvas {
 public:
+    const void* texLookup(TexName tex) override { return get(tex); }
+    void imageTex(const void* handle, TexName tex, int sx, int sy, int sw, int sh, float dx, float dy) override {
+        draws++;
+        if (handle) static_cast<const Texture*>(handle)->draw(sx, sy, sw, sh, dx, dy, false, nullptr);
+        (void)tex;
+    }
     unsigned draws = 0;   // draw calls this frame (performance readout)
     explicit C2DCanvas(std::function<std::string(const std::string&)> resolve);
     ~C2DCanvas();

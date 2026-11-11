@@ -151,6 +151,14 @@ public:
 
     // Draw (sx,sy,sw,sh) of texture `tex` (a name under tex/) at (dx,dy).
     // tint != 0 multiplies the texture colour by it.
+    // Fast path for drawing lots of tiles from a few sheets: look each sheet
+    // up once (texLookup), then draw by handle. Canvases without it fall back
+    // to image().
+    virtual const void* texLookup(TexName) { return nullptr; }
+    virtual void imageTex(const void* handle, TexName tex, int sx, int sy, int sw, int sh, float dx, float dy) {
+        (void)handle;
+        image(tex, sx, sy, sw, sh, dx, dy);
+    }
     virtual void image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                        bool flipX = false, uint32_t tint = 0) = 0;
     // Rotated draw: the source pixel (px, py) inside the (sx,sy,sw,sh) rect lands on

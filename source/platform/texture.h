@@ -15,6 +15,7 @@ struct TexPage {
     long fileOff = 0;        // where this page's pixels start in the .s3t
     u32 compLen = 0;         // S3T3: deflated size (0 = stored raw)
     bool loaded = false;     // pages load on first draw, and can be evicted
+    bool bad = false;        // couldn't be read: don't hit the SD card for it every frame
     u32 lastUsed = 0;        // frame number of the last draw
 };
 

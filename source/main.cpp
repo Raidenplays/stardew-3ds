@@ -111,7 +111,8 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
     return false;
 }
 
-static char perfLine1[96], perfLine2[96];   // performance readout text
+static char perfLine1[96], perfLine2[96], perfLine3[96];   // performance readout text
+static double tickMs() { return svcGetSystemTick() / (double)CPU_TICKS_PER_MSEC; }
 
 int main() {
     gfxInitDefault();
@@ -409,6 +410,9 @@ int main() {
             static u64 since = 0;
             static int frames = 0;
             static float upd = 0, cpu = 0, gpu = 0;
+            static float prof[PROF_COUNT];
+            g_profClock = tickMs;
+            for (int k = 0; k < PROF_COUNT; k++) prof[k] = std::max(prof[k], g_profMs[k]);
             static TexStats last;
             frames++;
             upd = std::max(upd, updMs);
@@ -421,6 +425,9 @@ int main() {
                 snprintf(perfLine1, sizeof perfLine1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
                 snprintf(perfLine2, sizeof perfLine2, "vram %uK  pages +%u -%u !%u  draws %u", (unsigned)(linearSpaceFree() / 1024),
                          st.loads - last.loads, st.evictions - last.evictions, st.failed - last.failed, topDraws);
+                snprintf(perfLine3, sizeof perfLine3, "map %.0f obj %.0f front %.0f wthr %.0f hud %.0f ms", prof[PROF_MAP],
+                         prof[PROF_OBJECTS], prof[PROF_FRONT], prof[PROF_WEATHER], prof[PROF_HUD]);
+                for (float& v : prof) v = 0;
                 last = st;
                 since = nowT;
                 frames = 0;
@@ -435,7 +442,8 @@ int main() {
             if (ui.showPerf) {
                 char l2[112];
                 snprintf(l2, sizeof l2, "%s+%u", perfLine2, canvas.draws - before);
-                canvas.rect(0, 0, 320, 30, RGBA(0, 0, 0));
+                canvas.rect(0, 0, 320, 42, RGBA(0, 0, 0));
+                canvas.text(4, 28, 0.4f, RGBA(255, 255, 0), perfLine3, ALIGN_LEFT);
                 canvas.text(4, 2, 0.4f, RGBA(255, 255, 0), perfLine1[0] ? perfLine1 : "measuring...", ALIGN_LEFT);
                 canvas.text(4, 15, 0.4f, RGBA(255, 255, 0), l2, ALIGN_LEFT);
             }
