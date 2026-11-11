@@ -572,7 +572,8 @@ TEXTURES_FROM_DATA = set()
 
 
 # Robin's buildings that the engine handles: animal houses, sheds, silos, wells.
-BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed"}
+BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed",
+             "Greenhouse"}
 
 
 def write_buildings_animals(content, out_dir):
@@ -583,7 +584,7 @@ def write_buildings_animals(content, out_dir):
     if os.path.isfile(bp):
         with open(os.path.join(out_dir, "buildings.dat"), "w", encoding="utf-8") as f:
             for name, b in _load_json(content, "Data/Buildings.json").items():
-                if name not in BUILDABLE or b.get("Builder") != "Robin":
+                if name not in BUILDABLE or (b.get("Builder") != "Robin" and name != "Greenhouse"):
                     continue
                 tex = str(b.get("Texture") or ("Buildings/" + name)).replace("\\", "/")
                 TEXTURES_FROM_DATA.add(tex)
@@ -688,6 +689,25 @@ def write_data(content, out_dir):
             n += 1
     print(f"  objects.dat: {n} objects")
     write_buildings_animals(content, out_dir)
+    # fruit trees: sapling, seasons, fruit, texture, row
+    fp = os.path.join(content, "Data", "FruitTrees.json")
+    if os.path.isfile(fp):
+        with open(os.path.join(out_dir, "fruittrees.dat"), "w", encoding="utf-8") as f:
+            for sid, t in _load_json(content, "Data/FruitTrees.json").items():
+                sap = ITEM_IDS.get(sid)
+                fruit = None
+                for fr in t.get("Fruit") or []:
+                    fruit = ITEM_IDS.get(str(fr.get("ItemId") or "").replace("(O)", ""))
+                    if fruit is not None:
+                        break
+                if sap is None or fruit is None:
+                    continue
+                mask = 0
+                for ss in t.get("Seasons") or []:
+                    mask |= season_bits.get(str(ss).lower(), 0)
+                tex = str(t.get("Texture") or "TileSheets/fruitTrees").replace("\\", "/")
+                TEXTURES_FROM_DATA.add(tex)
+                f.write(f"{sap}\t{mask}\t{fruit}\t{tex_name(tex)}\t{int(t.get('TextureSpriteRow', 0) or 0)}\n")
     # what's inside each geode (Clint cracks them): geode id, then possible item ids
     with open(os.path.join(out_dir, "geodes.dat"), "w", encoding="utf-8") as f:
         for oid, o in objs.items():

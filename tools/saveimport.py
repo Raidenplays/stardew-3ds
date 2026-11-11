@@ -203,7 +203,11 @@ def location_lines(loc, name, ids, out, extras):
         elif t == "Grass":
             out.append(["grass", name, x, y, max(1, num(tf, "numberOfWeeds", 1)), 1 if num(tf, "grassType", 1) == 7 else 0])
         elif t == "FruitTree":
-            extras.append(["fruittree", name, x, y, txt(tf, "treeId") or txt(tf, "indexOfFruit"), num(tf, "daysUntilMature")])
+            sap = ids.o(txt(tf, "treeId") or txt(tf, "treeType"))
+            fr = tf.find("fruit")
+            nfruit = len([c for c in fr if c.get(XSI_NIL) != "true"]) if fr is not None else num(tf, "fruitsOnTree")
+            if sap is not None:
+                out.append(["fruittree", name, x, y, sap, num(tf, "daysUntilMature"), nfruit])
 
 
 def import_save(save_path, root):

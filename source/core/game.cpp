@@ -346,6 +346,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     // maps without markers get it scattered at random
     if (!debrisFromMap(r)) spawnDebris(diggable / 6, r);
     rngState = r;
+    ensureGreenhouse();
     // the first two quests of a new farm
     addQuest("9");
     addQuest("6");
@@ -385,6 +386,36 @@ void Game::spawnDebris(int count, uint32_t& r) {
         farm->debrisVar[idx] = (uint8_t)((r >> 4) & 1);
         i++;
     }
+}
+
+// One night for a location's soil: crops grow (if watered), die out of season, dry out.
+void Game::growSoils(Location& loc, bool newSeason, bool anySeason) {
+    for (auto& s : loc.soils) {
+        if (s.seed >= 0 && !s.dead) {
+            const CropDef* c = data.cropForSeed(s.seed);
+            if (!c) {
+                s.seed = -1;
+            } else if (newSeason && !anySeason && !(c->seasonMask & (1 << season))) {
+                s.dead = true;
+            } else if (s.watered) {
+                if (s.regrowWait > 0) {
+                    s.regrowWait--;
+                    if (s.regrowWait == 0) s.regrowWait = -1;
+                } else if (s.phase < c->phaseDays.size()) {
+                    s.dayInPhase++;
+                    // agriculturist: crops sometimes put on an extra day of growth
+                    if (has(PR_AGRICULTURIST) && rand32() % 10 == 0) s.dayInPhase++;
+                    if (s.dayInPhase >= c->phaseDays[s.phase]) {
+                        s.phase++;
+                        s.dayInPhase = 0;
+                    }
+                }
+            }
+        }
+        s.watered = false;
+        if (s.tilled && s.seed < 0 && !anySeason && (season == WINTER || rand32() % 10 == 0)) s = Soil();
+    }
+
 }
 
 void Game::startDay() {
@@ -458,6 +489,7 @@ bool Game::tileSolid(int tx, int ty) const {
         if (t.x == tx && t.y == ty && (t.stage > 0 || t.stump)) return true;
     if (bushAt(tx, ty) >= 0) return true;
     if (!cur->clumps.empty() && clumpAt(tx, ty) >= 0) return true;
+    if (!cur->fruitTrees.empty() && fruitTreeAt(tx, ty) >= 0) return true;
     if (cur->mineLevel && m.tile(L_BUILDINGS, tx, ty) != NO_TILE) return true;   // a ladder that turned up
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
@@ -653,6 +685,7 @@ bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap;
 bool Game::tryInteract(int tx, int ty) {
     if (mineInteract(tx, ty)) return true;
     if (farmBuildingInteract(tx, ty) || hopperInteract(tx, ty) || animalInteract(tx, ty)) return true;
+    if (!cur->fruitTrees.empty() && shakeFruitTree(tx, ty)) return true;
     if (NpcState* n = npcAt(tx, ty)) {
         if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
         else talkTo(*n);
@@ -676,7 +709,7 @@ bool Game::tryInteract(int tx, int ty) {
             return true;
         }
     }
-    if (cur->isFarm) {
+    if (cropLand()) {
         if (cropReady(tx, ty)) {
             Soil& s = cur->soils[(size_t)ty * cur->map.width() + tx];
             const CropDef* c = data.cropForSeed(s.seed);
@@ -752,6 +785,7 @@ void Game::useSelected(int tx, int ty) {
         if (t->kind == TOOL_WEAPON) { swingWeapon(*t); return; }
         if (!inMap) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE) && pickUpPlaced(tx, ty)) return;
+        if (t->kind == TOOL_AXE && !cur->fruitTrees.empty() && chopFruitTree(tx, ty)) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE || t->kind == TOOL_HOE) && !cur->clumps.empty() &&
             clumpAt(tx, ty) >= 0) {
             if (t->kind == TOOL_HOE) sfx("woodyHit");
@@ -763,7 +797,7 @@ void Game::useSelected(int tx, int ty) {
         uint8_t f = m.flags(tx, ty);
         switch (t->kind) {
             case TOOL_HOE:
-                if (cur->isFarm && (f & CF_DIGGABLE) && !(f & CF_WATER) && !s.tilled && !deb &&
+                if (cropLand() && (f & CF_DIGGABLE) && !(f & CF_WATER) && !s.tilled && !deb &&
                     !buildingAt(tx, ty) && m.tile(L_BUILDINGS, tx, ty) == NO_TILE) {
                     cutGrass(tx, ty);
                     s = Soil();
@@ -860,14 +894,15 @@ void Game::useSelected(int tx, int ty) {
         return;
     }
 
+    if (plantFruitTree(tx, ty)) return;
     if (plantTree(tx, ty)) return;
     if (placeSelected(tx, ty)) return;
     const CropDef* crop = sl.type == SLOT_OBJECT ? data.cropForSeed(sl.id) : nullptr;
     if (crop) {
-        if (!inMap || !cur->isFarm) return;
+        if (!inMap || !cropLand()) return;
         Soil& s = cur->soils[idx];
         if (!s.tilled || s.seed >= 0) return;
-        if (!(crop->seasonMask & (1 << season))) {
+        if (!inGreenhouse() && !(crop->seasonMask & (1 << season))) {
             say("Can't plant this now");
             return;
         }
@@ -930,6 +965,7 @@ void Game::updateEffects(float dt) {
                                           [](const Location::Rustle& r) { return r.t <= 0; }), cur->rustles.end());
         for (auto& b : cur->bushes) if (b.shake > 0) b.shake -= dt;
         for (auto& b : cur->clumps) if (b.shake > 0) b.shake -= dt;
+        for (auto& b : cur->fruitTrees) if (b.shake > 0) b.shake -= dt;
     }
     for (auto& e : effects) {
         e.t += dt;
@@ -1170,31 +1206,14 @@ bool Game::goToBed() {
     bool newSeason = season != oldSeason;
     if (newSeason) refreshSeasonMaps();
 
-    for (auto& s : farm->soils) {
-        if (s.seed >= 0 && !s.dead) {
-            const CropDef* c = data.cropForSeed(s.seed);
-            if (!c) {
-                s.seed = -1;
-            } else if (newSeason && !(c->seasonMask & (1 << season))) {
-                s.dead = true;
-            } else if (s.watered) {
-                if (s.regrowWait > 0) {
-                    s.regrowWait--;
-                    if (s.regrowWait == 0) s.regrowWait = -1;
-                } else if (s.phase < c->phaseDays.size()) {
-                    s.dayInPhase++;
-                    // agriculturist: crops sometimes put on an extra day of growth
-                    if (has(PR_AGRICULTURIST) && rand32() % 10 == 0) s.dayInPhase++;
-                    if (s.dayInPhase >= c->phaseDays[s.phase]) {
-                        s.phase++;
-                        s.dayInPhase = 0;
-                    }
-                }
+    growSoils(*farm, newSeason, false);
+    fruitTreesNight(*farm, false);
+    for (auto& b : buildings)   // the greenhouse grows anything, any time of year
+        if (b.type == "Greenhouse" && b.daysLeft <= 0)
+            if (Location* gh = loadLocation(interiorName(b))) {
+                growSoils(*gh, newSeason, true);
+                fruitTreesNight(*gh, true);
             }
-        }
-        s.watered = false;
-        if (s.tilled && s.seed < 0 && (season == WINTER || rand32() % 10 == 0)) s = Soil();
-    }
 
     raining = (day > 3 && season != WINTER && rand32() % 100 < 18);
     windy = !raining && day > 2 && (season == SPRING || season == FALL) && rand32() % 100 < 15;
@@ -1226,7 +1245,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 15;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 16;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1239,6 +1258,7 @@ static const uint32_t SAVE_VERSION = 15;   // 2: villager friendships, 3: events
                                           // 13: big stumps, logs and boulders
                                           // 14: deepest mine floor
                                           // 15: farm buildings and animals
+                                          // 16: fruit trees, soil inside buildings (greenhouse)
 
 namespace {
 struct W {
@@ -1383,12 +1403,28 @@ bool Game::save(const std::string& path) const {
         const std::vector<WorldObject>& objs = it != locations.end() ? it->second->objects : none;
         w.u32((uint32_t)objs.size());
         for (auto& o : objs) { w.i32(o.x); w.i32(o.y); w.i32(o.itemId); }
+        // soil and fruit trees inside (the greenhouse)
+        const Location* in = it != locations.end() ? it->second.get() : nullptr;
+        uint32_t nt = 0;
+        if (in) for (auto& s : in->soils) nt += s.tilled;
+        w.u32(nt);
+        if (in)
+            for (size_t i = 0; i < in->soils.size(); i++) {
+                const Soil& s = in->soils[i];
+                if (!s.tilled) continue;
+                w.u32((uint32_t)i); w.u8((s.watered ? 2 : 0) | (s.dead ? 4 : 0) | (s.regrown ? 8 : 0));
+                w.i32(s.seed); w.u8(s.phase); w.u8(s.dayInPhase); w.u8((uint8_t)s.regrowWait);
+            }
+        w.u32(in ? (uint32_t)in->fruitTrees.size() : 0);
+        if (in) for (auto& t : in->fruitTrees) { w.i32(t.x); w.i32(t.y); w.i32(t.sapling); w.i32(t.daysLeft); w.i32(t.fruit); }
     }
     w.u32((uint32_t)animals.size());
     for (auto& a : animals) {
         w.str(a.type); w.str(a.name); w.i32(a.home); w.i32(a.age); w.i32(a.friendship);
         w.i32(a.daysSinceProduce); w.i32(a.ready); w.u8(a.fed ? 1 : 0);
     }
+    w.u32((uint32_t)farm->fruitTrees.size());
+    for (auto& t : farm->fruitTrees) { w.i32(t.x); w.i32(t.y); w.i32(t.sapling); w.i32(t.daysLeft); w.i32(t.fruit); }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1644,8 +1680,25 @@ bool Game::load(const std::string& path, std::string* err) {
                 objs.push_back(o);
             }
             buildings.push_back(b);
-            if (!objs.empty())
-                if (Location* in = loadLocation(interiorName(b))) in->objects = objs;
+            Location* in = !objs.empty() || version >= 16 ? loadLocation(interiorName(b)) : nullptr;
+            if (in) in->objects = objs;
+            if (version >= 16 && r.ok) {
+                uint32_t ns = r.u32();
+                for (uint32_t k = 0; k < ns && r.ok && k < 100000; k++) {
+                    uint32_t i = r.u32();
+                    uint8_t bits = r.u8();
+                    Soil s;
+                    s.tilled = true; s.watered = bits & 2; s.dead = bits & 4; s.regrown = bits & 8;
+                    s.seed = r.i32(); s.phase = r.u8(); s.dayInPhase = r.u8(); s.regrowWait = (int8_t)r.u8();
+                    if (in && i < in->soils.size()) in->soils[i] = s;
+                }
+                uint32_t nf = r.u32();
+                for (uint32_t k = 0; k < nf && r.ok && k < 10000; k++) {
+                    FruitTree t;
+                    t.x = r.i32(); t.y = r.i32(); t.sapling = r.i32(); t.daysLeft = r.i32(); t.fruit = r.i32();
+                    if (in) in->fruitTrees.push_back(t);
+                }
+            }
         }
         uint32_t na = r.u32();
         for (uint32_t i = 0; i < na && r.ok && i < 2000; i++) {
@@ -1656,6 +1709,15 @@ bool Game::load(const std::string& path, std::string* err) {
             animals.push_back(a);
         }
     }
+    farm->fruitTrees.clear();
+    if (version >= 16 && r.ok) {
+        uint32_t nf = r.u32();
+        for (uint32_t k = 0; k < nf && r.ok && k < 10000; k++) {
+            FruitTree t;
+            t.x = r.i32(); t.y = r.i32(); t.sapling = r.i32(); t.daysLeft = r.i32(); t.fruit = r.i32();
+            farm->fruitTrees.push_back(t);
+        }
+    }
     for (auto& c : farm->clumps)     // nothing grows under them
         for (int dy = 0; dy < 2; dy++)
             for (int dx = 0; dx < 2; dx++)
@@ -1664,6 +1726,7 @@ bool Game::load(const std::string& path, std::string* err) {
     if (!r.ok) return false;
     // saves from before events could hand out items: Willy's rod was never given
     if (eventsSeen.count("739330") && toolLevel(TOOL_ROD) < 0) awardPrize("rod");
+    ensureGreenhouse();
     // conversions before build 64 had no scythe (1.6 keeps it with the weapons): hand one over once
     if (!eventsSeen.count("s3d_scythe") && data.toolByKind(TOOL_SCYTHE)) {
         bool have = false;

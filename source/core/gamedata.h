@@ -61,6 +61,14 @@ struct BuildingType {
     int hopperX = -1, hopperY = -1;                // feed hopper inside
 };
 
+// Data/FruitTrees
+struct FruitTreeDef {
+    int sapling = 0, fruit = 0;
+    uint8_t seasonMask = 0;
+    std::string texture;
+    int row = 0;
+};
+
 // Data/FarmAnimals
 struct AnimalType {
     std::string name, house, tex, babyTex, harvestedTex, harvestType, harvestTool, sound, requires, shopTex;
@@ -273,6 +281,11 @@ public:
     std::unordered_map<std::string, NpcAnim> npcAnims;
     std::unordered_map<std::string, MonsterDef> monsters;
     std::vector<BuildingType> buildingTypes;
+    std::vector<FruitTreeDef> fruitTrees;
+    const FruitTreeDef* fruitTreeForSapling(int id) const {
+        for (auto& f : fruitTrees) if (f.sapling == id) return &f;
+        return nullptr;
+    }
     std::vector<AnimalType> animalTypes;
     const BuildingType* buildingType(const std::string& n) const {
         for (auto& b : buildingTypes) if (b.name == n) return &b;

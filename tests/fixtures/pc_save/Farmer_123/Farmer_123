@@ -23,7 +23,7 @@
       <item><key><string>Abigail</string></key><value><Friendship><Points>1500</Points></Friendship></value></item>
       <item><key><string>Sebastian</string></key><value><Friendship><Points>2500</Points></Friendship></value></item>
     </friendshipData>
-    <mailReceived><string>ccDoorUnlock</string><string>guildMember</string></mailReceived>
+    <mailReceived><string>ccPantry</string><string>ccDoorUnlock</string><string>guildMember</string></mailReceived>
     <eventsSeen><string>60367</string><string>739330</string></eventsSeen>
     <craftingRecipes><item><key><string>Chest</string></key><value><int>3</int></value></item></craftingRecipes>
   </player>
@@ -44,6 +44,7 @@
         <item><key><Vector2><X>58</X><Y>24</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>0</state><crop><indexOfHarvest>24</indexOfHarvest><currentPhase>4</currentPhase><dayOfCurrentPhase>0</dayOfCurrentPhase><fullyGrown>true</fullyGrown><dead>false</dead></crop></TerrainFeature></value></item>
         <item><key><Vector2><X>59</X><Y>24</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>0</state><crop xsi:nil="true"/></TerrainFeature></value></item>
         <item><key><Vector2><X>70</X><Y>30</Y></Vector2></key><value><TerrainFeature xsi:type="Tree"><treeType>1</treeType><growthStage>5</growthStage><stump>false</stump></TerrainFeature></value></item>
+        <item><key><Vector2><X>64</X><Y>30</Y></Vector2></key><value><TerrainFeature xsi:type="FruitTree"><treeId>628</treeId><daysUntilMature>0</daysUntilMature><growthStage>4</growthStage><fruit><Item xsi:type="Object"><itemId>638</itemId></Item><Item xsi:type="Object"><itemId>638</itemId></Item></fruit></TerrainFeature></value></item>
         <item><key><Vector2><X>72</X><Y>30</Y></Vector2></key><value><TerrainFeature xsi:type="Grass"><grassType>1</grassType><numberOfWeeds>3</numberOfWeeds></TerrainFeature></value></item>
       </terrainFeatures>
       <buildings>
@@ -52,10 +53,15 @@
             <objects><item><key><Vector2><X>5</X><Y>5</Y></Vector2></key><value><Object><itemId>176</itemId><name>Egg</name><bigCraftable>false</bigCraftable></Object></value></item></objects>
             <animals><item><key><long>1</long></key><value><FarmAnimal><name>Clucky</name><type>White Chicken</type><age>40</age><friendshipTowardFarmer>800</friendshipTowardFarmer></FarmAnimal></value></item></animals>
           </indoors></Building>
+        <Building><buildingType>Greenhouse</buildingType><tileX>25</tileX><tileY>10</tileY><daysOfConstructionLeft>0</daysOfConstructionLeft></Building>
         <Building xsi:type="ShippingBin"><buildingType>Shipping Bin</buildingType><tileX>71</tileX><tileY>14</tileY></Building>
       </buildings>
       <animals />
     </GameLocation>
+    <GameLocation><name>Greenhouse</name><objects /><terrainFeatures>
+        <item><key><Vector2><X>6</X><Y>12</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>1</state><crop><netSeedIndex>472</netSeedIndex><currentPhase>3</currentPhase><dayOfCurrentPhase>0</dayOfCurrentPhase><fullyGrown>false</fullyGrown><dead>false</dead></crop></TerrainFeature></value></item>
+        <item><key><Vector2><X>14</X><Y>12</Y></Vector2></key><value><TerrainFeature xsi:type="FruitTree"><treeId>630</treeId><daysUntilMature>10</daysUntilMature><fruit /></TerrainFeature></value></item>
+      </terrainFeatures></GameLocation>
     <GameLocation xsi:type="FarmHouse"><name>FarmHouse</name><objects /><terrainFeatures /></GameLocation>
   </locations>
   <currentSeason>fall</currentSeason><dayOfMonth>12</dayOfMonth><year>2</year><whichFarm>0</whichFarm>

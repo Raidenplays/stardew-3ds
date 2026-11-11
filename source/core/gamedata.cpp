@@ -450,6 +450,19 @@ bool GameData::load(const std::string& root, std::string* err) {
             buildingTypes.push_back(b);
         }
     lines.clear();
+    if (readLines(root + "data/fruittrees.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 5) continue;
+            FruitTreeDef t;
+            t.sapling = atoi(f[0].c_str());
+            t.seasonMask = (uint8_t)atoi(f[1].c_str());
+            t.fruit = atoi(f[2].c_str());
+            t.texture = f[3];
+            t.row = atoi(f[4].c_str());
+            fruitTrees.push_back(t);
+        }
+    lines.clear();
     if (readLines(root + "data/animals.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);

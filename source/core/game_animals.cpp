@@ -429,6 +429,10 @@ bool Game::farmBuildingInteract(int tx, int ty) {
                     if (td->kind == TOOL_CAN) { water = canCapacity(); sfx("slosh"); say("Filled the watering can."); return true; }
         return true;
     }
+    if (t && b->type == "Greenhouse" && !greenhouseFixed()) {
+        say("The old greenhouse is in ruins. Fixing up the Community Center's pantry would restore it.");
+        return true;
+    }
     if (t && b->type == "Silo") {
         say("Hay in your silos: " + std::to_string(hay) + "/" + std::to_string(hayCapacity()));
         return true;
@@ -441,6 +445,31 @@ bool Game::farmBuildingInteract(int tx, int ty) {
         return true;
     }
     return false;
+}
+
+// Every farm has a greenhouse: in ruins until the Community Center pantry is
+// done. The standard farm keeps it at 25,10 (an imported farm brings its own).
+void Game::ensureGreenhouse() {
+    const BuildingType* t = data.buildingType("Greenhouse");
+    if (!t || !farm || me.farmType != 0) return;
+    for (auto& b : buildings) if (b.type == "Greenhouse") return;
+    FarmBuilding b;
+    b.id = nextBuildingId++;
+    b.type = "Greenhouse";
+    b.x = 25;
+    b.y = 10;
+    int w = farm->map.width();
+    for (int dy = 0; dy < t->h; dy++)
+        for (int dx = 0; dx < t->w; dx++)
+            if (farm->map.inBounds(b.x + dx, b.y + dy)) {
+                size_t i = (size_t)(b.y + dy) * w + b.x + dx;
+                farm->debris[i] = DEB_NONE;
+                farm->grass[i] = 0;
+            }
+    for (size_t i = farm->trees.size(); i-- > 0;)
+        if (farm->trees[i].x >= b.x && farm->trees[i].x < b.x + t->w && farm->trees[i].y >= b.y && farm->trees[i].y < b.y + t->h)
+            farm->trees.erase(farm->trees.begin() + i);
+    buildings.push_back(b);
 }
 
 } // namespace sv

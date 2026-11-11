@@ -345,3 +345,96 @@ void Game::treesGrow() {
 }
 
 } // namespace sv
+
+namespace sv {
+
+// ---------------------------------------------------------------- fruit trees
+
+int Game::fruitTreeAt(int tx, int ty) const {
+    for (size_t i = 0; i < cur->fruitTrees.size(); i++)
+        if (cur->fruitTrees[i].x == tx && cur->fruitTrees[i].y == ty) return (int)i;
+    return -1;
+}
+
+// A sapling needs its tile and the 8 around it free (like the real thing).
+bool Game::plantFruitTree(int tx, int ty) {
+    Slot& sl = inv[selected];
+    if (sl.type != SLOT_OBJECT) return false;
+    const FruitTreeDef* d = data.fruitTreeForSapling(sl.id);
+    if (!d) return false;
+    bool greenhouse = cur->name.rfind("Greenhouse", 0) == 0;
+    if (!cur->isFarm && !greenhouse) { say("Plant fruit trees on your farm"); return true; }
+    const TileMap& m = cur->map;
+    for (int dy = -1; dy <= 1; dy++)
+        for (int dx = -1; dx <= 1; dx++) {
+            int x = tx + dx, y = ty + dy;
+            if (!m.inBounds(x, y)) { say("Can't plant that here"); return true; }
+            bool center = !dx && !dy;
+            if (tileSolid(x, y) || treeAt(x, y) || fruitTreeAt(x, y) >= 0 ||
+                (center && (cur->soils[(size_t)y * m.width() + x].tilled || (m.flags(x, y) & CF_WATER)))) {
+                say("Fruit trees need some space around them");
+                return true;
+            }
+        }
+    FruitTree t;
+    t.x = tx;
+    t.y = ty;
+    t.sapling = sl.id;
+    cur->fruitTrees.push_back(t);
+    if (grassAt(tx, ty)) cur->grass[(size_t)ty * m.width() + tx] = 0;
+    if (--sl.count <= 0) sl = Slot();
+    sfx("dirtyHit");
+    return true;
+}
+
+// A on a grown tree with fruit: it all drops.
+bool Game::shakeFruitTree(int tx, int ty) {
+    int i = fruitTreeAt(tx, ty);
+    if (i < 0) return false;
+    FruitTree& t = cur->fruitTrees[i];
+    t.shake = 0.4f;
+    sfx("leafrustle");
+    const FruitTreeDef* d = data.fruitTreeForSapling(t.sapling);
+    if (!d || t.fruit <= 0) return true;
+    if (addItem(d->fruit, t.fruit)) {
+        itemFlies(d->fruit, tx * TILE + 8.0f, ty * TILE - 24.0f, t.fruit);
+        gainXp(SK_FORAGING, t.fruit);
+        t.fruit = 0;
+    }
+    return true;
+}
+
+// The axe: a sapling comes out in one go; a grown tree takes a few hits (and drops its fruit).
+bool Game::chopFruitTree(int tx, int ty) {
+    int i = fruitTreeAt(tx, ty);
+    if (i < 0) return false;
+    FruitTree& t = cur->fruitTrees[i];
+    t.shake = 0.3f;
+    sfx("axchop");
+    if (t.daysLeft > 0) {
+        if (addItem(t.sapling, 1)) itemFlies(t.sapling, tx * TILE + 8.0f, ty * TILE);
+        cur->fruitTrees.erase(cur->fruitTrees.begin() + i);
+        return true;
+    }
+    if (t.fruit > 0) shakeFruitTree(tx, ty);
+    if (--t.health > 0) return true;
+    sfx("treecrack");
+    if (addItem(388, 12)) itemFlies(388, tx * TILE + 8.0f, ty * TILE, 12);
+    gainXp(SK_FORAGING, 15);
+    cur->fruitTrees.erase(cur->fruitTrees.begin() + i);
+    return true;
+}
+
+void Game::fruitTreesNight(Location& loc, bool anySeason) {
+    for (auto& t : loc.fruitTrees) {
+        t.health = 6;
+        if (t.daysLeft > 0) { t.daysLeft--; continue; }
+        const FruitTreeDef* d = data.fruitTreeForSapling(t.sapling);
+        if (!d) continue;
+        bool inSeason = anySeason || (d->seasonMask & (1 << season));
+        if (inSeason) t.fruit = std::min(3, t.fruit + 1);
+        else t.fruit = 0;
+    }
+}
+
+} // namespace sv
