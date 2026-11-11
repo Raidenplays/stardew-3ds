@@ -83,7 +83,8 @@ int main(int argc, char** argv) {
     bool mailDemo = false;
     bool titleDemo = false;   // title screen + character creation
     bool setupDemo = false;   // first-launch setup screens (runs the real converter on <sd root>)
-    bool introFrames = false; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
+    bool introFrames = false;
+    int introFps = 10; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
     for (int i = 3; i < argc; i++) {
         std::string a = argv[i];
         if (a.rfind("--event=", 0) == 0) eventArg = a.substr(8);
@@ -95,6 +96,7 @@ int main(int argc, char** argv) {
         else if (a == "--mail") mailDemo = true;
         else if (a == "--title") titleDemo = true;
         else if (a == "--intro-frames") introFrames = true;
+        else if (a.rfind("--intro-frames=", 0) == 0) { introFrames = true; introFps = atoi(a.c_str() + 15); }
         else if (a == "--setup") setupDemo = true;
         else font = a;
     }
@@ -182,8 +184,10 @@ int main(int argc, char** argv) {
         titleInit(t, data, false);
         t.creditsText = true;
         int n = 0;
-        for (float time = 0; time < SPLASH_SECONDS + INTRO_SECONDS + 1.0f; time += 0.1f) {
-            titleTick(t, 0.1f);
+        const float step = 1.0f / (introFps > 0 ? introFps : 10);
+        for (float time = 0; time < SPLASH_SECONDS + INTRO_SECONDS + 2.0f; time += step) {
+            titleTick(t, step);
+            t.t += step - 1.0f / 60;   // drawTitleTop advances the clouds by 1/60 per frame
             c.resize(400, 480);
             c.rect(0, 0, 400, 480, RGBA(0x18, 0x18, 0x1C));
             c.setOrigin(0, 0);
@@ -195,7 +199,7 @@ int main(int argc, char** argv) {
             c.setOrigin(0, 0);
             c.setClip(0, 0, 400, 480);
             char path[512];
-            snprintf(path, sizeof path, "%s/f%03d.png", g_out.c_str(), n++);
+            snprintf(path, sizeof path, "%s/f%04d.png", g_out.c_str(), n++);
             c.writePng(path, 1);
         }
         printf("  %d frames\n", n);

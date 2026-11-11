@@ -204,6 +204,16 @@ static float easeOut(float x) {
     return 1 - (1 - x) * (1 - x) * (1 - x);
 }
 
+// Two of the sign's leaves flutter: the title sheet has three frames for each,
+// drawn over the sign at the spot where one of them matches it exactly.
+static void drawLogoLeaves(Canvas& c, float time, float logoY) {
+    static const int seq[4] = {0, 1, 2, 1};
+    int f = seq[(int)(time / 0.25f) % 4];
+    int g = seq[((int)(time / 0.25f) + 2) % 4];   // out of step with the first
+    c.image(TITLE_TEX, 296 + f * 27, 187, 27, 21, 327, logoY + 107);        // right, by the Y
+    c.image(TITLE_TEX, 296 + g * 22, 208, 22, 18, 16, logoY + 16);          // top left
+}
+
 static float sceneCam(const TitleUi& t) {
     return CAM_START + (CAM_END - CAM_START) * smooth01((t.introT - PAN_START) / PAN_LEN);
 }
@@ -236,7 +246,8 @@ static void drawScene(Canvas& c, const TitleUi& t, float cam, bool bottom) {
             float y = Y(cl.d);
             if (y > 240 || y + cl.h < 0) continue;
             float span = 640 + cl.w;
-            float x = std::fmod(cl.x + t.t * cl.speed, span) - cl.w - ox;
+            // drift left, like the original
+            float x = std::fmod(std::fmod(cl.x - t.t * cl.speed, span) + span, span) - cl.w - ox;
             if (x > W || x + cl.w < 0) continue;
             c.image(CLOUDS, cl.sx, cl.sy, cl.w, cl.h, std::floor(x), y);
         }
@@ -281,9 +292,9 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
             drawScene(c, t, sceneCam(t), false);
             float k = easeOut((t.introT - LOGO_START) / LOGO_LEN);
             if (t.introT >= LOGO_START) {
-                float bob = t.introT >= INTRO_SECONDS && (int)(t.t * 2) % 2 ? 1.0f : 0.0f;   // the logo breathes a little
-                float y = std::floor(-LOGO_H - 70 + (LOGO_H + 72) * k) + bob;
+                float y = std::floor(-LOGO_H - 70 + (LOGO_H + 72) * k);
                 c.image(TITLE_TEX, 0, 0, LOGO_W, LOGO_H, 0, y);
+                drawLogoLeaves(c, t.t, y);
                 // our own "3DS" sign hanging under the logo
                 if (c.texWidth("UiBadge_3ds") > 0) c.image("UiBadge_3ds", 0, 0, 132, 62, 134, y + LOGO_H - 14);
             }
