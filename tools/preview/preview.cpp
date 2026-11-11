@@ -182,12 +182,18 @@ int main(int argc, char** argv) {
         titleInit(t, data, false);
         t.creditsText = true;
         int n = 0;
-        for (float time = 0; time < SPLASH_SECONDS + 2.0f; time += 0.1f) {
+        for (float time = 0; time < SPLASH_SECONDS + INTRO_SECONDS + 1.0f; time += 0.1f) {
             titleTick(t, 0.1f);
-            c.resize(400, 240);
+            c.resize(400, 480);
+            c.rect(0, 0, 400, 480, RGBA(0x18, 0x18, 0x1C));
             c.setOrigin(0, 0);
             c.setClip(0, 0, 400, 240);
             drawTitleTop(c, g, t);
+            c.setOrigin(40, 240);
+            c.setClip(40, 240, 320, 240);
+            drawTitleBottom(c, g, t);
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 480);
             char path[512];
             snprintf(path, sizeof path, "%s/f%03d.png", g_out.c_str(), n++);
             c.writePng(path, 1);
@@ -219,9 +225,16 @@ int main(int argc, char** argv) {
         };
         t.splashT = 1.5f;
         shoot("credits_original");
-        t.splashT = 5.0f;
+        t.splashT = 7.5f;
         shoot("credits_port");
-        titleKey(t, data, TK_A);              // skip to the title
+        t.screen = TS_TITLE;
+        for (float at : {0.8f, 3.0f, 7.0f, 10.0f, 11.9f}) {
+            t.introT = at;
+            char nm[32];
+            snprintf(nm, sizeof nm, "intro_%04.1f", at);
+            shoot(nm);
+        }
+        titleSkipIntro(t);
         shoot("title");
         titleKey(t, data, TK_A);              // New farm
         titleKey(t, data, TK_A);              // type a name
