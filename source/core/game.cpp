@@ -307,7 +307,9 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     for (int y = 0; y < m.height(); y++)
         for (int x = 0; x < m.width(); x++)
             if ((m.flags(x, y) & (CF_DIGGABLE | CF_NOSPAWN)) == CF_DIGGABLE) diggable++;
-    spawnDebris(diggable / 6, r);
+    // the map marks where the debris starts (Paths 13-15 weeds, 16-17 stones, 18 twigs);
+    // maps without markers get it scattered at random
+    if (!debrisFromMap(r)) spawnDebris(diggable / 6, r);
     rngState = r;
     // the first two quests of a new farm
     addQuest("9");

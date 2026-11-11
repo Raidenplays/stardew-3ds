@@ -63,6 +63,35 @@ void Game::treesFromMap(Location& loc) {
         }
 }
 
+bool Game::debrisFromMap(uint32_t& r) {
+    const TileMap& m = farm->map;
+    int w = m.width(), n = 0;
+    for (int y = 0; y < m.height(); y++)
+        for (int x = 0; x < w; x++) {
+            uint16_t t = m.tile(L_PATHS, x, y);
+            if (t < 13 || t > 18) continue;
+            int ts = m.tileset(L_PATHS, x, y);
+            if (ts >= (int)m.tilesets.size() || !isPathsSheet(m.tilesets[ts].texture)) continue;
+            size_t idx = (size_t)y * w + x;
+            if (farm->soils[idx].tilled || (m.flags(x, y) & CF_WATER)) continue;
+            int doorDx = x - data.layout.doorX, doorDy = y - data.layout.doorY;
+            if (doorDx * doorDx + doorDy * doorDy < 12) continue;   // keep the porch clear
+            bool onBuilding = false;
+            for (auto& b : data.layout.buildings)
+                if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY - 1 && y < b.tileY + b.footH + 1)
+                    onBuilding = true;
+            if (onBuilding) continue;
+            r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+            DebrisType d = t <= 15 ? DEB_WEED : t <= 17 ? DEB_STONE : DEB_TWIG;
+            if (season == WINTER && d == DEB_WEED) d = DEB_STONE;
+            farm->debris[idx] = d;
+            farm->debrisVar[idx] = (uint8_t)((r >> 4) & 1);
+            farm->grass[idx] = 0;
+            n++;
+        }
+    return n > 0;
+}
+
 int Game::bushAt(int tx, int ty) const {
     const auto& bs = cur->bushes;
     for (size_t i = 0; i < bs.size(); i++) {
