@@ -305,6 +305,10 @@ def import_save(save_path, root):
                     days = num(b, "daysOfConstructionLeft")
                     up = num(b, "daysUntilUpgrade")
                     out.append(["building", clean(btype), num(b, "tileX"), num(b, "tileY"), max(days, up), bidx])
+                    if btype == "Fish Pond":
+                        fish = ids.o(txt(b, "fishType"))
+                        if fish is not None and fish >= 0 and num(b, "currentOccupants") > 0:
+                            out.append(["pond", bidx, fish, num(b, "currentOccupants")])
                     indoors = b.find("indoors")
                     if indoors is not None and len(indoors):
                         location_lines(indoors, f"@B{bidx}", ids, out, extras)

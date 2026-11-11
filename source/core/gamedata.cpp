@@ -501,6 +501,31 @@ bool GameData::load(const std::string& root, std::string* err) {
             fruitTrees.push_back(t);
         }
     lines.clear();
+    if (readLines(root + "data/fishponds.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 5) continue;
+            FishPondDef p;
+            p.fish = atoi(f[0].c_str());
+            p.maxPop = std::max(1, std::min(10, atoi(f[1].c_str())));
+            p.spawn = atoi(f[2].c_str());
+            p.minChance = (float)atof(f[3].c_str());
+            p.maxChance = (float)atof(f[4].c_str());
+            if (f.size() > 5) {
+                std::string s = f[5];
+                size_t i = 0;
+                while (i < s.size()) {
+                    size_t j = s.find(' ', i);
+                    if (j == std::string::npos) j = s.size();
+                    FishPondDef::Out o;
+                    if (sscanf(s.substr(i, j - i).c_str(), "%d:%f:%d:%d:%d", &o.pop, &o.chance, &o.id, &o.mn, &o.mx) == 5)
+                        p.items.push_back(o);
+                    i = j + 1;
+                }
+            }
+            fishPonds.push_back(p);
+        }
+    lines.clear();
     if (readLines(root + "data/animals.dat", lines))
         for (auto& l : lines) {
             auto f = splitTabs(l);

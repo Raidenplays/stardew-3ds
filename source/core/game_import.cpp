@@ -143,6 +143,11 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             buildings.push_back(b);
             bid[I(f, 5)] = b.id;
             counts[1]++;
+        } else if (k == "pond" && f.size() > 3) {
+            auto it = bid.find(I(f, 1));
+            if (it == bid.end()) continue;
+            if (FarmBuilding* b = buildingById(it->second))
+                if (data.fishPond(I(f, 2))) { b->pondFish = I(f, 2); b->pondPop = std::max(1, std::min(10, I(f, 3))); }
         } else if (k == "animal" && f.size() > 5 && data.animalType(f[1])) {
             auto it = bid.find(I(f, 3));
             if (it == bid.end()) continue;

@@ -251,7 +251,72 @@ static bool openSpot(Game& g, const Location& loc, uint32_t r, int& ox, int& oy)
 }
 
 // Overnight: construction, eating, growing up, eggs and milk.
+// Fish ponds: fish breed up to the pond's cap and leave roe (or something better) in the bucket.
+static int pondSpawnDays(const FishPondDef* p, const ObjectDef* o) {
+    if (p && p->spawn > 0) return p->spawn;
+    int pr = o ? o->price : 100;
+    return pr <= 30 ? 1 : pr <= 80 ? 2 : pr <= 120 ? 3 : pr <= 250 ? 4 : 5;
+}
+
+void Game::pondsNight() {
+    for (auto& b : buildings) {
+        if (b.type != "Fish Pond" || b.daysLeft > 0 || b.pondFish < 0 || b.pondPop <= 0) continue;
+        const FishPondDef* p = data.fishPond(b.pondFish);
+        int cap = p ? p->maxPop : 10;
+        if (b.pondPop < cap && ++b.pondDays >= pondSpawnDays(p, data.object(b.pondFish))) {
+            b.pondPop++;
+            b.pondDays = 0;
+        }
+        if (b.pondOut >= 0 || !p) continue;
+        float ch = p->minChance + (p->maxChance - p->minChance) * (b.pondPop - 1) / 9.0f;
+        if ((rand32() % 10000) / 10000.0f >= ch) continue;
+        for (auto& it : p->items) {
+            if (b.pondPop < it.pop || (rand32() % 10000) / 10000.0f >= it.chance || !data.object(it.id)) continue;
+            b.pondOut = it.id;
+            b.pondOutN = it.mn + (it.mx > it.mn ? (int)(rand32() % (it.mx - it.mn + 1)) : 0);
+            if (it.id == 812) b.pondOutN += b.pondPop / 3;   // bigger ponds, more roe
+            break;
+        }
+    }
+}
+
+bool Game::pondInteract(FarmBuilding& b) {
+    const ObjectDef* fo = b.pondFish >= 0 ? data.object(b.pondFish) : nullptr;
+    if (b.pondOut >= 0) {
+        Slot sl;
+        sl.type = SLOT_OBJECT;
+        sl.id = b.pondOut;
+        sl.count = std::max(1, b.pondOutN);
+        if (b.pondOut == 812) sl.flavor = b.pondFish;
+        if (!addSlot(sl)) { say("No room in your bag."); return true; }
+        itemFlies(b.pondOut, (b.x + 4) * TILE, (b.y + 4) * TILE, sl.count);
+        sfx("coin");
+        b.pondOut = -1;
+        b.pondOutN = 0;
+        return true;
+    }
+    Slot& s = inv[selected];
+    const ObjectDef* so = s.type == SLOT_OBJECT ? data.object(s.id) : nullptr;
+    if (so && so->category == -4) {
+        if (!data.fishPond(s.id)) { say("That fish can't live in a pond."); return true; }
+        if (b.pondFish >= 0 && b.pondFish != s.id) { say("This pond already has " + (fo ? fo->name : std::string("fish")) + "."); return true; }
+        const FishPondDef* p = data.fishPond(s.id);
+        if (b.pondPop >= p->maxPop) { say("The pond is full."); return true; }
+        b.pondFish = s.id;
+        b.pondPop++;
+        if (--s.count <= 0) s = Slot();
+        sfx("slosh");
+        say(std::string("Added a ") + so->name + " to the pond (" + std::to_string(b.pondPop) + "/" + std::to_string(p->maxPop) + ").");
+        return true;
+    }
+    if (!fo) { say("An empty fish pond. Hold a fish and press A to put it in."); return true; }
+    const FishPondDef* p = data.fishPond(b.pondFish);
+    say(fo->name + " pond: " + std::to_string(b.pondPop) + "/" + std::to_string(p ? p->maxPop : 10) + " fish.");
+    return true;
+}
+
 void Game::animalsNight() {
+    pondsNight();
     for (auto& b : buildings) {
         if (b.daysLeft <= 0) continue;
         if (--b.daysLeft > 0) continue;
@@ -433,6 +498,7 @@ bool Game::farmBuildingInteract(int tx, int ty) {
         say("The old greenhouse is in ruins. Fixing up the Community Center's pantry would restore it.");
         return true;
     }
+    if (t && b->type == "Fish Pond") return pondInteract(*b);
     if (t && b->type == "Silo") {
         say("Hay in your silos: " + std::to_string(hay) + "/" + std::to_string(hayCapacity()));
         return true;

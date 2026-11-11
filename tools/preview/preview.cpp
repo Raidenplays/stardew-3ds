@@ -543,9 +543,10 @@ int main(int argc, char** argv) {
         g.teleport("Farm", 60, 20);
         for (auto& d : const_cast<Location&>(g.location()).debris) d = DEB_NONE;   // a cleared farm
         Input a; a.action = true;
-        const char* want[4] = {"Coop", "Barn", "Silo", "Stable"};
+        const char* want[5] = {"Coop", "Barn", "Silo", "Stable", "Fish Pond"};
         g.addItem(709, 200); g.addItem(335, 10); g.addItem(330, 20); g.addItem(334, 10);
-        for (int k = 0; k < 4; k++) {
+        g.addItem(152, 10); g.addItem(153, 10);
+        for (int k = 0; k < 5; k++) {
             g.startBuilding(want[k]);
             int tries = 0;
             g.placeX = 50 + k * 9; g.placeY = 22;
@@ -565,6 +566,18 @@ int main(int argc, char** argv) {
         g.teleport("Farm", cb.x + 3, cb.y + 5);
         step(g, ui, none, 5);
         shot(c, g, ui, "farm_buildings");
+        for (auto& b : g.buildings)
+            if (b.type == "Fish Pond") {
+                g.addItem(145, 3);
+                for (int i = 0; i < 36; i++) if (g.inv[i].type == SLOT_OBJECT && g.inv[i].id == 145) g.selected = i;
+                for (int n = 0; n < 3; n++) g.pondInteract(b);
+                for (int n = 0; n < 8 && b.pondOut < 0; n++) g.pondsNight();
+                printf("  pond: %d fish, output %d x%d\n", b.pondPop, b.pondOut, b.pondOutN);
+                g.teleport("Farm", b.x + 2, b.y + 6);
+                g.facing = FACE_UP;
+                step(g, ui, none, 30);
+                shot(c, g, ui, "fish_pond");
+            }
         for (int k = 0; k < 2 && k < (int)g.buildings.size(); k++) {
             FarmBuilding& b = g.buildings[k];
             const BuildingType* bt = g.typeOf(b);

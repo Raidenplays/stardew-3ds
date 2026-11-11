@@ -1355,7 +1355,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 22;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 23;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1375,6 +1375,7 @@ static const uint32_t SAVE_VERSION = 22;   // 2: villager friendships, 3: events
                                           // 20: dating, engagement, marriage
                                           // 21: furniture
                                           // 22: museum donations
+                                          // 23: fish ponds
 
 namespace {
 struct W {
@@ -1560,6 +1561,7 @@ bool Game::save(const std::string& path) const {
     for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
+    for (auto& b : buildings) { w.i32(b.pondFish); w.i32(b.pondPop); w.i32(b.pondDays); w.i32(b.pondOut); w.i32(b.pondOutN); }
     // item quality: inventory, shipped, then each chest / machine in order
     for (auto& s : inv) w.u8(s.quality);
     w.u32((uint32_t)shipped.size());
@@ -1914,6 +1916,11 @@ bool Game::load(const std::string& path, std::string* err) {
             uint32_t nm = r.u32();
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
+        if (version >= 23 && r.ok)
+            for (auto& b : buildings) {
+                b.pondFish = r.i32(); b.pondPop = r.i32(); b.pondDays = r.i32();
+                b.pondOut = r.i32(); b.pondOutN = r.i32();
+            }
     } else if (houseLevel > 0) {   // older saves: the starting furniture, moved into the bigger house's first room
         int ox, oy, nx, ny;
         if (houseDoor(0, ox, oy) && houseDoor(houseLevel, nx, ny))

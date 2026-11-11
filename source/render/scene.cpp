@@ -853,6 +853,22 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             case 14: {   // a farm building (see-through while Robin works on it)
                 const FarmBuilding& fb = g.buildings[it.a];
                 const BuildingType* bt = g.typeOf(fb);
+                if (fb.type == "Fish Pond" && c.texWidth(bt->texture) >= 80) {   // water, frame, fish, bucket
+                    float px = fb.x * TILE - camX, py = fb.y * TILE - camY;
+                    uint32_t tint = fb.daysLeft > 0 ? RGBA(0xFF, 0xFF, 0xFF, 0x70) : 0;
+                    c.image(bt->texture, 0, 80, 80, 80, std::floor(px), std::floor(py), false,
+                            fb.daysLeft > 0 ? RGBA(0x50, 0x90, 0xD0, 0x70) : RGBA(0x50, 0x90, 0xD0));
+                    for (int k = 0; k < std::min(fb.pondPop, 10) && fb.daysLeft <= 0; k++) {   // fish shadows drifting
+                        float t = timeMs * 0.0004f + k * 1.7f;
+                        float fx = px + 40 + std::sin(t + k) * 22, fy = py + 38 + std::cos(t * 0.7f + k * 2.3f) * 18;
+                        c.rect(std::floor(fx) - 4, std::floor(fy) - 1, 8, 3, RGBA(0x08, 0x20, 0x40, 0xC0));
+                    }
+                    c.image(bt->texture, 0, 0, 80, 80, std::floor(px), std::floor(py), false, tint);
+                    if (fb.pondOut >= 0) itemIcon(c, g.data.object(fb.pondOut), px + 58, py + 44);
+                    if (fb.daysLeft > 0)
+                        c.text(px + 40, py, 0.4f, COL_CREAM, std::to_string(fb.daysLeft) + (fb.daysLeft == 1 ? " day" : " days"), ALIGN_CENTER);
+                    break;
+                }
                 int sw = bt->srcW ? bt->srcW : c.texWidth(bt->texture), sh = bt->srcH ? bt->srcH : c.texHeight(bt->texture);
                 float dx = fb.x * TILE + (bt->w * TILE - sw) / 2.0f - camX, dy = (fb.y + bt->h) * TILE - sh - camY;
                 bool building = fb.daysLeft > 0 && fb.upgradingTo.empty();
