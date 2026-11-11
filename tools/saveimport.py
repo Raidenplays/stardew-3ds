@@ -23,6 +23,8 @@ def txt(e, tag, default=""):
     if e is None:
         return default
     c = e.find(tag)
+    if c is None and tag:   # saves from 2016-2019 spell some fields with the other capital (stack / Stack)
+        c = e.find(tag[0].swapcase() + tag[1:])
     return c.text if c is not None and c.text is not None else default
 
 
@@ -120,11 +122,11 @@ def item_line(it, ids, kind=None):
         b = ids.b(sid)
         return ["B", b, max(1, num(it, "Stack", 1))] if b is not None else None
     if t == "Boots":
-        return ["T", "Boots_" + sid, 0]
+        return ["T", "Boots_" + (sid or txt(it, "indexInTileSheet")).replace("(B)", ""), 0]
     if t == "Hat":
-        return ["T", "Hat_" + sid.replace("(H)", ""), 0]
+        return ["T", "Hat_" + (sid or txt(it, "which")).replace("(H)", ""), 0]
     if t == "Ring":
-        o = ids.o(sid)
+        o = ids.o(sid or txt(it, "indexInTileSheet"))
         return ["O", o, 1, 0] if o is not None else None
     if t == "CombinedRing":   # two rings forged together: keep the first
         inner = it.find("combinedRings")
@@ -250,6 +252,7 @@ def import_save(save_path, root):
     out.append(["name", clean(txt(p, "name", "Farmer"))])
     out.append(["farm", clean(txt(p, "farmName", "Stardew"))])
     out.append(["money", num(p, "money") or num(sg, "money")])
+    out.append(["earned", num(p, "totalMoneyEarned")])
     out.append(["date", SEASONS.get(txt(sg, "currentSeason", "spring").lower(), 0), num(sg, "dayOfMonth", 1), num(sg, "year", 1)])
     out.append(["farmtype", num(sg, "whichFarm")])
     out.append(["gender", "female" if txt(p, "gender", "Male") == "Female" or not truthy(p, "isMale") and p.find("isMale") is not None else "male"])
@@ -284,6 +287,10 @@ def import_save(save_path, root):
         status = txt(v, "Status").lower()
         if status in ("dating", "engaged", "married"):
             out.append([status if status != "married" else "spouse", who])
+    if p.find("friendshipData") is None:   # before 1.3: name -> [points, gifts this week, talked today, ...]
+        for k, v in dict_items(p.find("friendships")):
+            pts = v.find("int")
+            out.append(["friend", clean(k.text or ""), int(pts.text or 0) if pts is not None else 0])
     for tag, key in (("mailReceived", "mail"), ("eventsSeen", "event")):
         e = p.find(tag)
         if e is not None:
@@ -348,6 +355,10 @@ def import_save(save_path, root):
             out.append(["bundledef", clean(k.text), clean(v.text)])
     nws = sg.find("netWorldState")
     bundles_el = nws.find("Bundles") if nws is not None else None
+    if bundles_el is None and locs is not None:   # before 1.5 the Community Center itself kept them
+        for loc in locs:
+            if txt(loc, "name") == "CommunityCenter":
+                bundles_el = loc.find("bundles")
     for k, v in dict_items(bundles_el):
         bits = "".join("1" if (b.text or "").lower() == "true" else "0" for b in v.findall("boolean"))
         out.append(["bundle", k.text or "0", bits])

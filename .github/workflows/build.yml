@@ -40,6 +40,10 @@ jobs:
           # a PC save brought over (a made-up save shaped like the real XML)
           python3 tools/saveimport.py tests/fixtures/pc_save/Farmer_123 /tmp/fakeout/3ds/stardew3ds
           grep -q "^name	Farmer" /tmp/fakeout/3ds/stardew3ds/import.txt
+          # and one shaped like a 2016 save (lower-case fields, the old friendships and bundles)
+          python3 tools/saveimport.py tests/fixtures/pc_save_2016/Old_456 /tmp/fakeout/3ds/stardew3ds
+          grep -q "^friend	Abigail	1250" /tmp/fakeout/3ds/stardew3ds/import.txt
+          grep -q "^equip	3	T	Hat_2" /tmp/fakeout/3ds/stardew3ds/import.txt
   build-3dsx:
     needs: host-tests
     runs-on: ubuntu-latest

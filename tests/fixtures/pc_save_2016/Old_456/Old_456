@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SaveGame xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <player>
+    <name>Oldie</name>
+    <farmName>Vintage</farmName>
+    <money>4321</money>
+    <totalMoneyEarned>90000</totalMoneyEarned>
+    <isMale>true</isMale>
+    <maxItems>24</maxItems>
+    <houseUpgradeLevel>1</houseUpgradeLevel>
+    <deepestMineLevel>40</deepestMineLevel>
+    <experiencePoints><int>1200</int><int>300</int><int>100</int><int>500</int><int>50</int></experiencePoints>
+    <professions><int>1</int></professions>
+    <items>
+      <Item xsi:type="Axe"><upgradeLevel>2</upgradeLevel></Item>
+      <Item xsi:type="Object"><parentSheetIndex>24</parentSheetIndex><stack>7</stack><quality>2</quality><name>Parsnip</name></Item>
+      <Item xsi:nil="true" />
+      <Item xsi:type="Ring"><parentSheetIndex>529</parentSheetIndex><indexInTileSheet>529</indexInTileSheet></Item>
+    </items>
+    <hat><which>2</which></hat>
+    <boots><indexInTileSheet>506</indexInTileSheet></boots>
+    <friendships>
+      <item><key><string>Abigail</string></key><value><ArrayOfInt><int>1250</int><int>1</int><int>0</int><int>0</int></ArrayOfInt></value></item>
+    </friendships>
+    <mailReceived><string>ccPantry</string></mailReceived>
+    <eventsSeen><int>60367</int></eventsSeen>
+  </player>
+  <currentSeason>fall</currentSeason>
+  <dayOfMonth>12</dayOfMonth>
+  <year>3</year>
+  <whichFarm>0</whichFarm>
+  <locations>
+    <GameLocation xsi:type="Farm">
+      <name>Farm</name>
+      <objects />
+      <buildings>
+        <Building xsi:type="Coop">
+          <buildingType>Coop</buildingType><tileX>50</tileX><tileY>20</tileY><daysOfConstructionLeft>0</daysOfConstructionLeft>
+          <indoors><name>Coop</name><objects /></indoors>
+        </Building>
+      </buildings>
+    </GameLocation>
+    <GameLocation xsi:type="CommunityCenter">
+      <name>CommunityCenter</name>
+      <bundles><item><key><int>0</int></key><value><ArrayOfBoolean><boolean>true</boolean><boolean>false</boolean></ArrayOfBoolean></value></item></bundles>
+    </GameLocation>
+  </locations>
+</SaveGame>
