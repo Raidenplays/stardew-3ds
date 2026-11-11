@@ -111,6 +111,8 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
     return false;
 }
 
+static char perfLine1[96], perfLine2[96];   // performance readout text
+
 int main() {
     gfxInitDefault();
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
@@ -380,6 +382,7 @@ int main() {
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         texNewFrame();
         canvas.beginFrame();
+        canvas.draws = 0;
 
         float slider = osGet3DSliderState();
         bool stereo = slider > 0.01f;
@@ -392,36 +395,50 @@ int main() {
             drawTop(canvas, game, ui, timeMs);
         }
         canvas.eye = 0;
-        C2D_TargetClear(bot, C2D_Color32(0x2A, 0x1A, 0x10, 0xFF));
-        C2D_SceneBegin(bot);
-        drawBottom(canvas, game, ui);
+        unsigned topDraws = canvas.draws;
+        // The bottom screen mostly shows menus that don't move: redraw it when
+        // something was pressed or touched, and otherwise ~12 times a second.
+        // A screen that isn't drawn keeps showing its last picture.
+        static unsigned botTick = 0;
+        static u32 lastHeld = 0;
+        bool botDirty = (kDown | (kHeld ^ lastHeld)) != 0 || (kHeld & KEY_TOUCH) || (++botTick % 5) == 0;
+        lastHeld = kHeld;
         if (ui.showPerf) {
             // once a second: fps, CPU ms (game update / building the frame), GPU ms,
-            // free GPU memory, texture pages loaded/evicted/failed
+            // free GPU memory, texture pages loaded/evicted/failed, draw calls top+bottom
             static u64 since = 0;
             static int frames = 0;
-            static float fps = 0, upd = 0, cpu = 0, gpu = 0;
+            static float upd = 0, cpu = 0, gpu = 0;
             static TexStats last;
-            static char line1[96], line2[96];
             frames++;
             upd = std::max(upd, updMs);
             cpu = std::max(cpu, C3D_GetProcessingTime());
             gpu = std::max(gpu, C3D_GetDrawingTime());
             u64 nowT = osGetTime();
             if (nowT - since >= 1000) {
-                TexStats s = texStats();
-                fps = frames * 1000.0f / (float)(nowT - since);
-                snprintf(line1, sizeof line1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
-                snprintf(line2, sizeof line2, "vram %uK free  pages +%u -%u !%u", (unsigned)(linearSpaceFree() / 1024),
-                         s.loads - last.loads, s.evictions - last.evictions, s.failed - last.failed);
-                last = s;
+                TexStats st = texStats();
+                float fps = frames * 1000.0f / (float)(nowT - since);
+                snprintf(perfLine1, sizeof perfLine1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
+                snprintf(perfLine2, sizeof perfLine2, "vram %uK  pages +%u -%u !%u  draws %u", (unsigned)(linearSpaceFree() / 1024),
+                         st.loads - last.loads, st.evictions - last.evictions, st.failed - last.failed, topDraws);
+                last = st;
                 since = nowT;
                 frames = 0;
                 upd = cpu = gpu = 0;
             }
-            canvas.rect(0, 0, 320, 30, RGBA(0, 0, 0));
-            canvas.text(4, 2, 0.4f, RGBA(255, 255, 0), line1[0] ? line1 : "measuring...", ALIGN_LEFT);
-            canvas.text(4, 15, 0.4f, RGBA(255, 255, 0), line2, ALIGN_LEFT);
+        }
+        if (botDirty) {
+            C2D_TargetClear(bot, C2D_Color32(0x2A, 0x1A, 0x10, 0xFF));
+            C2D_SceneBegin(bot);
+            unsigned before = canvas.draws;
+            drawBottom(canvas, game, ui);
+            if (ui.showPerf) {
+                char l2[112];
+                snprintf(l2, sizeof l2, "%s+%u", perfLine2, canvas.draws - before);
+                canvas.rect(0, 0, 320, 30, RGBA(0, 0, 0));
+                canvas.text(4, 2, 0.4f, RGBA(255, 255, 0), perfLine1[0] ? perfLine1 : "measuring...", ALIGN_LEFT);
+                canvas.text(4, 15, 0.4f, RGBA(255, 255, 0), l2, ALIGN_LEFT);
+            }
         }
         C3D_FrameEnd(0);
     }
