@@ -62,6 +62,11 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
     if (!loc->map.load(loc->file, err)) return nullptr;
     loc->map.name = name;
     loc->isFarm = (name == "Farm");
+    if (name == "FarmHouse") {   // the original room sits elsewhere in the bigger houses: follow the door
+        houseDX = houseDY = 0;
+        if (houseLevel > 0)
+            if (const Warp* w = loc->map.warpTo("Farm")) { houseDX = w->x - 3; houseDY = w->y - 12; }
+    }
     loc->mineLevel = mineLevelOf(name);
     loc->initState();
     if (loc->map.outdoors) treesFromMap(*loc);
@@ -458,15 +463,10 @@ void Game::startDay() {
 
 void Game::wakeUp() {
     const Layout& L = data.layout;
-    if (houseLevel > 0 && L.wakeMap == "FarmHouse" && hasMap("FarmHouse")) {   // upgraded: wake just inside the door
-        Location* h = loadLocation("FarmHouse");
-        const Warp* w = h ? h->map.warpTo("Farm") : nullptr;
-        facing = FACE_UP;
-        if (w) { warpTo("FarmHouse", w->x, w->y - 2); return; }
-    }
     if (hasMap(L.wakeMap)) {
         facing = FACE_DOWN;
-        warpTo(L.wakeMap, L.wakeX, L.wakeY);
+        loadLocation(L.wakeMap);   // (sets the bigger house's shift)
+        warpTo(L.wakeMap, L.wakeX + furnDX(L.wakeMap), L.wakeY + furnDY(L.wakeMap));
     } else {
         cur = farm;
         facing = FACE_DOWN;
@@ -489,12 +489,13 @@ std::string Game::timeString() const { return timeString(timeOfDay); }
 bool Game::buildingAt(int x, int y) const {
     for (auto& fp : data.layout.furniture) {
         if (fp.map != cur->name) continue;
+        int fx = fp.x + furnDX(fp.map), fy = fp.y + furnDY(fp.map);
         auto it = data.furniture.find(fp.id);
         if (it != data.furniture.end() && (it->second.type == "rug" || it->second.type == "painting" || it->second.type == "window"))
             continue;   // walk over rugs; wall hangings are on the wall
         int bw = it != data.furniture.end() ? it->second.boxW : 1;
         int bh = it != data.furniture.end() ? it->second.boxH : 1;
-        if (x >= fp.x && x < fp.x + bw && y >= fp.y && y < fp.y + bh) return true;
+        if (x >= fx && x < fx + bw && y >= fy && y < fy + bh) return true;
     }
     if (!cur->isFarm) return false;
     if (const_cast<Game*>(this)->buildingAtTile(x, y)) return true;
@@ -793,8 +794,8 @@ bool Game::tryInteract(int tx, int ty) {
         }
     }
     const Layout& L = data.layout;
-    if (houseLevel == 0 && cur->name == L.bedMap && tx >= L.bedX && tx < L.bedX + L.bedW && ty >= L.bedY &&
-        ty < L.bedY + L.bedH) {
+    int bx = L.bedX + furnDX(L.bedMap), by = L.bedY + furnDY(L.bedMap);
+    if (cur->name == L.bedMap && tx >= bx && tx < bx + L.bedW && ty >= by && ty < by + L.bedH) {
         goToBed();
         return true;
     }
