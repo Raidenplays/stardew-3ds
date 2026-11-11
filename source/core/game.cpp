@@ -453,7 +453,36 @@ bool Game::addItem(int objId, int count) {
     sl.type = SLOT_OBJECT;
     sl.id = objId;
     sl.count = count;
-    return addSlot(sl);
+    if (!addSlot(sl)) return false;
+    for (auto& n : notices)
+        if (n.id == objId && n.t > 0) {
+            n.count += count;
+            n.t = 3.5f;
+            return true;
+        }
+    Notice n;
+    n.id = objId;
+    n.count = count;
+    n.t = 3.5f;
+    notices.push_back(n);
+    if (notices.size() > 5) notices.erase(notices.begin());
+    return true;
+}
+
+void Game::itemFlies(int objId, float x, float y, int count) {
+    for (int i = 0; i < std::min(count, 4); i++) {
+        if (effects.size() > 80) return;
+        Effect e;
+        e.kind = Effect::ITEM;
+        e.item = objId;
+        e.x = x;
+        e.y = y - 6;
+        e.vx = (float)((int)(rand32() % 81) - 40);
+        e.vy = -90.0f - (float)(rand32() % 40);
+        e.groundY = y + 4 + (float)(rand32() % 6);
+        e.life = 2.0f;
+        effects.push_back(e);
+    }
 }
 
 void Game::selectSlot(int i) {
@@ -698,7 +727,7 @@ void Game::useSelected(int tx, int ty) {
                     int v = debrisVariant(tx, ty) & 1, idx = v ? 295 : 294;   // Maps/springobjects twigs
                     burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 7);
                     deb = DEB_NONE;
-                    addItem(OBJ_WOOD, 1);
+                    if (addItem(OBJ_WOOD, 1)) itemFlies(OBJ_WOOD, tx * TILE + 8.0f, ty * TILE + 10.0f);
                     gainXp(SK_FORAGING, 1);
                 }
                 break;
@@ -714,7 +743,7 @@ void Game::useSelected(int tx, int ty) {
                         int n = drop == 390 ? 1 : 1 + (int)(rand32() % 2);
                         if (has(PR_MINER) && drop != 390) n++;
                         cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
-                        addItem(drop, n);
+                        if (addItem(drop, n)) itemFlies(drop, tx * TILE + 8.0f, ty * TILE + 10.0f, n);
                         gainXp(SK_MINING, 5);
                         questItem(drop, n);
                         const ObjectDef* od = data.object(drop);
@@ -725,7 +754,7 @@ void Game::useSelected(int tx, int ty) {
                     burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 7);
                     deb = DEB_NONE;
                     sfx("stoneCrack");
-                    addItem(OBJ_STONE, 1);
+                    if (addItem(OBJ_STONE, 1)) itemFlies(OBJ_STONE, tx * TILE + 8.0f, ty * TILE + 10.0f);
                     gainXp(SK_MINING, 1);
                 } else if ((s.tilled && s.seed < 0) || s.dead) {
                     s = Soil();
@@ -746,7 +775,7 @@ void Game::useSelected(int tx, int ty) {
                     burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 6);
                     deb = DEB_NONE;
                     sfx("cut");
-                    if (rand32() % 2) addItem(OBJ_FIBER, 1);
+                    if (rand32() % 2 && addItem(OBJ_FIBER, 1)) itemFlies(OBJ_FIBER, tx * TILE + 8.0f, ty * TILE + 10.0f);
                 } else if (s.dead) {
                     s.seed = -1;
                     s.dead = false;
@@ -806,6 +835,8 @@ void Game::burst(const std::string& tex, int sx, int sy, int sw, int sh, float x
 }
 
 void Game::updateEffects(float dt) {
+    for (auto& n : notices) n.t -= dt;
+    notices.erase(std::remove_if(notices.begin(), notices.end(), [](const Notice& n) { return n.t <= 0; }), notices.end());
     if (cur) {
         for (auto& r : cur->rustles) r.t -= dt;
         cur->rustles.erase(std::remove_if(cur->rustles.begin(), cur->rustles.end(),
@@ -815,6 +846,15 @@ void Game::updateEffects(float dt) {
     for (auto& e : effects) {
         e.t += dt;
         if (e.kind == Effect::FALLING_TREE) continue;   // angle comes from t when drawn
+        if (e.kind == Effect::ITEM && e.t > 0.55f) {    // pulled in to the farmer
+            float tx = px, ty = py - 14;
+            float dx = tx - e.x, dy = ty - e.y, d = std::sqrt(dx * dx + dy * dy);
+            float sp = 120.0f + (e.t - 0.55f) * 500.0f;
+            if (d < 4 || d < sp * dt) { e.t = e.life; continue; }
+            e.x += dx / d * sp * dt;
+            e.y += dy / d * sp * dt;
+            continue;
+        }
         e.vy += 420.0f * dt;
         e.x += e.vx * dt;
         e.y += e.vy * dt;
