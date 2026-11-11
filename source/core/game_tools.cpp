@@ -1,5 +1,6 @@
 // Tool upgrades at the blacksmith and charged hoe / watering can.
 #include <algorithm>
+#include <cctype>
 
 #include "game.h"
 
@@ -67,6 +68,32 @@ bool Game::startUpgrade(const UpgradeOffer& o) {
     if (selected == o.slot) charging = false;
     say("Come back in " + std::to_string(UPGRADE_DAYS) + " days");
     return true;
+}
+
+bool Game::giveTool(const std::string& key) {
+    for (size_t i = 0; i < data.tools.size(); i++)
+        if (data.tools[i].key == key) {
+            Slot t;
+            t.type = SLOT_TOOL;
+            t.id = (int)i;
+            t.count = 1;
+            if (!addSlot(t)) { say("No room for the " + data.tools[i].name); return false; }
+            say("Got the " + data.tools[i].name + "!");
+            return true;
+        }
+    return false;
+}
+
+void Game::awardPrize(const std::string& what) {
+    if (what == "rod") {                 // Willy's old rod
+        if (!giveTool("BambooPole")) {
+            if (const ToolDef* t = data.toolByKind(TOOL_ROD)) giveTool(t->key);
+        }
+    } else if (what == "pan") {
+        giveTool("Pan");
+    } else if (!what.empty() && isdigit((unsigned char)what[0])) {
+        addItem(atoi(what.c_str()), 1);
+    }
 }
 
 bool Game::collectUpgrade() {
