@@ -16,6 +16,7 @@ struct Ui {
     int picked = -1;          // inventory slot picked up for moving
     bool showSummary = false;
     bool quit = false;
+    int mapCache = 0;         // 0 off, 1 on, 2 on + flipped (testing the faster map drawing)
     bool showPerf = false;    // performance readout (Options tab, or L + SELECT)
     std::string status;
     float statusTime = 0;

@@ -89,7 +89,9 @@ int main(int argc, char** argv) {
     int atX = -1, atY = -1;
     bool swingDemo = false, setupDemo = false;
     int timeArg = -1;
-    int dayArg = -1;   // HHMM: run the villagers' day up to then
+    int dayArg = -1;
+    int mapCacheArg = 0;
+    bool panArg = false;   // HHMM: run the villagers' day up to then
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
     int introFps = 10; // top-screen frames of the opening credits -> title (for a GIF)    // sleep to day 2 and read the first letter    // stand by water in the Forest and show the reeling meter   // place machines near the house, shoot the Craft tab + a chest    // "Loc[@x,y],Loc2,..." -> one screenshot per location
@@ -112,6 +114,8 @@ int main(int argc, char** argv) {
         else if (a.rfind("--at=", 0) == 0) sscanf(a.c_str() + 5, "%d,%d", &atX, &atY);
         else if (a == "--story") storyDemo = true;
         else if (a.rfind("--time=", 0) == 0) timeArg = atoi(a.c_str() + 7);
+        else if (a == "--mapcache") mapCacheArg = 1;
+        else if (a == "--pan") panArg = true;
         else if (a.rfind("--day=", 0) == 0) dayArg = atoi(a.c_str() + 6);   // season*28 + day, e.g. 16 or 64
         else font = a;
     }
@@ -501,6 +505,7 @@ int main(int argc, char** argv) {
         // time the top screen at a location (centre of the map), per drawing stage
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
         g.teleport(whereMap, 10, 10);
+        ui.mapCache = mapCacheArg;
         if (dayArg > 0) { g.season = (dayArg - 1) / 28; g.day = (dayArg - 1) % 28 + 1; }
         g.teleport(whereMap, atX >= 0 ? atX : g.map().width() / 2, atY >= 0 ? atY : g.map().height() / 2);
         if (timeArg >= 0) {
@@ -533,6 +538,15 @@ int main(int argc, char** argv) {
         printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
                tot[3] / N, tot[4] / N);
         shot(c, g, ui, "where_" + whereMap);
+        if (panArg) {   // walk the camera around: the map cache has to follow
+            int bx = (int)(g.px / 16), by = (int)(g.py / 16);
+            static const int path[6][2] = {{5, 0}, {11, 2}, {17, 9}, {9, 14}, {-6, 6}, {-14, -3}};
+            for (int k = 0; k < 6; k++) {
+                g.teleport(whereMap, bx + path[k][0], by + path[k][1]);
+                for (int f = 0; f < 3; f++) drawTop(c, g, ui, (uint32_t)(f * 300 + k * 977));
+                shot(c, g, ui, "pan" + std::to_string(k));
+            }
+        }
         return 0;
     }
     if (swingDemo) {

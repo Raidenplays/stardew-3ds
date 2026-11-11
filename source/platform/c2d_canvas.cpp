@@ -110,3 +110,57 @@ float C2DCanvas::textWidth(const std::string& s, float scale) {
     C2D_TextGetDimensions(&t, scale, scale, &w, &h);
     return w;
 }
+
+// ---------------------------------------------------------------- map cache
+bool C2DCanvas::cacheSupported() {
+    if (!cacheTried) {
+        cacheTried = true;
+        const int S = CACHE_SIZE;
+        bool ok = C3D_TexInitVRAM(&cacheTex, S, S, GPU_RGBA8);
+        if (!ok) ok = C3D_TexInit(&cacheTex, S, S, GPU_RGBA8);
+        if (ok) {
+            C3D_TexSetFilter(&cacheTex, GPU_NEAREST, GPU_NEAREST);
+            cacheTarget = C3D_RenderTargetCreateFromTex(&cacheTex, GPU_TEXFACE_2D, 0, -1);
+            if (!cacheTarget) C3D_TexDelete(&cacheTex);
+        }
+    }
+    return cacheTarget && screen;
+}
+
+void C2DCanvas::cacheBegin() {
+    if (!cacheTarget) return;
+    C2D_TargetClear(cacheTarget, 0);
+    C2D_SceneBegin(cacheTarget);
+}
+
+void C2DCanvas::cacheEnd() {
+    if (!cacheTarget || !screen) return;
+    C2D_SceneBegin(screen);
+    cacheFresh = true;
+}
+
+void C2DCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) {
+    if (!cacheTarget) return;
+    draws++;
+    if (cacheFresh) {   // new contents at the same address: make citro2d bind it again
+        C2D_Flush();
+        C2D_Prepare();
+        cacheFresh = false;
+    }
+    const float S = (float)CACHE_SIZE;
+    Tex3DS_SubTexture sub;
+    sub.width = (u16)sw;
+    sub.height = (u16)sh;
+    sub.left = sx / S;
+    sub.right = (sx + sw) / S;
+    C2D_Image img = {&cacheTex, &sub};
+    if (!cacheFlipY) {   // first stored row is the top, like our texture pages
+        sub.top = 1.0f - sy / S;
+        sub.bottom = 1.0f - (sy + sh) / S;
+        C2D_DrawImageAt(img, dx, dy, 0.5f);
+    } else {             // stored bottom-up: read it the other way and flip it back
+        sub.top = (sy + sh) / S;
+        sub.bottom = sy / S;
+        C2D_DrawImageAt(img, dx, dy + sh, 0.5f, nullptr, 1.0f, -1.0f);
+    }
+}
