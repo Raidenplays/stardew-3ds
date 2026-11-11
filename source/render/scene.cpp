@@ -693,8 +693,21 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 auto& b = g.data.layout.buildings[it.a];
                 float dx = b.tileX * TILE + (b.footW * TILE - b.srcW) / 2.0f - camX;
                 float dy = (b.tileY + b.footH) * TILE - b.srcH - camY;
+                if (b.name == "mailbox") dx += 8;   // out from behind the house's eave
                 if (c.texWidth(b.texture) > 0) {
                     c.image(b.texture, b.srcX, b.srcY, b.srcW, b.srcH, dx, dy);
+                    if (b.name == "shippingbin" && c.texWidth("LooseSprites_Cursors") > 0)   // its lid, 13 frames
+                        c.image("LooseSprites_Cursors", 134 + (int)std::lround(g.binLid * 12) * 30, 226, 30, 25,
+                                std::floor(dx) + 1, std::floor(dy) - 7);
+                    if (b.name == "mailbox" && !g.mailbox.empty()) {   // mail's here: a letter bobbing over the box
+                        float bob = std::sin(timeMs * 0.006f) * 2.0f;
+                        float lx = std::floor(dx) + 1, ly = std::floor(dy - 13 + bob);
+                        c.rect(lx - 1, ly - 1, 16, 12, RGBA(0x5A, 0x24, 0x0C));
+                        c.rect(lx, ly, 14, 10, RGBA(0xFA, 0xEE, 0xD2));
+                        c.line(lx, ly, lx + 7, ly + 6, RGBA(0x8A, 0x4A, 0x20), 1);
+                        c.line(lx + 14, ly, lx + 7, ly + 6, RGBA(0x8A, 0x4A, 0x20), 1);
+                        c.rect(lx + 5, ly + 3, 4, 4, RGBA(0xD8, 0x30, 0x30));
+                    }
                 } else if (b.name == "mailbox") {   // converted before the mailbox texture was included
                     c.rect(dx + 7, dy + 14, 2, 18, RGBA(0x6A, 0x3A, 0x18));
                     c.rect(dx + 2, dy + 6, 12, 9, RGBA(0x4A, 0x6A, 0xB8));
@@ -1391,6 +1404,7 @@ static void slotBox(Canvas& c, const Game& g, int i, float x, float y, bool pick
     bool sel = i == g.selected;
     uint32_t edge = picked ? COL_PICK : (sel ? COL_SEL : COL_SLOT_EDGE);
     box(c, x, y, SLOT, SLOT, sel ? COL_SLOT_ON : COL_SLOT, edge, (sel || picked) ? 2 : 1);
+    if (i >= g.invSlots) c.rect(x + 1, y + 1, SLOT - 2, SLOT - 2, RGBA(0x6A, 0x4A, 0x2A, 0xB0));   // needs a bigger backpack
     const Slot& s = g.inv[i];
     if (s.empty()) return;
     slotIcon(c, g, s, x + 4, y + 4);
@@ -1655,13 +1669,18 @@ static void drawChest(Canvas& c, Game& g) {
     if (!p) return;
     box(c, 4, 4, BOT_W - 8, 22, COL_PANEL_DARK, COL_BORDER);
     const BigDef* b = g.data.big(p->id);
-    c.text(12, 7, 0.5f, COL_TEXT, b ? b->name : "Chest");
+    c.text(12, 7, 0.5f, COL_TEXT, g.binOpen ? "Shipping Bin" : b ? b->name : "Chest");
     box(c, BOT_W - 64, 6, 56, 18, COL_PANEL, COL_BORDER, 1);
     c.text(BOT_W - 36, 8, 0.42f, COL_TEXT, "Close", ALIGN_CENTER);
     box(c, 4, CH_Y, BOT_W - 8, 102, COL_PANEL, COL_BORDER);
     box(c, 4, INV_Y2, BOT_W - 8, 100, COL_PANEL, COL_BORDER);
-    c.text(HOT_X, CH_Y + 3, 0.36f, COL_TEXT_SOFT, "In the chest - tap to take");
-    c.text(HOT_X, INV_Y2 + 3, 0.36f, COL_TEXT_SOFT, "Backpack - tap to store");
+    if (g.binOpen) {
+        int total = 0;
+        for (auto& s : p->items) if (!s.empty()) total += g.itemPrice(s) * s.count;
+        c.text(BOT_W - 72, 8, 0.42f, COL_TEXT, std::to_string(total) + "g tonight", ALIGN_RIGHT);
+    }
+    c.text(HOT_X, CH_Y + 3, 0.36f, COL_TEXT_SOFT, g.binOpen ? "In the bin - sells overnight (tap to take back)" : "In the chest - tap to take");
+    c.text(HOT_X, INV_Y2 + 3, 0.36f, COL_TEXT_SOFT, g.binOpen ? "Backpack - tap to ship" : "Backpack - tap to store");
     for (int i = 0; i < (int)p->items.size() && i < 36; i++) {
         float x, y;
         chestSlotPos(true, i, x, y);
