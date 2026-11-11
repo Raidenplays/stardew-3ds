@@ -34,17 +34,19 @@ void HostCanvas::resize(int w, int h) {
 }
 
 // Undo convert.py's swizzle: Morton order inside 8x8 tiles, A,B,G,R bytes, rows flipped.
+extern "C" int s3d_inflate(char* out, int outLen, const char* in, int inLen);
+
 static bool loadS3T(const std::string& path, HostTexture& out) {
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return false;
     char magic[4];
     uint16_t hdr[4];
-    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) && memcmp(magic, "S3T2", 4)) ||
+    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) && memcmp(magic, "S3T2", 4) && memcmp(magic, "S3T3", 4)) ||
         fread(hdr, 2, 4, f) != 4) {
         fclose(f);
         return false;
     }
-    bool v2 = magic[3] == '2';
+    bool v2 = magic[3] >= '2', packed = magic[3] == '3';
     out.w = hdr[0];
     out.h = hdr[1];
     out.px.assign((size_t)out.w * out.h, 0);
@@ -59,7 +61,13 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
             y0 = ph[0]; hh = ph[1]; pw = ph[2]; pgh = ph[3]; ww = out.w;
         }
         std::vector<uint8_t> data((size_t)pw * pgh * 4);
-        if (fread(data.data(), 1, data.size(), f) != data.size()) break;
+        if (packed) {
+            uint32_t n = 0;
+            if (fread(&n, 4, 1, f) != 1) break;
+            std::vector<char> comp(n);
+            if (fread(comp.data(), 1, n, f) != n) break;
+            if (s3d_inflate((char*)data.data(), (int)data.size(), comp.data(), (int)n) != (int)data.size()) break;
+        } else if (fread(data.data(), 1, data.size(), f) != data.size()) break;
         for (int gy = 0; gy < pgh; gy++)
             for (int x = 0; x < pw; x++) {
                 int tile = (gy >> 3) * (pw >> 3) + (x >> 3);

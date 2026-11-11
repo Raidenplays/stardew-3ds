@@ -16,7 +16,8 @@ jobs:
       - name: XNB reader / LZX / texture writer
         run: |
           python3 tests/make_xnb_samples.py /tmp/xnbs
-          g++ -std=c++17 -O2 -Wall -Isource tests/xnb_test.cpp source/setup/xnb.cpp source/setup/lzx.cpp source/setup/s3t_write.cpp -o /tmp/xnb_test
+          gcc -O2 -c source/third_party/stb_impl.c -o /tmp/stbi.o
+          g++ -std=c++17 -O2 -Wall -Isource tests/xnb_test.cpp source/setup/xnb.cpp source/setup/lzx.cpp source/setup/s3t_write.cpp /tmp/stbi.o -o /tmp/xnb_test
           /tmp/xnb_test /tmp/xnbs
       - name: Sound (XACT reader, MS-ADPCM, engine)
         run: |
