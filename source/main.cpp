@@ -369,6 +369,19 @@ int main() {
 
         u64 tUpd = svcGetSystemTick();
         game.update(dt, in);
+        {   // after a warp, stay black while the new area's textures are still loading,
+            // then fade in (so the loading stutter happens behind the black screen)
+            static unsigned lastLoads = 0;
+            static float held = 0;
+            unsigned loads = texStats().loads;
+            if (game.fade > 0.5f && loads != lastLoads && held < 1.5f) {
+                game.fade = 1.0f;
+                held += dt;
+            } else if (game.fade <= 0) {
+                held = 0;
+            }
+            lastLoads = loads;
+        }
         float updMs = (svcGetSystemTick() - tUpd) / (float)CPU_TICKS_PER_MSEC;
         if (sceneAfterUpdate(game, ui, savePath)) canvas.dropTextures();
 
