@@ -82,6 +82,7 @@ EXTRA_TEXTURES = [
     ("TerrainFeatures/grass", False),
     ("TileSheets/bushes", False),
     ("TileSheets/rain", False),
+    ("TileSheets/bobbers", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
     ("Minigames/TitleButtons", False),
