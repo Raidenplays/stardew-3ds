@@ -1221,6 +1221,7 @@ void Game::updateEffects(float dt) {
 
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
+    if (arcade.game) { arcadeUpdate(dt, in); return; }
     if (packAsk > 0) packAsk -= dt;
     petUpdate(dt);
     kidsUpdate(dt);

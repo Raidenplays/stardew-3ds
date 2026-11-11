@@ -790,6 +790,24 @@ int main(int argc, char** argv) {
             ui.collections = false;
             shot(c, g, ui, "social");
         }
+        if (const char* which = getenv("ARCADE")) {   // ARCADE=1|2: play a few seconds of an arcade game
+            g.arcadeStart(atoi(which));
+            Input play; play.mx = 0.6f; play.my = -0.3f; play.sx = 1;
+            for (int k = 0; k < 500 && g.arcade.game; k++) {
+                play.action = (k % 37) == 0; play.hold = (k % 37) < 12;
+                if (g.arcade.game == 2) {   // hop when the rail ahead drops away or steps up
+                    int cell = (int)((g.arcade.dist + 40.0f) / 16.0f);
+                    int here = g.arcade.track[cell], ahead = g.arcade.track[std::min((int)g.arcade.track.size() - 1, cell + 1)];
+                    play.action = here > 0 && (ahead == 0 || ahead > here);
+                    play.hold = true;
+                }
+                if (k % 90 == 0) { play.mx = -play.mx; play.sx = -play.sx; }
+                g.update(1 / 60.0f, play);
+                if (k == 300) shot(c, g, ui, "arcade");
+            }
+            printf("  arcade: game %d score %d lives %d foes %zu | %s\n", g.arcade.game, g.arcade.score, g.arcade.lives, g.arcade.foes.size(), g.toast.c_str());
+            if (g.arcade.game) g.arcadeEnd(false);
+        }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");
             auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];

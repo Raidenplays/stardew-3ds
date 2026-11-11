@@ -241,6 +241,7 @@ struct Input {
     bool walk = false;      // hold B to walk instead of run
     bool prev = false, next = false;   // L / R
     bool hold = false;      // A is held down (charging upgraded tools)
+    int sx = 0, sy = 0;     // the face buttons as a direction (A right, Y left, X up, B down): arcade shooting
 };
 
 enum FishState : int { FS_NONE = 0, FS_CHARGE, FS_CAST, FS_WAIT, FS_BITE, FS_REEL, FS_DONE };
@@ -699,6 +700,25 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- the arcade machines (game_arcade.cpp) ----
+    struct Arcade {
+        int game = 0;              // 0 off, 1 Journey of the Prairie King, 2 Junimo Kart
+        float t = 0, pause = 0;
+        int lives = 3, score = 0, stage = 1;
+        // prairie king (a 192x192 field)
+        float px = 96, py = 96, cool = 0, spawn = 1, timer = 40;
+        struct Shot { float x, y, vx, vy; };
+        struct Foe { float x, y; int kind, hp; };
+        std::vector<Shot> shots;
+        std::vector<Foe> foes;
+        // junimo kart
+        std::vector<int> track;    // rail height per 16px (0 = a gap)
+        float dist = 0, cartY = 0, vy = 0;
+    } arcade;
+    int junimoBest = 0;
+    void arcadeStart(int which);
+    void arcadeEnd(bool won);
+    void arcadeUpdate(float dt, const Input& in);
     // ---- special orders (game_orders.cpp) ----
     struct OrderDef {
         std::string key, requester, name, text;

@@ -203,7 +203,8 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
     if (verb == "Yoba") { say("A shrine to Yoba."); return true; }
     if (verb == "DwarfGrave") { say("Strange symbols are carved in the stone. Unreadable... for now."); return true; }
     if (verb == "Tent") { say("Linus's tent. Better to knock."); return true; }
-    if (verb == "Arcade_Prairie" || verb == "Arcade_Minecart") { say("The arcade machine is out of order."); return true; }
+    if (verb == "Arcade_Prairie") { arcadeStart(1); return true; }
+    if (verb == "Arcade_Minecart") { arcadeStart(2); return true; }
     return false;
 }
 

@@ -368,6 +368,8 @@ int main() {
         if (kHeld & KEY_DUP) in.my = -1;
         if (kHeld & KEY_DDOWN) in.my = 1;
         in.walk = kHeld & KEY_B;
+        in.sx = (kHeld & KEY_A) ? 1 : (kHeld & KEY_Y) ? -1 : 0;
+        in.sy = (kHeld & KEY_B) ? 1 : (kHeld & KEY_X) ? -1 : 0;
         in.hold = kHeld & (KEY_A | KEY_Y);
         in.prev = kDown & KEY_L;
         in.next = kDown & KEY_R;

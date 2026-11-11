@@ -1447,7 +1447,81 @@ static void drawHud(Canvas& c, Game& g) {
     }
 }
 
+// The arcade cabinet's screen.
+static void drawArcade(Canvas& c, Game& g) {
+    const Game::Arcade& a = g.arcade;
+    const char* CUR = "LooseSprites_Cursors";
+    bool art = c.texWidth(CUR) > 0;
+    char buf[64];
+    c.rect(0, 0, TOP_W, TOP_H, RGBA(0x10, 0x0C, 0x14));
+    if (a.game == 1) {
+        float ox = (TOP_W - 192) / 2.0f, oy = (TOP_H - 192) / 2.0f;
+        c.rect(ox - 4, oy - 4, 200, 200, RGBA(0x6A, 0x3A, 0x18));
+        c.rect(ox, oy, 192, 192, RGBA(0xE8, 0xC8, 0x88));
+        for (int y = 0; y < 12; y++)                       // a little desert texture
+            for (int x = 0; x < 12; x++)
+                if ((x * 7 + y * 13) % 5 == 0) c.rect(ox + x * 16 + 5, oy + y * 16 + 9, 3, 1, RGBA(0xC8, 0xA0, 0x60));
+        for (int k = 0; k < 4; k++) {                      // the four gates
+            float gx = k == 0 ? ox - 4 : k == 1 ? ox + 192 : ox + 80, gy = k == 2 ? oy - 4 : k == 3 ? oy + 192 : oy + 80;
+            c.rect(gx, gy, k < 2 ? 4 : 32, k < 2 ? 32 : 4, RGBA(0xE8, 0xC8, 0x88));
+        }
+        for (auto& s : a.shots) {
+            if (art) c.image(CUR, 544, 1728, 16, 16, ox + s.x - 8, oy + s.y - 8);
+            else c.rect(ox + s.x - 2, oy + s.y - 2, 4, 4, RGBA(0xF0, 0xA0, 0x30));
+        }
+        for (auto& f : a.foes) {
+            int fr = ((int)(a.t * 6) & 1) * 16;
+            if (art) c.image(CUR, (f.kind ? 416 : 352) + fr, 1712, 16, 16, ox + f.x - 8, oy + f.y - 8);
+            else c.rect(ox + f.x - 6, oy + f.y - 6, 12, 12, RGBA(0x40, 0x90, 0x40));
+        }
+        if (a.pause <= 0 || ((int)(a.t * 10) & 1)) {
+            if (art) c.image(CUR, 464 + (((int)(a.t * 6) & 1) ? 16 : 0), 1728, 16, 16, ox + a.px - 8, oy + a.py - 8);
+            else c.rect(ox + a.px - 6, oy + a.py - 6, 12, 12, RGBA(0xB0, 0x40, 0x30));
+        }
+        for (int i = 0; i < a.lives; i++) {
+            if (art) c.image(CUR, 528, 1776, 16, 16, 8 + i * 18, 8);
+            else c.rect(8 + i * 14, 8, 10, 10, RGBA(0xE0, 0x40, 0x40));
+        }
+        snprintf(buf, sizeof buf, "Stage %d", a.stage);
+        c.text(8, 30, 0.45f, COL_CREAM, buf);
+        snprintf(buf, sizeof buf, "%d", a.score);
+        c.text(8, 46, 0.45f, COL_CREAM, buf);
+        c.rect(TOP_W - 22, 30, 10, 160, RGBA(0x40, 0x30, 0x20));
+        c.rect(TOP_W - 22, 30 + 160 * (1 - std::max(0.0f, a.timer) / 40.0f), 10, 160 * std::max(0.0f, a.timer) / 40.0f, RGBA(0x60, 0xC0, 0x40));
+        c.text(TOP_W - 8, 8, 0.36f, COL_CREAM, "L: quit", ALIGN_RIGHT);
+        c.text(8, TOP_H - 30, 0.32f, COL_CREAM, "Pad: move");
+        c.text(8, TOP_H - 18, 0.32f, COL_CREAM, "ABXY: shoot");
+    } else {
+        const char* MC = "Minigames_MineCart";
+        bool mart = c.texWidth(MC) > 0;
+        for (int y = 0; y < TOP_H; y += 16) c.rect(0, y, TOP_W, 16, RGBA(0x10, 0x18 + y / 6, 0x40 + y / 3));
+        float base = TOP_H - 40.0f;
+        int first = (int)(a.dist / 16.0f);
+        float off = a.dist - first * 16.0f;
+        for (int i = -1; i < TOP_W / 16 + 2; i++) {
+            int cell = first + i;
+            int h = cell >= 0 && cell < (int)a.track.size() ? a.track[cell] : 0;
+            if (!h) continue;
+            float x = i * 16 - off, y = base - h * 16.0f;
+            if (mart) {
+                c.image(MC, 16, 32, 16, 16, x, y);
+                for (float yy = y + 16; yy < TOP_H; yy += 16) c.image(MC, 32, 32, 16, 16, x, yy);
+            } else {
+                c.rect(x, y, 16, 3, RGBA(0xA0, 0x80, 0x50));
+                c.rect(x + 6, y + 3, 3, TOP_H - y, RGBA(0x70, 0x50, 0x30));
+            }
+        }
+        float cy = base - a.cartY - 14;
+        if (mart) c.image(MC, 0, 0, 16, 16, 40 - 8, cy);
+        else c.rect(40 - 7, cy + 4, 14, 10, RGBA(0x8A, 0x5A, 0x30));
+        snprintf(buf, sizeof buf, "Score %d   Best %d", a.score, g.junimoBest);
+        c.text(8, 8, 0.45f, COL_CREAM, buf);
+        c.text(TOP_W - 8, 8, 0.36f, COL_CREAM, "A: jump   L: quit", ALIGN_RIGHT);
+    }
+}
+
 void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
+    if (g.arcade.game) { drawArcade(c, g); return; }
     g_useMapCache = ui.mapCache != 0;
     c.cacheFlipY = ui.mapCache == 2;
     c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));

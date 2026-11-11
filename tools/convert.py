@@ -93,6 +93,7 @@ EXTRA_TEXTURES = [
     ("Characters/Monsters/Bug", False),
     ("Characters/Monsters/Bat", False),
     ("Animals/horse", False),
+    ("Minigames/MineCart", False),
     ("Animals/cat", False), ("Animals/cat1", False), ("Animals/cat2", False), ("Animals/cat3", False), ("Animals/cat4", False),
     ("Animals/turtle", False), ("Animals/turtle1", False),
     ("Characters/Baby", False), ("Characters/Baby_dark", False), ("Characters/Toddler", False),
