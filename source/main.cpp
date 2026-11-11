@@ -53,24 +53,37 @@ static void fatalScreen(C2DCanvas& c, C3D_RenderTarget* top, const std::string& 
 static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot, const std::string& root) {
     setup::Setup su(root);
     if (su.installed()) return true;
-    SetupView view = su.haveContent() ? SetupView::Confirm : SetupView::NeedFiles;
+    auto resolve = [&root](const std::string& rel) { return root + rel; };
+    // once the player's files are there, convert the menu art + fonts first so
+    // every screen after this looks like the game
+    auto prepare = [&] {
+        su.prepareUi();
+        c.dropTextures();
+        loadUiFonts(c, resolve);
+    };
+    SetupView view = SetupView::NeedFiles;
+    if (su.haveContent()) { prepare(); view = SetupView::Confirm; }
     auto now = [] { return (unsigned)osGetTime(); };
+    u64 t0 = osGetTime();
     while (aptMainLoop()) {
         hidScanInput();
         u32 down = hidKeysDown();
+        if (down & KEY_TOUCH) {
+            touchPosition tp;
+            hidTouchRead(&tp);
+            if (setupButtonHit(tp.px, tp.py)) down |= KEY_A;
+        }
         if (view != SetupView::Running) {
             if (down & KEY_START) return false;
             if (down & KEY_A) {
                 if (view == SetupView::NeedFiles) {
-                    setup::Setup again(root);
-                    if (again.haveContent()) view = SetupView::Confirm;
+                    if (su.haveContent()) { prepare(); view = SetupView::Confirm; }
                 } else if (view == SetupView::Confirm) {
                     su.begin();
                     aptSetSleepAllowed(false);
                     view = SetupView::Running;
                 } else if (view == SetupView::Result) {
-                    if (su.state() == setup::State::Done) return true;
-                    return false;
+                    return su.state() == setup::State::Done;
                 }
             }
         } else if (!su.step(50, now)) {
@@ -78,14 +91,15 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
             c.dropTextures();
             view = SetupView::Result;
         }
+        float t = (osGetTime() - t0) / 1000.0f;
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         c.beginFrame();
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
         C2D_SceneBegin(top);
-        drawSetupTop(c, su, view);
+        drawSetupTop(c, su, view, t);
         C2D_TargetClear(bot, C2D_Color32(0, 0, 0, 0xFF));
         C2D_SceneBegin(bot);
-        drawSetupBottom(c, su, view);
+        drawSetupBottom(c, su, view, t);
         C3D_FrameEnd(0);
     }
     return false;

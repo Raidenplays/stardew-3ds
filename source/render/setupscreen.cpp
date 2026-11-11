@@ -1,20 +1,18 @@
+// First-launch setup screens, drawn like the rest of the game: the title
+// screen's sky behind, the game's menu frames and fonts on top. Before the
+// player's files are found there's no game art yet, so the same layout falls
+// back to plain colours.
 #include "render/setupscreen.h"
+#include "render/scene.h"
+#include "render/title.h"
 #include <cstdio>
 
 namespace sv {
 namespace {
-const uint32_t BG = RGBA(0x2A, 0x1A, 0x10);
-const uint32_t PANEL = RGBA(0xF6, 0xD9, 0x9C);
-const uint32_t EDGE = RGBA(0x85, 0x45, 0x1C);
-const uint32_t INK = RGBA(0x3B, 0x22, 0x10);
-const uint32_t GOLD = RGBA(0xFF, 0xD0, 0x80);
-const uint32_t WHITE = RGBA(0xFF, 0xFF, 0xFF);
-const uint32_t GREY = RGBA(0xC0, 0xC0, 0xC0);
-
-void panel(Canvas& c, float x, float y, float w, float h) {
-    c.rect(x - 3, y - 3, w + 6, h + 6, EDGE);
-    c.rect(x, y, w, h, PANEL);
-}
+const uint32_t TXT = RGBA(0x3B, 0x1F, 0x0E);
+const uint32_t SOFT = RGBA(0x6B, 0x44, 0x23);
+const uint32_t RED = RGBA(0x9A, 0x2A, 0x16);
+const uint32_t CREAM = RGBA(0xFF, 0xE8, 0xB0);
 
 // word-wrapped text; returns the y after the last line
 float wrap(Canvas& c, float x, float y, float maxW, float scale, uint32_t col, const std::string& s, float lh) {
@@ -38,86 +36,98 @@ float wrap(Canvas& c, float x, float y, float maxW, float scale, uint32_t col, c
     }
     return y;
 }
+
+// A titled menu window like the game's: heading in the bold font on top.
+float window(Canvas& c, float x, float y, float w, float h, const char* title) {
+    uiFrame(c, x, y, w, h);
+    c.text(x + w / 2, y + 10, 0.6f, TXT, title, ALIGN_CENTER);
+    return y + 34;
+}
+
+void button(Canvas& c, float y, const char* label, bool lit) {
+    uiSlot(c, 50, y, 220, 40, lit);
+    c.text(160, y + 12, 0.5f, TXT, label, ALIGN_CENTER);
+}
 }  // namespace
 
-void drawSetupTop(Canvas& c, const setup::Setup& su, SetupView v) {
-    c.rect(0, 0, 400, 240, BG);
-    c.text(200, 14, 0.75f, GOLD, "stardew3ds setup", ALIGN_CENTER);
-    panel(c, 16, 44, 368, 180);
-    float y = 54;
+void drawSetupTop(Canvas& c, const setup::Setup& su, SetupView v, float t) {
+    titleSky(c, 400, 240, t, false);
+    const float X = 18, W = 364, TX = X + 16, TW = W - 32;
     switch (v) {
-    case SetupView::NeedFiles:
-        y = wrap(c, 26, y, 348, 0.5f, INK, "This game needs your own copy of Stardew Valley.", 15);
-        y += 6;
-        y = wrap(c, 26, y, 348, 0.45f, INK,
-                 "1. On your PC, open your Stardew Valley folder (Steam: right-click it, Manage, Browse local files).", 14);
-        y = wrap(c, 26, y, 348, 0.45f, INK, "2. Copy the whole Content folder to your SD card here:", 14);
-        c.text(36, y, 0.45f, EDGE, "sdmc:/3ds/stardew3ds/Content/", ALIGN_LEFT);
-        y += 18;
-        y = wrap(c, 26, y, 348, 0.45f, INK,
-                 "3. Optional: put Stardew Valley Expanded and Ridgeside Village (with their Content Patcher "
-                 "folders) in sdmc:/3ds/stardew3ds/mods/", 14);
-        y += 4;
-        wrap(c, 26, y, 348, 0.45f, INK, "Then put the SD card back and press A.", 14);
-        break;
-    case SetupView::Confirm:
-        y = wrap(c, 26, y, 348, 0.5f, INK, "Found your Stardew Valley files!", 16);
-        y += 6;
-        y = wrap(c, 26, y, 348, 0.45f, INK,
-                 "The game will now convert them for the 3DS. This only happens once, but it takes a while. "
-                 "Keep the console plugged in and the lid open.", 14);
-        y += 6;
-        wrap(c, 26, y, 348, 0.45f, INK, "When it's done, the Content folder can be deleted to free up space.", 14);
-        break;
-    case SetupView::Running: {
-        c.text(200, 64, 0.6f, INK, su.stage().empty() ? "Starting..." : su.stage(), ALIGN_CENTER);
-        c.text(200, 88, 0.45f, EDGE, su.item(), ALIGN_CENTER);
-        float p = su.progress();
-        c.rect(40, 120, 320, 22, EDGE);
-        c.rect(43, 123, 314, 16, RGBA(0xE0, 0xB8, 0x78));
-        c.rect(43, 123, 314 * p, 16, RGBA(0x5C, 0xA8, 0x3C));
-        char pct[16];
-        snprintf(pct, sizeof pct, "%d%%", (int)(p * 100 + 0.5f));
-        c.text(200, 148, 0.5f, INK, pct, ALIGN_CENTER);
-        wrap(c, 26, 180, 348, 0.42f, INK, "Please don't turn off the console or take out the SD card.", 13);
+    case SetupView::NeedFiles: {
+        float y = window(c, X, 30, W, 170, "Welcome!");
+        y = wrap(c, TX, y, TW, 0.45f, TXT, "This game plays with your own copy of Stardew Valley.", 15) + 4;
+        y = wrap(c, TX, y, TW, 0.42f, TXT,
+                 "1. On your PC, open the Stardew Valley folder (Steam: right-click the game, Manage, "
+                 "Browse local files).", 13) + 2;
+        y = wrap(c, TX, y, TW, 0.42f, TXT, "2. Copy the whole Content folder onto your SD card here:", 13);
+        c.text(TX + 10, y, 0.42f, RED, "sdmc:/3ds/stardew3ds/Content/", ALIGN_LEFT);
+        y += 15;
+        y = wrap(c, TX, y, TW, 0.42f, TXT,
+                 "3. Optional: put Stardew Valley Expanded and Ridgeside Village in "
+                 "sdmc:/3ds/stardew3ds/mods/", 13) + 2;
+        wrap(c, TX, y, TW, 0.42f, SOFT, "Then put the SD card back in and press A.", 13);
         break;
     }
-    case SetupView::Result:
-        if (su.state() == setup::State::Done) {
-            y = wrap(c, 26, y, 348, 0.5f, INK, "All done! Your farm is waiting.", 16);
-        } else {
-            y = wrap(c, 26, y, 348, 0.48f, INK, su.error().empty() ? "Setup stopped." : su.error(), 15);
-        }
-        y += 4;
+    case SetupView::Confirm: {
+        float y = window(c, X, 30, W, 180, "Found your files!");
+        y = wrap(c, TX, y + 4, TW, 0.45f, TXT,
+                 "Your farm is almost ready. The game will now convert your files for the 3DS.", 15) + 6;
+        y = wrap(c, TX, y, TW, 0.42f, TXT,
+                 "This only happens once, but it takes a while. Keep the console plugged in with the lid open.",
+                 13) + 6;
+        wrap(c, TX, y, TW, 0.42f, SOFT, "Afterwards you can delete the Content folder to free up space.", 13);
+        break;
+    }
+    case SetupView::Running: {
+        float y = window(c, X, 40, W, 160, su.stage().empty() ? "Getting ready..." : su.stage().c_str());
+        c.text(200, y, 0.42f, SOFT, su.item(), ALIGN_CENTER);
+        float p = su.progress();
+        uiSlot(c, 50, y + 22, 300, 24, false);
+        if (p > 0) c.rect(54, y + 26, 292 * p, 16, RGBA(0x5C, 0xA8, 0x3C));
+        if (p > 0) c.rect(54, y + 26, 292 * p, 3, RGBA(0x8C, 0xD0, 0x5C));   // highlight
+        char pct[16];
+        snprintf(pct, sizeof pct, "%d%%", (int)(p * 100 + 0.5f));
+        c.text(200, y + 52, 0.5f, TXT, pct, ALIGN_CENTER);
+        c.text(200, y + 80, 0.4f, SOFT, "Please don't turn off the console or take out the SD card.", ALIGN_CENTER);
+        break;
+    }
+    case SetupView::Result: {
+        bool done = su.state() == setup::State::Done;
+        float y = window(c, X, 20, W, 200, done ? "All done!" : "Setup stopped");
+        y = wrap(c, TX, y + 2, TW, 0.45f, TXT,
+                 done ? "Your farm is waiting." : (su.error().empty() ? "Something went wrong." : su.error()), 15) + 4;
         if (!su.warnings().empty()) {
             char buf[64];
             snprintf(buf, sizeof buf, "%d file(s) had problems:", (int)su.warnings().size());
-            c.text(26, y, 0.42f, EDGE, buf, ALIGN_LEFT);
-            y += 14;
-            for (size_t i = 0; i < su.warnings().size() && y < 210; i++) {
-                c.text(30, y, 0.38f, INK, su.warnings()[i], ALIGN_LEFT);
-                y += 12;
+            c.text(TX, y, 0.42f, RED, buf, ALIGN_LEFT);
+            y += 15;
+            for (size_t i = 0; i < su.warnings().size() && y < 204; i++) {
+                c.text(TX + 6, y, 0.4f, SOFT, su.warnings()[i], ALIGN_LEFT);
+                y += 13;
             }
         }
         break;
     }
+    }
 }
 
-void drawSetupBottom(Canvas& c, const setup::Setup&, SetupView v) {
-    c.rect(0, 0, 320, 240, BG);
-    const char* a = nullptr;
+void drawSetupBottom(Canvas& c, const setup::Setup&, SetupView v, float t) {
+    titleSky(c, 320, 240, t, true);
     switch (v) {
-    case SetupView::NeedFiles: a = "A: Check again"; break;
-    case SetupView::Confirm: a = "A: Start converting"; break;
-    case SetupView::Running: break;
-    case SetupView::Result: a = "A: Continue"; break;
+    case SetupView::NeedFiles: button(c, 70, "Check again", true); break;
+    case SetupView::Confirm: button(c, 70, "Start converting", true); break;
+    case SetupView::Result: button(c, 70, "Continue", true); break;
+    case SetupView::Running:
+        uiFrame(c, 70, 74, 180, 34);
+        c.text(160, 84, 0.45f, TXT, "Converting...", ALIGN_CENTER);
+        break;
     }
-    if (a) {
-        panel(c, 60, 90, 200, 40);
-        c.text(160, 103, 0.55f, INK, a, ALIGN_CENTER);
+    if (v != SetupView::Running) {
+        uiFrame(c, 110, 136, 100, 26, true);
+        c.text(160, 142, 0.4f, TXT, "START: Exit", ALIGN_CENTER);
     }
-    if (v != SetupView::Running) c.text(160, 210, 0.45f, GREY, "START: Exit", ALIGN_CENTER);
-    else c.text(160, 110, 0.5f, WHITE, "Converting...", ALIGN_CENTER);
+    (void)CREAM;
 }
 
 }  // namespace sv

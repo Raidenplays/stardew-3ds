@@ -183,6 +183,45 @@ bool readStringDict(File& f, std::vector<std::pair<std::string, std::string>>& o
     return true;
 }
 
+// UTF-8 char as written by BinaryWriter.Write(char)
+static uint32_t readChar(File& f) {
+    uint8_t b = f.u8();
+    if (b < 0x80) return b;
+    int extra = (b & 0xE0) == 0xC0 ? 1 : (b & 0xF0) == 0xE0 ? 2 : 3;
+    uint32_t cp = b & (0x3F >> extra);
+    for (int i = 0; i < extra; i++) cp = (cp << 6) | (f.u8() & 0x3F);
+    return cp;
+}
+
+static bool readRectList(File& f, std::vector<Rect>& out) {
+    if (f.typeId().find("ListReader") == std::string::npos) return false;
+    uint32_t n = f.u32();
+    if (n > 100000) return false;
+    out.resize(n);
+    for (auto& r : out) { r.x = f.i32(); r.y = f.i32(); r.w = f.i32(); r.h = f.i32(); }
+    return true;
+}
+
+bool readSpriteFont(File& f, SpriteFont& out) {
+    if (f.typeId().find("SpriteFontReader") == std::string::npos) { f.error = "not a font"; return false; }
+    if (!readTexture(f, out.texW, out.texH, out.rgba)) return false;
+    if (!readRectList(f, out.glyphs) || !readRectList(f, out.cropping)) { f.error = "bad font glyphs"; return false; }
+    if (f.typeId().find("ListReader") == std::string::npos) { f.error = "bad font chars"; return false; }
+    uint32_t n = f.u32();
+    if (n != out.glyphs.size()) { f.error = "font char count mismatch"; return false; }
+    out.chars.resize(n);
+    for (auto& c : out.chars) c = readChar(f);
+    out.lineSpacing = f.i32();
+    out.spacing = f.f32();
+    if (f.typeId().find("ListReader") == std::string::npos) { f.error = "bad font kerning"; return false; }
+    uint32_t k = f.u32();
+    if (k != n) { f.error = "font kerning count mismatch"; return false; }
+    out.kerning.resize(k * 3);
+    for (auto& v : out.kerning) v = f.f32();
+    if (f.pos > f.data.size()) { f.error = "truncated font"; return false; }
+    return true;
+}
+
 bool readTbin(File& f, std::vector<uint8_t>& tbin) {
     std::string t = f.typeId();
     if (t.find("TideReader") == std::string::npos) { f.error = "not a map"; return false; }

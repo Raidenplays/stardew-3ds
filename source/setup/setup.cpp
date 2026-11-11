@@ -1,8 +1,10 @@
 #include "setup/setup.h"
+#include "setup/fontconv.h"
 #include "setup/s3t_write.h"
 #include "setup/xnb.h"
 
 #include <cerrno>
+#include <algorithm>
 #include <cstdio>
 #include <sys/stat.h>
 
@@ -74,11 +76,31 @@ bool Setup::haveContent() const {
     return fileExists(content_ + "Maps/springobjects.xnb") && fileExists(content_ + "Data");
 }
 
+static const char* UI_TEXTURES[] = {"LooseSprites/Cursors", "LooseSprites/stardewPanorama",
+                                     "Minigames/Clouds", "Minigames/treestrip"};
+
+bool Setup::prepareUi() {
+    if (!haveContent()) return false;
+    makeDirs(root_ + "tex/");
+    makeDirs(root_ + "data/");
+    bool ok = true;
+    std::string err;
+    for (const char* t : UI_TEXTURES) {
+        if (!fileExists(content_ + t + ".xnb")) continue;
+        if (convertTexture(content_, t, root_ + "tex/", err)) uiDone_.push_back(t);
+        else ok = false;
+    }
+    if (convertBoldFont(content_, root_, err)) uiDone_.push_back("LooseSprites/font_bold");
+    if (!convertSmallFont(content_, root_, 16, err)) ok = false;
+    return ok && fileExists(root_ + "tex/LooseSprites_Cursors.s3t");
+}
+
 void Setup::queueTextures() {
     std::string texDir = root_ + "tex/";
     for (auto& t : EXTRA_TEXTURES) {
         std::string path = t.path;
         bool required = t.required;
+        if (std::find(uiDone_.begin(), uiDone_.end(), path) != uiDone_.end()) continue;   // done by prepareUi
         if (!fileExists(content_ + path + ".xnb")) {
             if (required) warnings_.push_back("missing " + path + ".xnb");
             continue;
@@ -103,6 +125,16 @@ void Setup::begin() {
     makeDirs(root_ + "maps/");
     makeDirs(root_ + "data/");
     queueTextures();
+    {
+        Job j;
+        j.stage = "Fonts";
+        j.item = "Fonts/SmallFont";
+        j.run = [this](std::string& err) {
+            if (fileExists(root_ + "data/font_small.dat")) return true;
+            return convertSmallFont(content_, root_, 16, err);
+        };
+        jobs_.push_back(std::move(j));
+    }
     // Still being ported from tools/convert.py: maps, data tables, villagers,
     // events, fonts, and the SVE / Ridgeside merge. Until those land, finish()
     // stops short of writing VERSION so the game doesn't start half-converted.

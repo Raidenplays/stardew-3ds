@@ -43,6 +43,18 @@ bool readStringDict(File& f, std::vector<std::pair<std::string, std::string>>& o
 // xTile map (TideReader) -> the raw .tbin bytes inside.
 bool readTbin(File& f, std::vector<uint8_t>& tbin);
 
+struct Rect { int x, y, w, h; };
+struct SpriteFont {
+    int texW = 0, texH = 0;
+    std::vector<uint8_t> rgba;          // straight alpha
+    std::vector<Rect> glyphs, cropping;
+    std::vector<uint32_t> chars;        // code points
+    std::vector<float> kerning;         // 3 per glyph: left bearing, width, right bearing
+    int lineSpacing = 0;
+    float spacing = 0;
+};
+bool readSpriteFont(File& f, SpriteFont& out);
+
 // LZ4 block decoder (XNB flag 0x40).
 bool lz4Block(const uint8_t* in, size_t inSize, std::vector<uint8_t>& out, size_t outSize);
 
