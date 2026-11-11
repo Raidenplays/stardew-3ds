@@ -401,7 +401,14 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 auto& b = g.data.layout.buildings[it.a];
                 float dx = b.tileX * TILE + (b.footW * TILE - b.srcW) / 2.0f - camX;
                 float dy = (b.tileY + b.footH) * TILE - b.srcH - camY;
-                c.image(b.texture, b.srcX, b.srcY, b.srcW, b.srcH, dx, dy);
+                if (c.texWidth(b.texture) > 0) {
+                    c.image(b.texture, b.srcX, b.srcY, b.srcW, b.srcH, dx, dy);
+                } else if (b.name == "mailbox") {   // converted before the mailbox texture was included
+                    c.rect(dx + 7, dy + 14, 2, 18, RGBA(0x6A, 0x3A, 0x18));
+                    c.rect(dx + 2, dy + 6, 12, 9, RGBA(0x4A, 0x6A, 0xB8));
+                    c.rect(dx + 2, dy + 6, 12, 2, RGBA(0x6A, 0x8A, 0xD8));
+                    if (!g.mailbox.empty()) c.rect(dx + 13, dy + 2, 2, 6, RGBA(0xD8, 0x30, 0x30));   // flag up
+                }
                 break;
             }
             case 3: {

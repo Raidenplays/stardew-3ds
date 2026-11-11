@@ -579,11 +579,24 @@ bool GameData::load(const std::string& root, std::string* err) {
                 }
             } else if (!strcmp(kw, "farmer")) {
                 if (l.size() > 7) layout.farmerName = l.substr(7);
+            } else if (!strcmp(kw, "mailbox")) {
+                sscanf(l.c_str(), "mailbox %d %d", &layout.mailX, &layout.mailY);
             } else if (!strcmp(kw, "bin")) {
                 int x, y;
                 if (sscanf(l.c_str(), "bin %d %d", &x, &y) == 2) layout.bins.push_back({x, y});
             }
         }
+    }
+    // older layout.txt files have no mailbox: add the game's (Buildings/Mailbox, 16x32)
+    bool haveMailbox = false;
+    for (auto& b : layout.buildings) haveMailbox |= b.name == "mailbox";
+    if (!haveMailbox) {
+        BuildingDef b;
+        b.name = "mailbox";
+        b.texture = "Buildings_Mailbox";
+        b.srcX = 0; b.srcY = 0; b.srcW = 16; b.srcH = 32;
+        b.tileX = layout.mailX; b.tileY = layout.mailY; b.footW = 1; b.footH = 1;
+        layout.buildings.push_back(b);
     }
     return true;
 }

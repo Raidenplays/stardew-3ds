@@ -11,14 +11,21 @@ C2DCanvas::~C2DCanvas() { C2D_TextBufDelete(textBuf); }
 
 void C2DCanvas::beginFrame() { C2D_TextBufClear(textBuf); }
 
-const Texture* C2DCanvas::get(const std::string& name) {
-    if (lastTex && name == lastName) return lastTex;
-    lastName = name;
-    lastTex = cache.get(name);
-    return lastTex;
+const Texture* C2DCanvas::get(TexName name) {
+    // a few most-recent names: tile drawing alternates between sheets
+    for (int i = 0; i < RECENT; i++)
+        if (recent[i].tex && name == recent[i].name) return recent[i].tex;
+    std::string s = name.str();
+    const Texture* t = cache.get(s);
+    if (t) {
+        recentNext = (recentNext + 1) % RECENT;
+        recent[recentNext].name = s;
+        recent[recentNext].tex = t;
+    }
+    return t;
 }
 
-void C2DCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+void C2DCanvas::image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                       bool flipX, uint32_t tint) {
     const Texture* t = get(tex);
     if (!t) return;
@@ -31,7 +38,7 @@ void C2DCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, fl
     }
 }
 
-void C2DCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
+void C2DCanvas::imageRotated(TexName tex, int sx, int sy, int sw, int sh, float px, float py,
                              float dx, float dy, float radians, uint32_t tint) {
     const Texture* t = get(tex);
     if (!t) return;
@@ -48,7 +55,7 @@ void C2DCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, int
     }
 }
 
-void C2DCanvas::imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+void C2DCanvas::imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                             float scale, bool flipX, uint32_t tint) {
     const Texture* t = get(tex);
     if (!t) return;
@@ -80,12 +87,12 @@ void C2DCanvas::text(float x, float y, float scale, uint32_t color, const std::s
     C2D_DrawText(&t, flags, x, y, 0.5f, scale, scale, toC2D(color));
 }
 
-int C2DCanvas::texWidth(const std::string& tex) {
+int C2DCanvas::texWidth(TexName tex) {
     const Texture* t = get(tex);
     return t ? t->width : 0;
 }
 
-int C2DCanvas::texHeight(const std::string& tex) {
+int C2DCanvas::texHeight(TexName tex) {
     const Texture* t = get(tex);
     return t ? t->height : 0;
 }

@@ -23,11 +23,11 @@ public:
     void setOrigin(int x, int y) { ox = x; oy = y; }
     void setClip(int x, int y, int w, int h) { cx = x; cy = y; cw = w; ch = h; }
 
-    void image(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+    void image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                bool flipX, uint32_t tint) override;
-    void imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py, float dx,
+    void imageRotated(TexName tex, int sx, int sy, int sw, int sh, float px, float py, float dx,
                       float dy, float radians, uint32_t tint) override;
-    void imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy, float scale,
+    void imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy, float scale,
                      bool flipX, uint32_t tint) override;
     void rect(float x, float y, float w, float h, uint32_t color) override;
     void line(float x1, float y1, float x2, float y2, uint32_t color, float width) override;
@@ -37,8 +37,8 @@ public:
         if (const BitmapFont* f = fontFor(scale)) return bitmapWidth(*f, s);
         return textWidthPx(s, 30.0f * scale);
     }
-    int texWidth(const std::string& tex) override;
-    int texHeight(const std::string& tex) override;
+    int texWidth(TexName tex) override;
+    int texHeight(TexName tex) override;
     void dropTextures() override { cache.clear(); }
 
     bool writePng(const std::string& path, int scale) const;
@@ -47,7 +47,7 @@ public:
     std::vector<uint32_t> fb;
 
 private:
-    const HostTexture* get(const std::string& name);
+    const HostTexture* get(TexName name);
     void blend(int x, int y, uint32_t c);
     float textWidthPx(const std::string& s, float px);
 

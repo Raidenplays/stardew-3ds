@@ -464,8 +464,9 @@ private:
     void refreshSeasonMaps();
     void spawnObjects(Location& loc);
     bool canSpawnAt(const Location& loc, int x, int y, const std::string& terrain, bool vanilla) const;
-    bool warpTo(const std::string& name, int tx, int ty);
-    bool enterFrom(const std::string& name);   // arrive at name's warp back to cur
+    // door = through a door (plays the door sound, like the game); map-edge walks are silent
+    bool warpTo(const std::string& name, int tx, int ty, bool door = false);
+    bool enterFrom(const std::string& name, bool door = false);   // arrive at name's warp back to cur
     bool runMapAction(const std::string& action, bool bumped);
     void useSelected(int tx, int ty);
     bool tryInteract(int tx, int ty);

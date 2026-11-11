@@ -1,6 +1,7 @@
 // Drawing interface shared by the 3DS (citro2d) and the PC screenshot tool.
 // All game/UI drawing goes through this, so screenshots match the console.
 #pragma once
+#include <cstring>
 #include <algorithm>
 #include <cstdint>
 #include <string>
@@ -132,20 +133,32 @@ inline int nextCodepoint(const std::string& s, size_t& i) {
     return cp < 256 ? cp : '?';
 }
 
+// A texture name passed without copying: string literals ("TerrainFeatures_hoeDirt")
+// would otherwise allocate a std::string on every draw call.
+struct TexName {
+    const char* p;
+    size_t n;
+    TexName(const char* s) : p(s), n(strlen(s)) {}
+    TexName(const std::string& s) : p(s.data()), n(s.size()) {}
+    bool operator==(const std::string& s) const { return s.size() == n && memcmp(s.data(), p, n) == 0; }
+    std::string str() const { return std::string(p, n); }
+    operator std::string() const { return str(); }
+};
+
 class Canvas {
 public:
     virtual ~Canvas() {}
 
     // Draw (sx,sy,sw,sh) of texture `tex` (a name under tex/) at (dx,dy).
     // tint != 0 multiplies the texture colour by it.
-    virtual void image(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+    virtual void image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                        bool flipX = false, uint32_t tint = 0) = 0;
     // Rotated draw: the source pixel (px, py) inside the (sx,sy,sw,sh) rect lands on
     // (dx, dy), and the image is turned by `radians` around it (clockwise).
-    virtual void imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
+    virtual void imageRotated(TexName tex, int sx, int sy, int sw, int sh, float px, float py,
                               float dx, float dy, float radians, uint32_t tint = 0) = 0;
     // Whole-number scaling (2x, 3x) stays sharp: used for the farmer preview.
-    virtual void imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+    virtual void imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                              float scale, bool flipX = false, uint32_t tint = 0) = 0;
     virtual void rect(float x, float y, float w, float h, uint32_t color) = 0;
     virtual void line(float x1, float y1, float x2, float y2, uint32_t color, float width) = 0;
@@ -153,8 +166,8 @@ public:
     virtual void text(float x, float y, float scale, uint32_t color, const std::string& s,
                       int align = ALIGN_LEFT) = 0;
     virtual float textWidth(const std::string& s, float scale) = 0;
-    virtual int texWidth(const std::string& tex) = 0;   // 0 if missing
-    virtual int texHeight(const std::string& tex) = 0;  // 0 if missing
+    virtual int texWidth(TexName tex) = 0;   // 0 if missing
+    virtual int texHeight(TexName tex) = 0;  // 0 if missing
     virtual void dropTextures() = 0;                    // free everything (map/season change)
 
     // Game fonts (set by loadUiFonts); backends use them when loaded.

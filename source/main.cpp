@@ -111,6 +111,8 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
     return false;
 }
 
+static bool perfShow = false;   // L + SELECT
+
 int main() {
     gfxInitDefault();
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
@@ -332,7 +334,8 @@ int main() {
             if (game.cutscene.active) game.skipEvent();
             else ui.tab = TAB_OPTIONS;
         }
-        if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
+        if ((kDown & KEY_SELECT) && (kHeld & KEY_L)) perfShow = !perfShow;   // L + SELECT: performance readout
+        else if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
         if (!ui.shop.empty() && (kDown & KEY_B)) { ui.shop.clear(); ui.cart.clear(); }
         if (game.chestOpen && (kDown & KEY_B)) game.closeChest();
         if (game.letterOpen) {
@@ -363,7 +366,9 @@ int main() {
             touchBottom(game, ui, tp.px, tp.py, savePath);
         }
 
+        u64 tUpd = svcGetSystemTick();
         game.update(dt, in);
+        float updMs = (svcGetSystemTick() - tUpd) / (float)CPU_TICKS_PER_MSEC;
         if (sceneAfterUpdate(game, ui, savePath)) canvas.dropTextures();
 
         // music for where you are, then this frame's sound effects
@@ -392,6 +397,34 @@ int main() {
         C2D_TargetClear(bot, C2D_Color32(0x2A, 0x1A, 0x10, 0xFF));
         C2D_SceneBegin(bot);
         drawBottom(canvas, game, ui);
+        if (perfShow) {
+            // once a second: fps, CPU ms (game update / building the frame), GPU ms,
+            // free GPU memory, texture pages loaded/evicted/failed
+            static u64 since = 0;
+            static int frames = 0;
+            static float fps = 0, upd = 0, cpu = 0, gpu = 0;
+            static TexStats last;
+            static char line1[96], line2[96];
+            frames++;
+            upd = std::max(upd, updMs);
+            cpu = std::max(cpu, C3D_GetProcessingTime());
+            gpu = std::max(gpu, C3D_GetDrawingTime());
+            u64 nowT = osGetTime();
+            if (nowT - since >= 1000) {
+                TexStats s = texStats();
+                fps = frames * 1000.0f / (float)(nowT - since);
+                snprintf(line1, sizeof line1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
+                snprintf(line2, sizeof line2, "vram %uK free  pages +%u -%u !%u", (unsigned)(linearSpaceFree() / 1024),
+                         s.loads - last.loads, s.evictions - last.evictions, s.failed - last.failed);
+                last = s;
+                since = nowT;
+                frames = 0;
+                upd = cpu = gpu = 0;
+            }
+            canvas.rect(0, 0, 320, 30, RGBA(0, 0, 0));
+            canvas.text(4, 2, 0.4f, RGBA(255, 255, 0), line1, ALIGN_LEFT);
+            canvas.text(4, 15, 0.4f, RGBA(255, 255, 0), line2, ALIGN_LEFT);
+        }
         C3D_FrameEnd(0);
     }
 

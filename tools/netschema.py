@@ -186,7 +186,7 @@ class Schema:
             k = Klass(name)
             k.generic_params = [n for _, n in sorted(gparams.get(ti, []))]
             base = None
-            if t.Extends is not None and t.Extends.table is not None:
+            if t.Extends is not None and t.Extends.table is not None and t.Extends.row_index:
                 tn = t.Extends.table.name
                 base = self._tdor_name({"TypeDef": 0, "TypeRef": 1, "TypeSpec": 2}[tn], t.Extends.row_index)
                 if isinstance(base, T):

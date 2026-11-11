@@ -31,6 +31,8 @@ static void unflip(u32* px, int pw, int ph) {
 static u32 g_frame = 1;
 static std::vector<Texture*> g_textures;   // every live texture, for eviction
 
+static TexStats g_stats;
+TexStats& texStats() { return g_stats; }
 void texNewFrame() { g_frame++; }
 
 Texture::~Texture() {
@@ -86,6 +88,14 @@ bool Texture::load(const std::string& path_) {
     }
     fclose(f);
     if (pages.empty()) return false;
+    // the converters write pages row by row in a regular grid: index them directly
+    int cols = 0;
+    while (cols < (int)pages.size() && pages[cols].y0 == 0) cols++;
+    int gw = cols > 1 ? pages[1].x0 : width, gh = (int)pages.size() > cols ? pages[cols].y0 : height;
+    bool grid = gw > 0 && gh > 0 && pages.size() % cols == 0;
+    for (size_t i = 0; grid && i < pages.size(); i++)
+        grid = pages[i].x0 == (int)(i % cols) * gw && pages[i].y0 == (int)(i / cols) * gh;
+    if (grid) { gridCols = cols; gridW = gw; gridH = gh; }
     g_textures.push_back(this);
     return true;
 }
@@ -98,6 +108,7 @@ bool Texture::evictOne() {
     if (!best) return false;
     C3D_TexDelete(&best->tex);
     best->loaded = false;
+    g_stats.evictions++;
     return true;
 }
 
@@ -108,7 +119,7 @@ bool Texture::ensure(TexPage& p) const {
     // into the same struct must not be mistaken for what was bound before.
     C2D_Flush();
     while (!C3D_TexInit(&p.tex, p.pw, p.ph, GPU_RGBA8))
-        if (!evictOne()) return false;   // out of GPU memory even after evicting
+        if (!evictOne()) { g_stats.failed++; return false; }   // out of GPU memory even after evicting
     size_t bytes = (size_t)p.pw * p.ph * 4;
     bool ok = false;
     FILE* f = fopen(path.c_str(), "rb");
@@ -131,20 +142,36 @@ bool Texture::ensure(TexPage& p) const {
     C3D_TexSetFilter(&p.tex, GPU_NEAREST, GPU_NEAREST);
     C3D_TexSetWrap(&p.tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
     p.loaded = true;
+    g_stats.loads++;
     C2D_Prepare();   // forgets the cached texture binding
     return true;
 }
 
 void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
                    const C2D_ImageTint* tint, float scale) const {
-    // A sprite can straddle the seam between two 1024px pages (e.g. the title
+    // A sprite can straddle the seam between two pages (e.g. the title
     // mountains on Cursors), so draw the part that falls in each page.
-    for (const TexPage& p : pages) {
+    if (gridCols > 0) {
+        if (sw <= 0 || sh <= 0 || sx < 0 || sy < 0) return;
+        int c0 = sx / gridW, c1 = (sx + sw - 1) / gridW, r0 = sy / gridH, r1 = (sy + sh - 1) / gridH;
+        int rows = (int)pages.size() / gridCols;
+        if (c1 >= gridCols) c1 = gridCols - 1;
+        if (r1 >= rows) r1 = rows - 1;
+        for (int r = r0; r <= r1; r++)
+            for (int cc = c0; cc <= c1; cc++) drawPart(pages[(size_t)r * gridCols + cc], sx, sy, sw, sh, dx, dy, flipX, tint, scale);
+        return;
+    }
+    for (const TexPage& p : pages) drawPart(p, sx, sy, sw, sh, dx, dy, flipX, tint, scale);
+}
+
+void Texture::drawPart(const TexPage& p, int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
+                       const C2D_ImageTint* tint, float scale) const {
+    {
         int x0 = sx > p.x0 ? sx : p.x0, y0 = sy > p.y0 ? sy : p.y0;
         int x1 = sx + sw < p.x0 + p.w ? sx + sw : p.x0 + p.w;
         int y1 = sy + sh < p.y0 + p.h ? sy + sh : p.y0 + p.h;
-        if (x1 <= x0 || y1 <= y0) continue;
-        if (!ensure(const_cast<TexPage&>(p))) continue;
+        if (x1 <= x0 || y1 <= y0) return;
+        if (!ensure(const_cast<TexPage&>(p))) return;
         int pw = x1 - x0, ph = y1 - y0;
         float lx = (float)(x0 - p.x0), ly = (float)(y0 - p.y0);
         Tex3DS_SubTexture sub;

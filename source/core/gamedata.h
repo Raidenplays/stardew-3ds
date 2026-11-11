@@ -211,6 +211,7 @@ struct Layout {
     int doorX = 64, doorY = 17;           // farmhouse door on the Farm
     int spawnX = 64, spawnY = 18;         // Farm wake-up spot if there's no house map
     std::vector<std::pair<int, int>> bins;
+    int mailX = 68, mailY = 16;           // the farmhouse mailbox (house tile 9,4 in Data/Buildings)
     std::string bedMap = "FarmHouse";
     int bedX = 9, bedY = 4, bedW = 2, bedH = 3;
     std::string wakeMap = "FarmHouse";

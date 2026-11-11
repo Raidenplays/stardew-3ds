@@ -86,7 +86,8 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
     return true;
 }
 
-const HostTexture* HostCanvas::get(const std::string& name) {
+const HostTexture* HostCanvas::get(TexName tn) {
+    std::string name = tn.str();
     auto it = cache.find(name);
     if (it != cache.end()) return it->second.w ? &it->second : nullptr;
     HostTexture& t = cache[name];
@@ -96,12 +97,12 @@ const HostTexture* HostCanvas::get(const std::string& name) {
     return t.w ? &t : nullptr;
 }
 
-int HostCanvas::texWidth(const std::string& tex) {
+int HostCanvas::texWidth(TexName tex) {
     const HostTexture* t = get(tex);
     return t ? t->w : 0;
 }
 
-int HostCanvas::texHeight(const std::string& tex) {
+int HostCanvas::texHeight(TexName tex) {
     const HostTexture* t = get(tex);
     return t ? t->h : 0;
 }
@@ -121,7 +122,7 @@ void HostCanvas::blend(int x, int y, uint32_t c) {
     d = ch_(24) | ch_(16) | ch_(8) | 0xFF;
 }
 
-void HostCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+void HostCanvas::image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                        bool flipX, uint32_t tint) {
     const HostTexture* t = get(tex);
     if (!t) return;
@@ -142,7 +143,7 @@ void HostCanvas::image(const std::string& tex, int sx, int sy, int sw, int sh, f
     }
 }
 
-void HostCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, int sh, float px, float py,
+void HostCanvas::imageRotated(TexName tex, int sx, int sy, int sw, int sh, float px, float py,
                               float dx, float dy, float radians, uint32_t tint) {
     const HostTexture* t = get(tex);
     if (!t) return;
@@ -166,7 +167,7 @@ void HostCanvas::imageRotated(const std::string& tex, int sx, int sy, int sw, in
         }
 }
 
-void HostCanvas::imageScaled(const std::string& tex, int sx, int sy, int sw, int sh, float dx, float dy,
+void HostCanvas::imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                              float scale, bool flipX, uint32_t tint) {
     const HostTexture* t = get(tex);
     if (!t || scale <= 0) return;
