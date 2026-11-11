@@ -6,8 +6,6 @@ The packed Data/*.xnb files are written by XNA/MonoGame's ReflectiveWriter,
 which stores each object's members in a fixed order with no names, so this
 layout is what lets xnbdata.py turn them back into JSON.
 """
-import dnfile
-
 # ELEMENT_TYPE codes from ECMA-335 II.23.1.16
 _PRIM = {0x02: "bool", 0x03: "char", 0x04: "sbyte", 0x05: "byte", 0x06: "short",
          0x07: "ushort", 0x08: "int", 0x09: "uint", 0x0a: "long", 0x0b: "ulong",
@@ -57,6 +55,7 @@ def _full(ns, name):
 
 class Schema:
     def __init__(self, dll_path):
+        import dnfile   # only needed for data models, not plain string tables
         self.pe = dnfile.dnPE(dll_path)
         self.md = self.pe.net.mdtables
         self.classes = {}
