@@ -235,6 +235,10 @@ def import_save(save_path, root):
     if xp is not None:
         for i, v in enumerate(xp.findall("int")[:5]):
             out.append(["xp", i, int(v.text or 0)])
+    prof = p.find("professions")
+    if prof is not None:
+        for v in prof.findall("int"):
+            out.append(["profession", int(v.text or 0)])
     out.append(["maxstamina", num(p, "maxStamina", 270)])
     out.append(["maxhealth", num(p, "maxHealth", 100)])
     items = p.find("items")

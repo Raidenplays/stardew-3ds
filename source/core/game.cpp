@@ -542,11 +542,12 @@ int Game::cropFrame(int x, int y) const {
 
 // ------------------------------------------------------------ inventory
 
-bool Game::addItem(int objId, int count) {
+bool Game::addItem(int objId, int count, int quality) {
     Slot sl;
     sl.type = SLOT_OBJECT;
     sl.id = objId;
     sl.count = count;
+    sl.quality = (uint8_t)quality;
     if (!addSlot(sl)) return false;
     for (auto& n : notices)
         if (n.id == objId && n.t > 0) {
@@ -717,7 +718,11 @@ bool Game::tryInteract(int tx, int ty) {
             Soil& s = cur->soils[(size_t)ty * cur->map.width() + tx];
             const CropDef* c = data.cropForSeed(s.seed);
             int n = c->harvestMin;
-            if (!addItem(c->harvestId, n)) return true;
+            int lvl = skillLevel(SK_FARMING);
+            float gold = 0.2f * (lvl / 10.0f) + 0.01f, silver = std::min(0.75f, gold * 2.0f);
+            float roll = (rand32() % 10000) / 10000.0f;
+            int q = roll < gold ? 2 : roll < silver ? 1 : 0;
+            if (!addItem(c->harvestId, n, q)) return true;
             itemFlies(c->harvestId, tx * TILE + 8.0f, ty * TILE + 6.0f, n);   // pops out of the soil to you
             sfx("harvest");
             const ObjectDef* o = data.object(c->harvestId);
@@ -1258,7 +1263,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 17;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 18;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1273,6 +1278,7 @@ static const uint32_t SAVE_VERSION = 17;   // 2: villager friendships, 3: events
                                           // 15: farm buildings and animals
                                           // 16: fruit trees, soil inside buildings (greenhouse)
                                           // 17: Community Center bundles
+                                          // 18: item quality
 
 namespace {
 struct W {
@@ -1447,6 +1453,16 @@ bool Game::save(const std::string& path) const {
         w.u32((uint32_t)kv.second.size());
         for (uint8_t v : kv.second) w.u8(v);
     }
+    // item quality: inventory, shipped, then each chest / machine in order
+    for (auto& s : inv) w.u8(s.quality);
+    w.u32((uint32_t)shipped.size());
+    for (auto& s : shipped) w.u8(s.quality);
+    for (auto& kv : placed)
+        for (auto& p : kv.second) {
+            w.u8(p.held.quality);
+            w.u32((uint32_t)p.items.size());
+            for (auto& s : p.items) w.u8(s.quality);
+        }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1758,6 +1774,23 @@ bool Game::load(const std::string& path, std::string* err) {
             for (uint32_t j = 0; j < n && r.ok && j < 64; j++) v.push_back(r.u8());
             bundleGiven[idx] = v;
         }
+    }
+    if (version >= 18 && r.ok) {
+        for (auto& s : inv) s.quality = r.u8();
+        uint32_t ns2 = r.u32();
+        for (uint32_t k = 0; k < ns2 && r.ok; k++) {
+            uint8_t q = r.u8();
+            if (k < shipped.size()) shipped[k].quality = q;
+        }
+        for (auto& kv : placed)
+            for (auto& p : kv.second) {
+                p.held.quality = r.u8();
+                uint32_t ni = r.u32();
+                for (uint32_t k = 0; k < ni && r.ok; k++) {
+                    uint8_t q = r.u8();
+                    if (k < p.items.size()) p.items[k].quality = q;
+                }
+            }
     }
     for (auto& c : farm->clumps)     // nothing grows under them
         for (int dy = 0; dy < 2; dy++)

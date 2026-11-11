@@ -86,7 +86,9 @@ int Game::bundleHave(const Bundle::Item& it) const {
                 if (const ObjectDef* o = data.object(s.id)) n += o->category == it.id ? s.count : 0;
         return n;
     }
-    return countItem(it.id);
+    int n = 0;   // only good enough quality counts (silver 1, gold 2, iridium 4)
+    for (auto& s : inv) if (s.type == SLOT_OBJECT && s.id == it.id && s.quality >= it.quality) n += s.count;
+    return n;
 }
 
 bool Game::bundleGive(int bundleIndex, int slot) {
@@ -113,7 +115,18 @@ bool Game::bundleGive(int bundleIndex, int slot) {
                 need -= k;
                 if (s.count <= 0) s = Slot();
             }
-        } else takeItem(it.id, it.count);
+        } else {
+            int need = it.count;   // lowest good-enough quality first
+            for (int q = it.quality; q <= 4 && need > 0; q++)
+                for (auto& s : inv) {
+                    if (need <= 0) break;
+                    if (s.type != SLOT_OBJECT || s.id != it.id || s.quality != q) continue;
+                    int k = std::min(need, s.count);
+                    s.count -= k;
+                    need -= k;
+                    if (s.count <= 0) s = Slot();
+                }
+        }
         given[slot] = 1;
         sfx("newArtifact");
         if (!bundleDone(b)) return true;

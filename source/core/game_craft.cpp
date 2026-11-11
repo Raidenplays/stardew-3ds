@@ -190,6 +190,7 @@ int Game::itemPrice(const Slot& s) const {
     const ObjectDef* o = data.object(s.id);
     if (!o) return 0;
     int base = itemBasePrice(s);
+    if (s.quality) base = (int)(base * (s.quality >= 4 ? 2.0f : s.quality == 2 ? 1.5f : 1.25f));
     // profession bonuses on what you sell
     float k = 1.0f;
     int cat = o->category;

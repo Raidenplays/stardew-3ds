@@ -122,6 +122,11 @@ static void slotIcon(Canvas& c, const Game& g, const Slot& s, float x, float y) 
         bigSprite(c, g, s.id, 0, x, y, 10, 16);
     } else if (s.type == SLOT_OBJECT) {
         itemIcon(c, g.data.object(s.id), x, y);
+        if (s.quality) {   // the quality star from Cursors (silver, gold, iridium)
+            int sx = s.quality == 1 ? 338 : 346, sy = s.quality >= 4 ? 392 : 400;
+            if (c.texWidth("LooseSprites_Cursors") > 0) c.image("LooseSprites_Cursors", sx, sy, 8, 8, x - 1, y + 9);
+            else c.rect(x, y + 11, 4, 4, s.quality == 1 ? RGBA(0xC0, 0xC0, 0xD0) : s.quality == 2 ? RGBA(0xF0, 0xC8, 0x30) : RGBA(0xB0, 0x60, 0xE0));
+        }
     } else if (s.type == SLOT_TOOL) {
         const ToolDef* td = g.data.tool(s.id);
         if (!td) return;

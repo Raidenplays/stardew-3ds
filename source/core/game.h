@@ -20,9 +20,10 @@ struct Slot {
     int id = 0;        // tool index into GameData::tools, object id, or big craftable id
     int count = 0;
     int flavor = -1;   // artisan goods: the object it was made from (Blueberry -> Blueberry Wine)
+    uint8_t quality = 0;   // 0 normal, 1 silver, 2 gold, 4 iridium (the game's numbers)
     bool empty() const { return type == SLOT_EMPTY; }
     bool stacksWith(const Slot& o) const {
-        return type != SLOT_TOOL && type == o.type && id == o.id && flavor == o.flavor;
+        return type != SLOT_TOOL && type == o.type && id == o.id && flavor == o.flavor && quality == o.quality;
     }
 };
 
@@ -381,7 +382,7 @@ public:
     int itemPrice(const Slot& s) const;   // per item, with profession bonuses
     int itemBasePrice(const Slot& s) const;
     bool addSlot(Slot s);                 // stacks; false = no room (nothing added)
-    bool addItem(int objId, int count);
+    bool addItem(int objId, int count, int quality = 0);
     bool giveTool(const std::string& key);   // by Data/Tools key (BambooPole, Pan...)
     void awardPrize(const std::string& what); // event awardFestivalPrize / gifts
     std::map<std::string, std::vector<Placed>> placed;   // by location name

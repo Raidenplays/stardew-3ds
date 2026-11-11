@@ -18,6 +18,7 @@
       <Item xsi:type="Hat"><itemId>1</itemId></Item>
       <Item xsi:type="Object"><itemId>130</itemId><name>Keg</name><Stack>2</Stack><bigCraftable>true</bigCraftable></Item>
     </items>
+    <professions><int>0</int><int>4</int><int>18</int></professions>
     <experiencePoints><int>5000</int><int>1200</int><int>2500</int><int>9000</int><int>800</int><int>0</int></experiencePoints>
     <friendshipData>
       <item><key><string>Abigail</string></key><value><Friendship><Points>1500</Points></Friendship></value></item>
