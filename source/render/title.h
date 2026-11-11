@@ -6,7 +6,7 @@
 #include "canvas.h"
 #include "core/game.h"
 
-enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE };
+enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE, TS_EXIT };
 
 // Fields on the creation screen, top to bottom.
 enum CreateField {
@@ -23,16 +23,24 @@ struct TitleUi {
     int hairColor = 0, pantsColor = 0;
     float t = 0;                 // for the little walk animation
     float splashT = 0;           // seconds into the opening credits
+    float introT = 1e9f;         // seconds into the title's pan up the sky (big = finished)
+    bool official = false;       // drawing the game's own title sheet (4 buttons)
     bool creditsText = false;    // show the developer credit as text only (previews)
     std::string note;            // e.g. "Give your farmer a name"
     // text entry: the 3DS app plugs in the system keyboard; returns the new text
     std::function<std::string(const std::string& hint, const std::string& current, int maxLen)> keyboard;
+    // sound effects (e.g. "logoClick"); empty until the engine has audio
+    std::function<void(const char* cue)> sound;
 };
 
 void titleInit(TitleUi& t, const sv::GameData& data, bool hasSave);
 void drawTitleTop(Canvas& c, const sv::Game& g, TitleUi& t);
-// opening credits run for this long, then the title shows
-static const float SPLASH_SECONDS = 7.0f;
+// opening credits run for this long (on white, like the original), then the
+// title scene fades in and pans up the sky for INTRO_SECONDS
+static const float SPLASH_SECONDS = 11.2f;
+static const float INTRO_SECONDS = 12.6f;
+// jump straight to the settled title (A / START / touch during the intro)
+void titleSkipIntro(TitleUi& t);
 void titleTick(TitleUi& t, float dt);
 void drawTitleBottom(Canvas& c, const sv::Game& g, TitleUi& t);
 

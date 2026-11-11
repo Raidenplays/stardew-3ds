@@ -223,6 +223,14 @@ int main() {
             drawTitleBottom(canvas, game, title);
             C3D_FrameEnd(0);
         }
+        if (title.screen == TS_EXIT || title.screen == TS_SPLASH || title.screen == TS_TITLE ||
+            title.screen == TS_CREATE) {   // Exit button (or HOME > close)
+            C2D_Fini();
+            C3D_Fini();
+            romfsExit();
+            gfxExit();
+            return 0;
+        }
         if (title.screen == TS_DONE_NEW) {
             ok = game.newGame((uint32_t)osGetTime(), title.draft, &err);
             newFarm = true;
