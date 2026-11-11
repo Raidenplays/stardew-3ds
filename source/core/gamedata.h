@@ -290,6 +290,15 @@ public:
     std::unordered_map<std::string, MonsterDef> monsters;
     std::vector<BuildingType> buildingTypes;
     std::vector<FruitTreeDef> fruitTrees;
+    // the museum: what Gunther takes ('A' artifacts, 'M' minerals) and the rewards
+    std::unordered_map<int, char> museumItems;
+    struct MuseumReward {
+        std::string key;
+        char kind = '-';              // O object, R recipe, B big craftable, F furniture
+        int id = 0, count = 1;
+        std::vector<std::pair<std::string, int>> reqs;   // "id=96" 1, "arch" 15, "min" 11, "all" 40
+    };
+    std::vector<MuseumReward> museumRewards;
     std::vector<std::pair<std::string, std::string>> bundles;   // Data/Bundles: "Pantry/0" -> raw definition
     std::unordered_map<std::string, int> objectIds;             // the game's own item id -> ours
     int objectIdFor(std::string s) const {                       // "24", "(O)24", "Mod.Item" -> id, or -1

@@ -2697,6 +2697,44 @@ static void touchBundles(Game& g, int tx, int ty) {
     }
 }
 
+// ---------------------------------------------------------------- the museum
+static std::vector<int> museumSlots(const Game& g) {
+    std::vector<int> out;
+    for (int i = 0; i < INV_SIZE; i++) if (g.museumWants(g.inv[i])) out.push_back(i);
+    return out;
+}
+
+static void drawMuseum(Canvas& c, Game& g) {
+    c.rect(0, 0, BOT_W, BOT_H, RGBA(0x30, 0x24, 0x1A));
+    box(c, 4, 4, BOT_W - 8, 32, COL_PANEL, COL_BORDER);
+    c.text(10, 6, 0.5f, COL_TEXT, "Museum donations");
+    char buf[64];
+    snprintf(buf, sizeof buf, "%d of %d donated", (int)g.museumDonated.size(), (int)g.data.museumItems.size());
+    c.text(10, 21, 0.36f, COL_TEXT_SOFT, buf);
+    box(c, BOT_W - 38, 7, 28, 26, COL_PANEL_DARK, COL_BORDER, 1);
+    c.text(BOT_W - 24, 10, 0.5f, COL_TEXT, "X", ALIGN_CENTER);
+    auto slots = museumSlots(g);
+    for (size_t r = 0; r < slots.size() && r < 7; r++) {
+        const Slot& s = g.inv[slots[r]];
+        float y = 40 + r * 27;
+        box(c, 8, y, BOT_W - 16, 25, COL_SLOT, COL_SLOT_EDGE, 1);
+        slotIcon(c, g, s, 12, y + 4);
+        const ObjectDef* o = g.data.object(s.id);
+        c.text(34, y + 5, 0.44f, COL_TEXT, o ? o->name : "?");
+        box(c, 236, y + 3, 72, 19, COL_GREEN, COL_GREEN_DARK, 1);
+        c.text(272, y + 4, 0.42f, COL_CREAM, "Donate", ALIGN_CENTER);
+    }
+    if (slots.empty())
+        c.text(160, 120, 0.42f, COL_CREAM, "Nothing new to donate right now.", ALIGN_CENTER);
+}
+
+static void touchMuseum(Game& g, int tx, int ty) {
+    if (hit(tx, ty, BOT_W - 38, 7, 28, 26)) { g.museumOpen = false; return; }
+    auto slots = museumSlots(g);
+    for (size_t r = 0; r < slots.size() && r < 7; r++)
+        if (hit(tx, ty, 236, 40 + r * 27 + 3, 72, 19)) { g.museumDonate(slots[r]); return; }
+}
+
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
     if (ui.showSummary) {
         if (!g.levelUps.empty()) drawLevelUp(c, g, ui);
@@ -2713,6 +2751,7 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
     }
     if (!ui.shop.empty()) { drawShop(c, g, ui); return; }
     if (g.bundleView >= 0) { drawBundles(c, g); return; }
+    if (g.museumOpen) { drawMuseum(c, g); return; }
     if (g.fishingActive()) { drawFishing(c, g); return; }
     if (g.letterOpen) { drawLetter(c, g); return; }
     if (g.chestOpen) { drawChest(c, g); return; }
@@ -2736,6 +2775,7 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
     if (g.cutscene.active) return;
     if (!ui.shop.empty()) { touchShop(g, ui, tx, ty); return; }
     if (g.bundleView >= 0) { touchBundles(g, tx, ty); return; }
+    if (g.museumOpen) { touchMuseum(g, tx, ty); return; }
     if (g.fishingActive()) return;   // handled by fishingTouch() as input
     if (g.letterOpen) { touchLetter(g, tx, ty); return; }
     if (g.chestOpen) { touchChest(g, tx, ty); return; }

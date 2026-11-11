@@ -569,6 +569,13 @@ public:
     bool riding = false;
     void horseMorning();
     bool horseInteract(int tx, int ty);
+    // The museum (Gunther)
+    std::set<int> museumDonated;
+    bool museumOpen = false;
+    bool museumWants(const Slot& s) const;
+    bool museumDonate(int slot);
+    void museumRewardsCheck(bool give);       // give (or, for an imported save, just mark) earned rewards
+    bool placeFurnitureInHouse(int id);       // a furniture reward finds a free spot in your house
     // Romance: dating (a bouquet at 8 hearts), engaged (the mermaid's pendant at 10), married
     std::string spouse, engagedTo;
     std::set<std::string> dating;

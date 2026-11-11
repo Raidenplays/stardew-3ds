@@ -455,6 +455,30 @@ bool GameData::load(const std::string& root, std::string* err) {
             buildingTypes.push_back(b);
         }
     lines.clear();
+    if (readLines(root + "data/museum.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() >= 3 && f[0] == "item") museumItems[atoi(f[1].c_str())] = f[2].empty() ? 'A' : f[2][0];
+            else if (f.size() >= 6 && f[0] == "reward") {
+                MuseumReward r;
+                r.key = f[1];
+                r.kind = f[2].empty() ? '-' : f[2][0];
+                r.id = atoi(f[3].c_str());
+                r.count = std::max(1, atoi(f[4].c_str()));
+                size_t p = 0;
+                const std::string& q = f[5];
+                while (p < q.size()) {
+                    size_t sp = q.find(' ', p);
+                    std::string tok = q.substr(p, sp == std::string::npos ? std::string::npos : sp - p);
+                    size_t c = tok.rfind(':');
+                    if (c != std::string::npos) r.reqs.push_back({tok.substr(0, c), atoi(tok.c_str() + c + 1)});
+                    if (sp == std::string::npos) break;
+                    p = sp + 1;
+                }
+                museumRewards.push_back(r);
+            }
+        }
+    lines.clear();
     if (readLines(root + "data/romance.dat", lines))
         for (auto& l : lines) if (!l.empty()) romance.push_back(l);
     lines.clear();

@@ -157,3 +157,91 @@ bool Game::bundleGive(int bundleIndex, int slot) {
 }
 
 } // namespace sv
+
+namespace sv {
+
+// ---------------------------------------------------------------- the museum
+
+bool Game::museumWants(const Slot& s) const {
+    return s.type == SLOT_OBJECT && data.museumItems.count(s.id) && !museumDonated.count(s.id);
+}
+
+bool Game::museumDonate(int slot) {
+    if (slot < 0 || slot >= INV_SIZE || !museumWants(inv[slot])) return false;
+    int id = inv[slot].id;
+    museumDonated.insert(id);
+    if (--inv[slot].count <= 0) inv[slot] = Slot();
+    sfx("newArtifact");
+    const ObjectDef* o = data.object(id);
+    say("Gunther: Thank you for donating the " + (o ? o->name : std::string("piece")) + "!");
+    museumRewardsCheck(true);
+    return true;
+}
+
+void Game::museumRewardsCheck(bool give) {
+    int arch = 0, min = 0;
+    for (int id : museumDonated) {
+        auto it = data.museumItems.find(id);
+        if (it == data.museumItems.end()) continue;
+        (it->second == 'A' ? arch : min)++;
+    }
+    int all = arch + min;
+    for (auto& r : data.museumRewards) {
+        std::string flag = "museum:" + r.key;
+        if (mailReceived.count(flag)) continue;
+        bool ok = true;
+        for (auto& q : r.reqs) {
+            if (q.first.rfind("id=", 0) == 0) ok &= museumDonated.count(atoi(q.first.c_str() + 3)) > 0;
+            else if (q.first == "arch") ok &= arch >= q.second;
+            else if (q.first == "min") ok &= min >= q.second;
+            else ok &= q.second < 0 ? all >= (int)data.museumItems.size() : all >= q.second;   // -1: the whole collection
+        }
+        if (!ok) continue;
+        mailReceived.insert(flag);
+        if (!give) continue;
+        const ObjectDef* o = data.object(r.id);
+        if (r.kind == 'O' && o) { addItem(r.id, r.count); say("Gunther gave you " + o->name + " for your donations!"); }
+        else if (r.kind == 'R' && o) { mailReceived.insert("craft:" + o->name); say("You learned to make " + o->name + "!"); }
+        else if (r.kind == 'B' && data.big(r.id)) {
+            Slot s; s.type = SLOT_BIG; s.id = r.id; s.count = r.count;
+            if (addSlot(s)) say("Gunther gave you a " + data.big(r.id)->name + "!");
+        } else if (r.kind == 'F' && placeFurnitureInHouse(r.id)) {
+            auto fd = data.furniture.find(r.id);
+            say("Gunther sent a " + (fd != data.furniture.end() ? fd->second.name : std::string("gift")) + " to your house!");
+        }
+    }
+}
+
+bool Game::placeFurnitureInHouse(int id) {
+    auto fd = data.furniture.find(id);
+    if (fd == data.furniture.end() || !hasMap("FarmHouse")) return false;
+    Location* h = loadLocation("FarmHouse");
+    if (!h) return false;
+    const TileMap& m = h->map;
+    int bw = fd->second.boxW, bh = fd->second.boxH;
+    for (int y = 3; y + bh < m.height(); y++)
+        for (int x = 1; x + bw < m.width(); x++) {
+            bool ok = true;
+            for (int dy = 0; dy < bh && ok; dy++)
+                for (int dx = 0; dx < bw && ok; dx++) {
+                    int tx = x + dx, ty = y + dy;
+                    if (m.tile(L_BACK, tx, ty) == NO_TILE || (m.flags(tx, ty) & CF_BLOCKED) || m.tile(L_BUILDINGS, tx, ty) != NO_TILE ||
+                        m.warpAt(tx, ty) || m.warpAt(tx, ty + 1))
+                        ok = false;
+                    for (auto& fp : furniture) {
+                        if (fp.map != "FarmHouse") continue;
+                        auto od = data.furniture.find(fp.id);
+                        int ow = od != data.furniture.end() ? od->second.boxW : 1, oh = od != data.furniture.end() ? od->second.boxH : 1;
+                        if (tx >= fp.x && tx < fp.x + ow && ty >= fp.y && ty < fp.y + oh) ok = false;
+                    }
+                }
+            if (!ok) continue;
+            FurniturePlacement p;
+            p.map = "FarmHouse"; p.id = id; p.x = x; p.y = y;
+            furniture.push_back(p);
+            return true;
+        }
+    return false;
+}
+
+} // namespace sv

@@ -282,6 +282,13 @@ def import_save(save_path, root):
             out.append([key, clean(k.text or "")])
     out.append(["house", num(p, "houseUpgradeLevel")])
 
+    # museum donations (ArchaeologyHouse museumPieces)
+    for loc in (sg.find("locations") if sg.find("locations") is not None else []):
+        if txt(loc, "name") == "ArchaeologyHouse":
+            for k, v in dict_items(loc.find("museumPieces")):
+                mid = ids.o(v.text if v.text else txt(v, "string"))
+                if mid is not None:
+                    out.append(["museum", mid])
     locs = sg.find("locations")
     bidx = 0
     if locs is not None:
