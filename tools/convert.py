@@ -81,6 +81,7 @@ EXTRA_TEXTURES = [
     ("TerrainFeatures/tree1_spring", False),
     ("TerrainFeatures/grass", False),
     ("TileSheets/bushes", False),
+    ("TileSheets/rain", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
     ("Minigames/TitleButtons", False),

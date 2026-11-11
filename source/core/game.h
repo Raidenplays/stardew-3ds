@@ -425,7 +425,11 @@ public:
     int energy = MAX_ENERGY;
     int water = CAN_CAPACITY;
     bool raining = false;
-    bool windy = false;      // spring/fall "debris" days: petals and leaves blow across the screen
+    bool windy = false;
+    bool stormy = false;     // rain with lightning
+    bool snowing = false;    // winter days with snow
+    float lightning = 0;     // flash brightness (render), counts down
+    float nextLightning = 6; // seconds to the next strike on a stormy day      // spring/fall "debris" days: petals and leaves blow across the screen
     // Sound cues (Stardew's names) the frontend plays then clears.
     std::vector<std::string> sounds;
 
