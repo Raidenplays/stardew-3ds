@@ -44,6 +44,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     for (auto& s : farm->soils) s = Soil();
     farm->trees.clear();
     farm->clumps.clear();
+    farm->fruitTrees.clear();
     placed.clear();
     for (auto& s : inv) s = Slot();
     buildings.clear();
@@ -58,6 +59,9 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             FarmBuilding* b = buildingById(it->second);
             return b ? loadLocation(interiorName(*b)) : nullptr;
         }
+        if (name == "Greenhouse")
+            for (auto& b : buildings)
+                if (b.type == "Greenhouse") return loadLocation(interiorName(b));
         return hasMap(name) ? loadLocation(name) : nullptr;
     };
     auto slotFrom = [&](const std::vector<std::string>& f, size_t i, Slot& s) -> bool {
@@ -189,6 +193,13 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             if (p.big ? !data.big(p.id) : !data.object(p.id)) continue;
             placed[L->name].push_back(p);
             counts[5]++;
+        } else if (k == "fruittree" && f.size() > 5) {
+            Location* L = locFor(f[1]);
+            if (!L || !data.fruitTreeForSapling(I(f, 4))) continue;
+            FruitTree t;
+            t.x = I(f, 2); t.y = I(f, 3); t.sapling = I(f, 4); t.daysLeft = std::max(0, I(f, 5)); t.fruit = std::min(3, I(f, 6));
+            L->fruitTrees.push_back(t);
+            counts[3]++;
         } else if (k == "drop" && f.size() > 4) {   // an egg or forage lying there
             Location* L = locFor(f[1]);
             if (!L || !data.object(I(f, 4))) continue;
@@ -216,6 +227,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             }
         }
     }
+    ensureGreenhouse();
     farm->spawnDay = absoluteDay();
     if (summary) {
         std::ostringstream ss;

@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
     int mapCacheArg = 0;
     bool panArg = false;
     bool animalsArg = false;
+    bool importArg = false;
     int mineArg = 0;   // HHMM: run the villagers' day up to then
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
@@ -119,6 +120,7 @@ int main(int argc, char** argv) {
         else if (a == "--mapcache") mapCacheArg = 1;
         else if (a == "--pan") panArg = true;
         else if (a == "--animals") animalsArg = true;
+        else if (a == "--import") importArg = true;
         else if (a.rfind("--mine=", 0) == 0) mineArg = atoi(a.c_str() + 7);
         else if (a.rfind("--day=", 0) == 0) dayArg = atoi(a.c_str() + 6);   // season*28 + day, e.g. 16 or 64
         else font = a;
@@ -505,6 +507,32 @@ int main(int argc, char** argv) {
     if (!walkUntilWarp(g, ui, 0, 1)) printf("  ! couldn't leave the farmhouse\n");
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
+    if (importArg) {   // a PC save brought over: the farm, then the greenhouse
+        std::string note;
+        bool ok = g.applyImport(std::string(argv[1]) + "import.txt", &note);
+        printf("  import %d: %s\n", ok, note.c_str());
+        auto settle = [&]() {
+            for (int k = 0; k < 40; k++) {
+                if (g.cutscene.active) g.skipEvent();
+                if (g.dialogue.active) g.dialogue = DialogueBox();
+                step(g, ui, none, 1);
+            }
+        };
+        g.teleport("Farm", 64, 32);
+        settle();
+        printf("  at %s %.0f,%.0f cutscene %d\n", g.location().name.c_str(), g.px / 16, g.py / 16, g.cutscene.active);
+        shot(c, g, ui, "import_farm");
+        g.teleport("Farm", 28, 18);
+        settle();
+        shot(c, g, ui, "import_greenhouse_outside");
+        for (auto& b : g.buildings)
+            if (b.type == "Greenhouse") {
+                g.teleport(g.interiorName(b), 10, 14);
+                settle();
+                shot(c, g, ui, "import_greenhouse");
+            }
+        return 0;
+    }
     if (animalsArg) {   // Robin builds a coop and a barn, Marnie sells animals, a look inside
         g.money = 100000;
         g.addItem(388, 999); g.addItem(390, 999);

@@ -551,7 +551,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     }
 
     // Tilled soil
-    if (g.location().isFarm) {
+    if (g.cropLand()) {
         bool wetHalf = c.texWidth("TerrainFeatures_hoeDirt") >= 128;
         auto tilled = [&](int x, int y) { return m.inBounds(x, y) && g.soil(x, y).tilled; };
         float sh = c.shift(0.0f);
@@ -595,6 +595,10 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             const BuildingType* bt = g.typeOf(g.buildings[i]);
             if (bt) items.push_back({(float)((g.buildings[i].y + bt->h) * TILE - 1), 14, (int)i, 0});
         }
+    for (size_t i = 0; i < here.fruitTrees.size(); i++) {
+        const FruitTree& t = here.fruitTrees[i];
+        if (t.x >= x0 - 2 && t.x <= x1 + 2 && t.y >= y0 && t.y <= y1 + 5) items.push_back({(float)(t.y * TILE + 14), 17, (int)i, 0});
+    }
     const FarmBuilding* inside = g.buildingForInterior(here.name);
     if (inside) {
         for (size_t i = 0; i < g.animals.size(); i++)
@@ -835,7 +839,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 int sw = bt->srcW ? bt->srcW : c.texWidth(bt->texture), sh = bt->srcH ? bt->srcH : c.texHeight(bt->texture);
                 float dx = fb.x * TILE + (bt->w * TILE - sw) / 2.0f - camX, dy = (fb.y + bt->h) * TILE - sh - camY;
                 bool building = fb.daysLeft > 0 && fb.upgradingTo.empty();
-                if (sw > 0) c.image(bt->texture, bt->srcX, bt->srcY, sw, sh, std::floor(dx), std::floor(dy), false,
+                int sy0 = fb.type == "Greenhouse" && !g.greenhouseFixed() ? 0 : bt->srcY;   // the ruins sit above
+                if (sw > 0) c.image(bt->texture, bt->srcX, sy0, sw, sh, std::floor(dx), std::floor(dy), false,
                                     building ? RGBA(0xFF, 0xFF, 0xFF, 0x70) : 0);
                 else c.rect(fb.x * TILE - camX, fb.y * TILE - camY, bt->w * TILE, bt->h * TILE, RGBA(0x8A, 0x5A, 0x30));
                 if (building) {   // scaffolding hint
@@ -867,6 +872,23 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     c.rect(ax - 1, hy + 4, 2, 1, RGBA(0xE0, 0x30, 0x40));
                 }
                 if (a.ready >= 0) c.rect(ax - 1, ay - h - 2, 3, 3, RGBA(0xFF, 0xF0, 0x80));   // produce waiting
+                break;
+            }
+            case 17: {   // a fruit tree: 48x80 cells, 4 sapling sizes then the 4 seasons
+                const FruitTree& t = here.fruitTrees[it.a];
+                const FruitTreeDef* d = g.data.fruitTreeForSapling(t.sapling);
+                if (!d) break;
+                bool greenhouse = here.name.rfind("Greenhouse", 0) == 0;
+                int cell = t.daysLeft > 21 ? 0 : t.daysLeft > 14 ? 1 : t.daysLeft > 7 ? 2 : t.daysLeft > 0 ? 3
+                         : 4 + (greenhouse ? (int)SUMMER : g.season);
+                float wob = t.shake > 0 ? std::sin(t.shake * 60.0f) * 1.5f : 0.0f;
+                float tx = std::floor(t.x * TILE + 8 - 24 - camX + wob), ty = (t.y + 1) * TILE - 80 - camY;
+                c.image(d->texture, cell * 48, d->row * 80, 48, 80, tx, ty);
+                if (t.daysLeft <= 0 && t.fruit > 0) {   // the fruit hanging in the leaves
+                    static const float fx[3] = {8, 24, 16}, fy[3] = {20, 12, 32};
+                    const ObjectDef* fo = g.data.object(d->fruit);
+                    for (int k = 0; k < t.fruit && k < 3; k++) itemIcon(c, fo, tx + fx[k], ty + fy[k]);
+                }
                 break;
             }
             case 16:   // the feed hopper
@@ -1860,6 +1882,7 @@ static std::vector<int> sellableSlots(Game& g) {
 static std::vector<const BuildingType*> buildOffers(const Game& g) {
     std::vector<const BuildingType*> out;
     for (auto& t : g.data.buildingTypes) {
+        if (t.cost <= 0) continue;   // the greenhouse isn't for sale
         if (t.upgradeFrom.empty()) { out.push_back(&t); continue; }
         for (auto& b : g.buildings)
             if (b.type == t.upgradeFrom && b.daysLeft <= 0) { out.push_back(&t); break; }

@@ -75,6 +75,16 @@ struct Tree {
 
 static const int TREE_GROWN = 5;
 
+// A fruit tree: 28 days to grow up, then up to 3 fruit in its season.
+struct FruitTree {
+    int x = 0, y = 0;
+    int sapling = 0;              // which (Data/FruitTrees key)
+    int daysLeft = 28;            // until grown
+    int fruit = 0;                // on the tree now (0-3)
+    int8_t health = 6;            // axe hits left once grown
+    float shake = 0;
+};
+
 // One map plus whatever lives on it.
 struct Location {
     std::string name;
@@ -94,6 +104,7 @@ struct Location {
     struct Clump { int16_t x = 0, y = 0; uint8_t kind = 0; int8_t health = 0; float shake = 0; };
     enum { CLUMP_STUMP = 0, CLUMP_LOG = 1, CLUMP_BOULDER = 2 };
     std::vector<Clump> clumps;
+    std::vector<FruitTree> fruitTrees;
     struct Monster {
         std::string kind;              // Data/Monsters name
         float x = 0, y = 0;            // feet, map pixels
@@ -566,6 +577,16 @@ public:
     std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
     int countItem(int id) const;
     bool applyImport(const std::string& path, std::string* summary);   // a PC save via tools/saveimport.py
+    int fruitTreeAt(int tx, int ty) const;           // index into cur->fruitTrees, or -1
+    bool plantFruitTree(int tx, int ty);
+    bool shakeFruitTree(int tx, int ty);
+    bool chopFruitTree(int tx, int ty);
+    void fruitTreesNight(Location& loc, bool anySeason);
+    void growSoils(Location& loc, bool newSeason, bool anySeason);
+    bool greenhouseFixed() const { return mailReceived.count("ccPantry") > 0; }
+    bool inGreenhouse() const { return cur && cur->name.rfind("Greenhouse", 0) == 0; }
+    bool cropLand() const { return cur && (cur->isFarm || inGreenhouse()); }   // where you can hoe and plant
+    void ensureGreenhouse();
     void notify(const std::string& s) { say(s); }
     void takeItem(int id, int n);
     // The Mines
