@@ -1317,8 +1317,29 @@ void Game::update(float dt, const Input& in) {
             }
         }
         bool movedX = false, movedY = false;
-        if (nx != px && !blockedPx(nx, py)) { px = nx; movedX = true; }
-        if (ny != py && !blockedPx(px, ny)) { py = ny; movedY = true; }
+        {   // move in small steps so a slow frame still stops flush against a wall, slide along
+            // walls, and round corners: walking straight at a corner eases you past it
+            float remX = nx - px, remY = ny - py;
+            int steps = std::max(1, (int)std::ceil(std::max(std::fabs(remX), std::fabs(remY)) / 2.0f));
+            float sx = remX / steps, sy = remY / steps;
+            for (int k = 0; k < steps; k++) {
+                bool okX = sx != 0 && !blockedPx(px + sx, py);
+                bool okY = sy != 0 && !blockedPx(px, py + sy);
+                if (okX) { px += sx; movedX = true; }
+                if (okY && !blockedPx(px, py + sy)) { py += sy; movedY = true; }
+                if (sx != 0 && !okX && sy == 0) {          // blocked going sideways: a gap just above or below?
+                    for (int off = 1; off <= 5; off++) {
+                        if (!blockedPx(px + sx, py - off) && !blockedPx(px, py - off)) { py -= std::min((float)off, std::fabs(sx)); break; }
+                        if (!blockedPx(px + sx, py + off) && !blockedPx(px, py + off)) { py += std::min((float)off, std::fabs(sx)); break; }
+                    }
+                } else if (sy != 0 && !okY && sx == 0) {   // blocked going up or down: a gap to one side?
+                    for (int off = 1; off <= 5; off++) {
+                        if (!blockedPx(px - off, py + sy) && !blockedPx(px - off, py)) { px -= std::min((float)off, std::fabs(sy)); break; }
+                        if (!blockedPx(px + off, py + sy) && !blockedPx(px + off, py)) { px += std::min((float)off, std::fabs(sy)); break; }
+                    }
+                }
+            }
+        }
         {   // walking through grass sets it swaying (and rustles)
             int cx = (int)std::floor(px / TILE), cy = (int)std::floor((py - 2) / TILE);
             int cell = cur->map.inBounds(cx, cy) ? cy * cur->map.width() + cx : -1;
