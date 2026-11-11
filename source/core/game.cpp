@@ -331,6 +331,10 @@ void Game::spawnDebris(int count, uint32_t& r) {
         if ((f & (CF_DIGGABLE | CF_NOSPAWN | CF_BLOCKED)) != CF_DIGGABLE) continue;
         size_t idx = (size_t)y * w + x;
         if (farm->debris[idx] || farm->soils[idx].tilled) continue;
+        bool onClump = false;
+        for (auto& c : farm->clumps)
+            if (x >= c.x - 1 && x < c.x + 3 && y >= c.y - 1 && y < c.y + 3) onClump = true;
+        if (onClump) continue;
         bool onBuilding = false;
         for (auto& b : data.layout.buildings)
             if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY - 1 && y < b.tileY + b.footH + 1)
@@ -413,6 +417,7 @@ bool Game::tileSolid(int tx, int ty) const {
     for (auto& t : cur->trees)
         if (t.x == tx && t.y == ty && (t.stage > 0 || t.stump)) return true;
     if (bushAt(tx, ty) >= 0) return true;
+    if (!cur->clumps.empty() && clumpAt(tx, ty) >= 0) return true;
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
@@ -702,6 +707,12 @@ void Game::useSelected(int tx, int ty) {
         if (t->kind != TOOL_SCYTHE) energy = std::max(0, energy - ENERGY_PER_SWING);
         if (!inMap) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE) && pickUpPlaced(tx, ty)) return;
+        if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE || t->kind == TOOL_HOE) && !cur->clumps.empty() &&
+            clumpAt(tx, ty) >= 0) {
+            if (t->kind == TOOL_HOE) sfx("woodyHit");
+            else hitClump(tx, ty, t->kind, t->upgrade);
+            return;
+        }
         Soil& s = cur->soils[idx];
         uint8_t& deb = cur->debris[idx];
         uint8_t f = m.flags(tx, ty);
@@ -871,6 +882,7 @@ void Game::updateEffects(float dt) {
         cur->rustles.erase(std::remove_if(cur->rustles.begin(), cur->rustles.end(),
                                           [](const Location::Rustle& r) { return r.t <= 0; }), cur->rustles.end());
         for (auto& b : cur->bushes) if (b.shake > 0) b.shake -= dt;
+        for (auto& b : cur->clumps) if (b.shake > 0) b.shake -= dt;
     }
     for (auto& e : effects) {
         e.t += dt;
@@ -1150,7 +1162,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 12;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 13;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1160,6 +1172,7 @@ static const uint32_t SAVE_VERSION = 12;   // 2: villager friendships, 3: events
                                           // 10: professions
                                           // 11: your character + farm type
                                           // 12: farm grass
+                                          // 13: big stumps, logs and boulders
 
 namespace {
 struct W {
@@ -1288,6 +1301,8 @@ bool Game::save(const std::string& path) const {
     w.u32(ng);
     for (size_t i = 0; i < farm->grass.size(); i++)
         if (farm->grass[i]) { w.u32((uint32_t)i); w.u8(farm->grass[i]); }
+    w.u32((uint32_t)farm->clumps.size());
+    for (auto& c : farm->clumps) { w.i32(c.x); w.i32(c.y); w.u8(c.kind); w.u8((uint8_t)c.health); }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1493,6 +1508,38 @@ bool Game::load(const std::string& path, std::string* err) {
             for (auto& p : pl->second)
                 if (p.x >= 0 && p.y >= 0 && p.y * w + p.x < (int)farm->grass.size()) farm->grass[p.y * w + p.x] = 0;
     }
+    if (version >= 13 && r.ok) {
+        uint32_t nc = r.u32();
+        farm->clumps.clear();
+        for (uint32_t i = 0; i < nc && r.ok && i < 10000; i++) {
+            Location::Clump c;
+            c.x = (int16_t)r.i32(); c.y = (int16_t)r.i32();
+            c.kind = r.u8(); c.health = (int8_t)r.u8();
+            farm->clumps.push_back(c);
+        }
+    } else {   // older saves: the map's clumps, where nothing else has been put since
+        int w = farm->map.width();
+        auto& cs = farm->clumps;
+        auto pl = placed.find("Farm");
+        for (size_t k = cs.size(); k-- > 0;) {
+            bool clear = true;
+            for (int dy = 0; dy < 2; dy++)
+                for (int dx = 0; dx < 2; dx++) {
+                    int x = cs[k].x + dx, y = cs[k].y + dy;
+                    if (!farm->map.inBounds(x, y)) continue;
+                    size_t i = (size_t)y * w + x;
+                    if (farm->soils[i].tilled || farm->debris[i]) clear = false;
+                    for (auto& t : farm->trees) if (t.x == x && t.y == y) clear = false;
+                    if (pl != placed.end())
+                        for (auto& p : pl->second) if (p.x == x && p.y == y) clear = false;
+                }
+            if (!clear) cs.erase(cs.begin() + k);
+        }
+    }
+    for (auto& c : farm->clumps)     // nothing grows under them
+        for (int dy = 0; dy < 2; dy++)
+            for (int dx = 0; dx < 2; dx++)
+                if (farm->map.inBounds(c.x + dx, c.y + dy)) farm->grass[(size_t)(c.y + dy) * farm->map.width() + c.x + dx] = 0;
     fclose(f);
     if (!r.ok) return false;
     // saves from before events could hand out items: Willy's rod was never given

@@ -88,6 +88,11 @@ struct Location {
     // large/medium/small bush, 22 = grass, 36 = blue grass).
     struct Bush { int16_t x = 0, y = 0; uint8_t size = 0; float shake = 0; };   // size 0 small, 1 medium, 2 large
     std::vector<Bush> bushes;
+    // Big 2x2 obstacles placed when the farm is made (Paths 19 log, 20 boulder,
+    // 21 stump): they need an upgraded tool.
+    struct Clump { int16_t x = 0, y = 0; uint8_t kind = 0; int8_t health = 0; float shake = 0; };
+    enum { CLUMP_STUMP = 0, CLUMP_LOG = 1, CLUMP_BOULDER = 2 };
+    std::vector<Clump> clumps;
     std::vector<uint8_t> grass;        // per tile: tufts 0-4 (low bits), bit 3 = blue grass
     struct Rustle { int cell; float t; };
     std::vector<Rustle> rustles;       // grass swaying after you walk through it
@@ -532,6 +537,8 @@ private:
     void treesGrow();
     bool chopTree(int tx, int ty, int axeLevel);
     int bushAt(int tx, int ty) const;        // index into location().bushes, or -1
+    int clumpAt(int tx, int ty) const;      // index into cur->clumps covering the tile, or -1
+    bool hitClump(int tx, int ty, ToolKind kind, int level);
     int grassAt(int tx, int ty) const;       // tufts on that tile (0 = none)
     bool cutGrass(int tx, int ty);           // scythe / hoe; true if there was grass
     void growGrass();                        // overnight on the farm
