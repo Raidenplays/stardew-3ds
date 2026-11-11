@@ -467,6 +467,38 @@ int main() {
         static u32 lastHeld = 0;
         bool botDirty = (kDown | (kHeld ^ lastHeld)) != 0 || (kHeld & KEY_TOUCH) || (++botTick % 5) == 0;
         lastHeld = kHeld;
+        {   // a performance log on the SD card (perf.txt): one line every 20 seconds and whenever you change
+            // place, so slow spots can be found without watching the readout
+            static u64 logSince = osGetTime();
+            static int logFrames = 0, logLines = 0;
+            static float worstCpu = 0, worstGpu = 0, worstUpd = 0;
+            static unsigned worstDraws = 0;
+            static std::string logWhere;
+            logFrames++;
+            worstCpu = std::max(worstCpu, C3D_GetProcessingTime());
+            worstGpu = std::max(worstGpu, C3D_GetDrawingTime());
+            worstUpd = std::max(worstUpd, updMs);
+            worstDraws = std::max(worstDraws, topDraws);
+            u64 nowL = osGetTime();
+            const std::string& where = game.location().name;
+            if (logWhere.empty()) logWhere = where;
+            if ((nowL - logSince >= 20000 || where != logWhere) && nowL - logSince >= 2000 && logLines < 600) {
+                if (FILE* lf = fopen((std::string(ROOT) + "perf.txt").c_str(), logLines ? "a" : "w")) {
+                    if (!logLines) fprintf(lf, "place\tfps\tworst update ms\tworst cpu ms\tworst gpu ms\tmost draws\t3D\n");
+                    fprintf(lf, "%s\t%.1f\t%.1f\t%.1f\t%.1f\t%u\t%s\n", logWhere.c_str(), logFrames * 1000.0f / (float)(nowL - logSince),
+                            worstUpd, worstCpu, worstGpu, worstDraws, stereo ? "on" : "off");
+                    fclose(lf);
+                    logLines++;
+                }
+            }
+            if (nowL - logSince >= 20000 || where != logWhere) {
+                logSince = nowL;
+                logFrames = 0;
+                worstCpu = worstGpu = worstUpd = 0;
+                worstDraws = 0;
+                logWhere = where;
+            }
+        }
         if (ui.showPerf) {
             // once a second: fps, CPU ms (game update / building the frame), GPU ms,
             // free GPU memory, texture pages loaded/evicted/failed, draw calls top+bottom
