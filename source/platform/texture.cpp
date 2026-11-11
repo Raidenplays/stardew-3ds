@@ -6,6 +6,28 @@
 
 extern "C" int s3d_inflate(char* out, int outLen, const char* in, int inLen);
 
+// The converters store each page bottom row first, but the GPU (like tex3ds)
+// wants the top row first. Flip in place: tile row r swaps with tile row
+// TH-1-r, and inside a tile y -> 7-y, which flips the three y bits of the
+// Morton index (bits 1, 3, 5 -> XOR 0x2A).
+static void unflip(u32* px, int pw, int ph) {
+    int tw = pw / 8, th = ph / 8;
+    for (int r = 0; r < (th + 1) / 2; r++) {
+        int r2 = th - 1 - r;
+        for (int c = 0; c < tw; c++) {
+            u32* a = px + ((size_t)(r * tw + c) << 6);
+            u32* b = px + ((size_t)(r2 * tw + c) << 6);
+            for (int m = 0; m < 64; m++) {
+                int m2 = m ^ 0x2A;
+                if (a == b && m2 <= m) continue;   // middle tile row: swap once
+                u32 t = a[m];
+                a[m] = b[m2];
+                b[m2] = t;
+            }
+        }
+    }
+}
+
 Texture::~Texture() {
     for (auto& p : pages) C3D_TexDelete(&p.tex);
 }
@@ -54,6 +76,7 @@ bool Texture::load(const std::string& path) {
             fclose(f);
             return false;
         }
+        unflip((u32*)p.tex.data, p.pw, p.ph);
         C3D_TexFlush(&p.tex);
         C3D_TexSetFilter(&p.tex, GPU_NEAREST, GPU_NEAREST);
         C3D_TexSetWrap(&p.tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
@@ -63,8 +86,6 @@ bool Texture::load(const std::string& path) {
     return !pages.empty();
 }
 
-// Page data is stored bottom row first (converter flips it), and the GPU puts
-// the first stored row at t = 1, so image row y sits at t = y / ph.
 void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
                    const C2D_ImageTint* tint, float scale) const {
     // A sprite can straddle the seam between two 1024px pages (e.g. the title
@@ -82,8 +103,8 @@ void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flip
         float l = lx / p.pw, r = (lx + pw) / p.pw;
         sub.left = flipX ? r : l;
         sub.right = flipX ? l : r;
-        sub.top = ly / p.ph;
-        sub.bottom = (ly + ph) / p.ph;
+        sub.top = 1.0f - ly / p.ph;
+        sub.bottom = 1.0f - (ly + ph) / p.ph;
         // where this piece lands on screen (mirrored across the sprite if flipped)
         float ox = flipX ? (float)((sx + sw) - x1) : (float)(x0 - sx);
         float oy = (float)(y0 - sy);
@@ -102,8 +123,8 @@ void Texture::drawRotated(int sx, int sy, int sw, int sh, float cx, float cy, fl
         sub.height = (u16)sh;
         sub.left = lx / p.pw;
         sub.right = (lx + sw) / p.pw;
-        sub.top = ly / p.ph;
-        sub.bottom = (ly + sh) / p.ph;
+        sub.top = 1.0f - ly / p.ph;
+        sub.bottom = 1.0f - (ly + sh) / p.ph;
         C2D_Image img = {const_cast<C3D_Tex*>(&p.tex), &sub};
         C2D_DrawImageAtRotated(img, cx, cy, 0.5f, radians, tint, 1.0f, 1.0f);
         return;
