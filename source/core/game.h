@@ -654,6 +654,16 @@ public:
     bool collectBuilding(FarmBuilding& b, const char* empty);
     void junimosHarvest();
     void nightEvents();
+    // ---- the rest of the map actions (game_world.cpp) ----
+    std::map<std::string, std::string> mapStrings;
+    bool mapStringsLoaded = false;
+    std::set<std::string> garbageToday;
+    const std::string* mapString(const std::string& key);
+    void showMessage(const std::string& text);
+    bool worldAction(const std::string& verb, const std::string& rest);
+    bool worldChoice(const std::string& what, const std::string& key);
+    void worldMorning();
+    bool ccDone() const;
     // ---- festivals (game_festival.cpp) ----
     std::vector<Festival> festivals;
     bool festivalsLoaded = false;

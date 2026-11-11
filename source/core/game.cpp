@@ -94,7 +94,8 @@ std::string Game::mapFileFor(const std::string& name) const {
         if (data.vfs.exists("maps/" + m + ".smap")) return data.vfs.path("maps/" + m + ".smap");
     }
     if (int lv = mineLevelOf(name)) {   // a mine floor: one of Maps/Mines/1..60, 120 at the bottom
-        int n = lv >= 120 ? 120 : (lv - 1) % 40 + 1;
+        int n = lv == 120 ? 120 : (lv - 1) % 40 + 1;
+        if (lv > 120 && n % 10 == 0) n = n == 40 ? 39 : n + 1;   // no rest floors in the Skull Cavern
         std::string p = "maps/Mines_" + std::to_string(n) + ".smap";
         if (!data.vfs.exists(p)) p = "maps/Mines_" + std::to_string(n % 10 == 0 ? 10 : 1) + ".smap";
         return data.vfs.path(p);
@@ -285,9 +286,16 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         if (!openMail()) say("No new mail");
         return true;
     }
-    if (verb == "Buy") {        // older maps: "Buy General"
-        openShop = "SeedShop";
+    if (verb == "Buy") {        // "Buy General", "Buy Fish"
+        std::string what;
+        ss >> what;
+        openShop = what == "Fish" && data.shops.count("FishShop") ? "FishShop" : "SeedShop";
         return true;
+    }
+    {
+        std::string rest;
+        std::getline(ss, rest);
+        if (worldAction(verb, rest)) return true;
     }
     return false;
 }
@@ -478,6 +486,7 @@ void Game::startDay() {
     npcsStartDay();
     festivalActive = -1;
     festivalDone = false;
+    worldMorning();
     if (const Festival* fe = festivalToday())
         if (morningNote.empty()) {
             int h = fe->start / 100;

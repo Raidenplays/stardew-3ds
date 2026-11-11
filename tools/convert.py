@@ -1695,6 +1695,32 @@ def _festival_actors(content, map_name):
     return out
 
 
+def write_world_text(content, out_dir):
+    """Signs and shelves (Strings/StringsFromMaps), the library's lost books (Strings/Notes), secret
+    notes (Data/SecretNotes) and where the minecarts go (Data/Minecarts)."""
+    def load(rel):
+        p = os.path.join(content, *rel.split("/"))
+        if not os.path.isfile(p):
+            return {}
+        try:
+            return json.load(open(p, encoding="utf-8-sig"))
+        except ValueError:
+            return {}
+    with open(os.path.join(out_dir, "mapstrings.dat"), "w", encoding="utf-8") as f:
+        for k, v in load("Strings/StringsFromMaps.json").items():
+            f.write(f"{_flat(k)}\t{_flat(v)}\n")
+        for k, v in load("Strings/Notes.json").items():
+            f.write(f"note:{_flat(k)}\t{_flat(v)}\n")
+        for k, v in load("Data/SecretNotes.json").items():
+            f.write(f"secret:{_flat(k)}\t{_flat(v)}\n")
+    with open(os.path.join(out_dir, "minecarts.dat"), "w", encoding="utf-8") as f:
+        for net, nd in load("Data/Minecarts.json").items():
+            for d in (nd or {}).get("Destinations") or []:
+                t = d.get("TargetTile") or {}
+                f.write("\t".join([_flat(net), _flat(d.get("Id", "")), _flat(d.get("TargetLocation", "")),
+                                   str(t.get("X", 0)), str(t.get("Y", 0))]) + "\n")
+
+
 def write_festivals(content, out_dir):
     src = os.path.join(content, "Data", "Festivals")
     if not os.path.isdir(src):
@@ -2333,6 +2359,7 @@ def main():
     print("Villagers...")
     write_npcs(content, os.path.join(out_root, "data"), textures)
     write_festivals(content, os.path.join(out_root, "data"))
+    write_world_text(content, os.path.join(out_root, "data"))
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
     print("Sound...")

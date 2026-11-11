@@ -76,7 +76,9 @@ void Game::mineGenerate(Location& loc) {
             int roll = (int)((r >> 8) % 1000);
             int deep = level % 40;     // ore gets commoner further down each section
             int oreChance = 40 + deep * 2;
-            if (roll < oreChance) {
+            if (level > 120 && roll < std::min(120, 15 + (level - 120) * 2)) {
+                o.itemId = 765;                                                       // iridium, more the deeper you go
+            } else if (roll < oreChance) {
                 o.itemId = level >= 80 ? 764 : level >= 40 ? 290 : 751;               // gold / iron / copper
             } else if (roll < oreChance + 20 && level >= 40) {
                 o.itemId = level >= 80 ? 290 : 751;
@@ -327,7 +329,8 @@ void Game::enterMine(int level) {
         warpTo("Mine", ENTRANCE_X, ENTRANCE_Y, false);
         return;
     }
-    level = std::min(level, 120);
+    bool skull = level > 120;            // the Skull Cavern: floors past the bottom, from the desert
+    if (!skull) level = std::min(level, 120);
     std::string name = "UndergroundMine" + std::to_string(level);
     Location* loc = loadLocation(name);
     if (!loc) {
@@ -340,8 +343,8 @@ void Game::enterMine(int level) {
             if (loc->map.tile(L_BUILDINGS, x, y) == LADDER_UP) { sx = x; sy = y + 1; }
     sfx("stairsdown");
     warpTo(name, sx, sy, false);
-    say("Floor " + std::to_string(level));
-    if (level > mineDeepest) {
+    say(skull ? "Skull Cavern, floor " + std::to_string(level - 120) : "Floor " + std::to_string(level));
+    if (level > mineDeepest && !skull) {
         mineDeepest = level;
         if (level % 5 == 0) say("Elevator unlocked: floor " + std::to_string(level));
     }
@@ -392,7 +395,14 @@ bool Game::mineInteract(int tx, int ty) {
     }
     uint16_t t = cur->map.tile(L_BUILDINGS, tx, ty);
     if (t == LADDER_DOWN) { enterMine(cur->mineLevel + 1); return true; }
+    if (t == LADDER_UP && cur->mineLevel > 120) {
+        sfx("stairsdown");
+        if (hasMap("SkullCave")) warpTo("SkullCave", 3, 5, false);
+        else warpTo("Desert", 8, 7, false);
+        return true;
+    }
     if (t == LADDER_UP) { sfx("stairsdown"); warpTo("Mine", ENTRANCE_X, ENTRANCE_Y, false); return true; }
+    if (t == ELEVATOR && cur->mineLevel > 120) { say("No elevator down here."); return true; }
     if (t == ELEVATOR) { openElevator(); return true; }
     return false;
 }
