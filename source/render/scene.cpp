@@ -321,7 +321,8 @@ static void drawPlayerWithTool(Canvas& c, const Game& g, float sx, float sy) {
 // ================================================================ top screen
 struct DrawItem {
     float sortY;
-    int kind;   // 0 debris, 1 crop, 2 building, 3 player, 4 villager, 5 furniture, 6 cutscene actor
+    int kind;   // 0 debris, 1 crop, 2 building, 3 player, 4 villager, 5 furniture, 6 cutscene actor,
+                // 7 object, 8 placed, 9 tree, 10 grass, 11 bush
     int a, b;
 };
 
@@ -428,12 +429,21 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     drawLayer(L_BUILDINGS, 0.0f);
     profEnd(PROF_MAP);
 
-    std::vector<DrawItem> items;
+    static std::vector<DrawItem> items;
+    items.clear();
+    const Location& here = g.location();
+    bool hasGrass = !here.grass.empty();
     for (int y = y0; y <= y1; y++)
         for (int x = x0; x <= x1; x++) {
             if (g.debris(x, y) != DEB_NONE) items.push_back({(float)(y * TILE + 15), 0, x, y});
             if (g.soil(x, y).seed >= 0) items.push_back({(float)(y * TILE + 14), 1, x, y});
+            if (hasGrass && here.grass[(size_t)y * m.width() + x]) items.push_back({(float)(y * TILE + 10), 10, x, y});
         }
+    for (size_t i = 0; i < here.bushes.size(); i++) {
+        const Location::Bush& b = here.bushes[i];
+        if (b.x >= x0 - 3 && b.x <= x1 && b.y >= y0 && b.y <= y1 + 3) items.push_back({(float)((b.y + 1) * TILE - 2), 11, (int)i, 0});
+    }
+    const void* grassTex = c.texLookup("TerrainFeatures_grass");
     if (g.location().isFarm)
         for (size_t i = 0; i < g.data.layout.buildings.size(); i++) {
             auto& b = g.data.layout.buildings[i];
@@ -624,6 +634,47 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     c.rect(x + 1, y - 20, 14, 3, RGBA(0x30, 0x20, 0x10, 0xC0));
                     c.rect(x + 2, y - 19, 12 * f, 1, RGBA(0x7C, 0xD0, 0x42));
                 }
+                break;
+            }
+            case 10: {   // 1-4 grass tufts, swaying for a moment after you walk through
+                uint8_t v = here.grass[(size_t)it.b * m.width() + it.a];
+                int n = v & 7;
+                int row = (v & 8) ? 160 : g.season == SUMMER ? 20 : g.season == FALL ? 40 : g.season == WINTER ? 80 : 0;
+                float sway = 0;
+                int cell = it.b * m.width() + it.a;
+                for (auto& r : here.rustles)
+                    if (r.cell == cell) sway = std::sin(r.t * 30.0f) * 2.0f * (r.t / 0.5f);
+                float tx = it.a * TILE - camX, ty = it.b * TILE - camY;
+                for (int k = 0; k < n; k++) {
+                    uint32_t h = (uint32_t)(cell * 4 + k) * 2654435761u;
+                    int variant = (h >> 13) % 3;
+                    float ox = (k & 1) * 7 - 3 + (float)((h >> 5) % 3), oy = (k >> 1) * 6 - 12;
+                    float s = k & 1 ? sway : -sway;
+                    c.imageTex(grassTex, "TerrainFeatures_grass", variant * 15, row, 15, 20, std::floor(tx + ox + s), ty + oy);
+                }
+                break;
+            }
+            case 11: {   // bushes from TileSheets/bushes: small 16x32, medium 32x32, large 48x48
+                const Location::Bush& b = here.bushes[it.a];
+                int sx, sy, sw, sh;
+                int season = g.season & 3;
+                if (b.size == 2) {
+                    sw = sh = 48;
+                    sx = season == FALL ? 48 : 0;
+                    sy = season == WINTER ? 176 : 128;
+                } else if (b.size == 1) {
+                    sw = sh = 32;
+                    static const int mx[4] = {0, 64, 0, 96}, my[4] = {96, 96, 64, 96};
+                    sx = mx[season];
+                    sy = my[season];
+                } else {
+                    sw = 16;
+                    sh = 32;
+                    sx = season * 32 + ((b.x + b.y) & 1) * 16;
+                    sy = 224;
+                }
+                float wob = b.shake > 0 ? std::sin(b.shake * 60.0f) * 1.0f : 0.0f;
+                c.image("TileSheets_bushes", sx, sy, sw, sh, std::floor(b.x * TILE - camX + wob), (b.y + 1) * TILE - sh - camY);
                 break;
             }
             case 4: {

@@ -30,6 +30,19 @@ void Game::treesFromMap(Location& loc) {
             if (t == NO_TILE) continue;
             int ts = m.tileset(L_PATHS, x, y);
             if (ts >= (int)m.tilesets.size() || !isPathsSheet(m.tilesets[ts].texture)) continue;
+            if (t == 24 || t == 25 || t == 26) {   // large / medium / small bush
+                Location::Bush b;
+                b.x = (int16_t)x;
+                b.y = (int16_t)y;
+                b.size = (uint8_t)(26 - t);
+                loc.bushes.push_back(b);
+                continue;
+            }
+            if (t == 22 || t == 36) {              // grass: 1-4 tufts
+                uint32_t h = (uint32_t)(x * 73856093u) ^ (uint32_t)(y * 19349663u);
+                loc.grass[(size_t)y * m.width() + x] = (uint8_t)(1 + (h >> 7) % 4) | (t == 36 ? 8 : 0);
+                continue;
+            }
             int type = t == 9 ? 1 : t == 10 ? 2 : t == 11 ? 3 : 0;
             if (!type || !data.trees.count(type)) continue;
             Tree tr;
@@ -38,6 +51,55 @@ void Game::treesFromMap(Location& loc) {
             tr.type = type;
             loc.trees.push_back(tr);
         }
+}
+
+int Game::bushAt(int tx, int ty) const {
+    const auto& bs = cur->bushes;
+    for (size_t i = 0; i < bs.size(); i++) {
+        int w = bs[i].size == 2 ? 3 : bs[i].size == 1 ? 2 : 1;
+        if (ty == bs[i].y && tx >= bs[i].x && tx < bs[i].x + w) return (int)i;
+    }
+    return -1;
+}
+
+int Game::grassAt(int tx, int ty) const {
+    if (!cur->map.inBounds(tx, ty) || cur->grass.empty()) return 0;
+    return cur->grass[(size_t)ty * cur->map.width() + tx] & 7;
+}
+
+bool Game::cutGrass(int tx, int ty) {
+    if (!grassAt(tx, ty)) return false;
+    uint8_t& gr = cur->grass[(size_t)ty * cur->map.width() + tx];
+    int row = (gr & 8) ? 160 : (season == SUMMER ? 20 : season == FALL ? 40 : season == WINTER ? 80 : 0);
+    burst("TerrainFeatures_grass", 0, row, 15, 20, tx * TILE + 8.0f, ty * TILE + 10.0f, 5, 4);
+    gr = 0;
+    return true;
+}
+
+// Each night farm grass fills out, and now and then spreads to a free neighbour.
+void Game::growGrass() {
+    if (!farm || season == WINTER) return;
+    const TileMap& m = farm->map;
+    int w = m.width(), h = m.height();
+    std::vector<int> spread;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            uint8_t& g = farm->grass[(size_t)y * w + x];
+            if (!(g & 7)) continue;
+            if ((g & 7) < 4 && rand32() % 2) g++;
+            if (rand32() % 100 < 6) {
+                static const int dx[4] = {1, -1, 0, 0}, dy[4] = {0, 0, 1, -1};
+                int k = rand32() % 4, nx = x + dx[k], ny = y + dy[k];
+                if (!m.inBounds(nx, ny)) continue;
+                size_t i = (size_t)ny * w + nx;
+                uint8_t f = m.flags(nx, ny);
+                if (!(f & CF_DIGGABLE) || (f & CF_WATER) || farm->grass[i] || farm->debris[i] ||
+                    farm->soils[i].tilled || m.tile(L_BUILDINGS, nx, ny) != NO_TILE)
+                    continue;
+                spread.push_back((int)i);
+            }
+        }
+    for (int i : spread) farm->grass[i] = 1;
 }
 
 Tree* Game::treeAt(int x, int y) {
@@ -138,6 +200,7 @@ bool Game::plantTree(int tx, int ty) {
     t.stage = 0;
     t.health = 1;
     cur->trees.push_back(t);
+    if (grassAt(tx, ty)) cur->grass[(size_t)ty * cur->map.width() + tx] = 0;
     if (--sl.count <= 0) sl = Slot();
     return true;
 }

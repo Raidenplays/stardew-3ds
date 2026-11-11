@@ -27,6 +27,9 @@ void Location::initState() {
     soils.assign(cells, Soil());
     debris.assign(cells, DEB_NONE);
     debrisVar.assign(cells, 0);
+    grass.assign(cells, 0);
+    bushes.clear();
+    rustles.clear();
 }
 
 Game::Game(const GameData& d) : data(d) {
@@ -396,6 +399,7 @@ bool Game::tileSolid(int tx, int ty) const {
     if (placedAt(tx, ty)) return true;
     for (auto& t : cur->trees)
         if (t.x == tx && t.y == ty && (t.stage > 0 || t.stump)) return true;
+    if (bushAt(tx, ty) >= 0) return true;
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);
@@ -662,6 +666,7 @@ void Game::useSelected(int tx, int ty) {
             case TOOL_HOE:
                 if (cur->isFarm && (f & CF_DIGGABLE) && !(f & CF_WATER) && !s.tilled && !deb &&
                     !buildingAt(tx, ty) && m.tile(L_BUILDINGS, tx, ty) == NO_TILE) {
+                    cutGrass(tx, ty);
                     s = Soil();
                     s.tilled = true;
                     s.watered = raining;
@@ -726,8 +731,16 @@ void Game::useSelected(int tx, int ty) {
                     s = Soil();
                 }
                 break;
-            case TOOL_SCYTHE:
+            case TOOL_SCYTHE: {
                 sfx("swordswipe");
+                // the blade sweeps the tile in front and the two beside it
+                bool cut = false;
+                for (int k = -1; k <= 1; k++) {
+                    int gx = tx + ((facing == FACE_UP || facing == FACE_DOWN) ? k : 0);
+                    int gy = ty + ((facing == FACE_LEFT || facing == FACE_RIGHT) ? k : 0);
+                    cut |= cutGrass(gx, gy);
+                }
+                if (cut) sfx("cut");
                 if (deb == DEB_WEED) {
                     int v = debrisVariant(tx, ty) & 1, idx = v ? 675 : 674;   // Maps/springobjects weeds
                     burst("Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, tx * TILE + 8.0f, ty * TILE + 10.0f, 6);
@@ -739,6 +752,7 @@ void Game::useSelected(int tx, int ty) {
                     s.dead = false;
                 }
                 break;
+            }
             default:
                 break;
         }
@@ -792,6 +806,12 @@ void Game::burst(const std::string& tex, int sx, int sy, int sw, int sh, float x
 }
 
 void Game::updateEffects(float dt) {
+    if (cur) {
+        for (auto& r : cur->rustles) r.t -= dt;
+        cur->rustles.erase(std::remove_if(cur->rustles.begin(), cur->rustles.end(),
+                                          [](const Location::Rustle& r) { return r.t <= 0; }), cur->rustles.end());
+        for (auto& b : cur->bushes) if (b.shake > 0) b.shake -= dt;
+    }
     for (auto& e : effects) {
         e.t += dt;
         if (e.kind == Effect::FALLING_TREE) continue;   // angle comes from t when drawn
@@ -931,6 +951,26 @@ void Game::update(float dt, const Input& in) {
         bool movedX = false, movedY = false;
         if (nx != px && !blockedPx(nx, py)) { px = nx; movedX = true; }
         if (ny != py && !blockedPx(px, ny)) { py = ny; movedY = true; }
+        {   // walking through grass sets it swaying (and rustles)
+            int cx = (int)std::floor(px / TILE), cy = (int)std::floor((py - 2) / TILE);
+            int cell = cur->map.inBounds(cx, cy) ? cy * cur->map.width() + cx : -1;
+            if (cell != lastGrassCell && cell >= 0 && grassAt(cx, cy)) {
+                bool already = false;
+                for (auto& r : cur->rustles) if (r.cell == cell) { r.t = 0.5f; already = true; }
+                if (!already) cur->rustles.push_back({cell, 0.5f});
+                sfx("grassyStep");
+            }
+            lastGrassCell = cell;
+        }
+        if ((nx != px && !movedX) || (ny != py && !movedY)) {   // bumped into a bush: it shakes
+            int bx, by;
+            targetTile(bx, by);
+            int b = bushAt(bx, by);
+            if (b >= 0 && cur->bushes[b].shake <= 0) {
+                cur->bushes[b].shake = 0.4f;
+                sfx("leafrustle");
+            }
+        }
         walkTime += dt * (in.walk ? 1.0f : 1.6f);
 
         // Walking into a door opens it.
@@ -1013,6 +1053,7 @@ bool Game::goToBed() {
     sprinklersWater();
     machinesDayStart();
     treesGrow();
+    growGrass();
 
     uint32_t r = rand32();
     spawnDebris(6, r);
@@ -1029,7 +1070,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 11;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 12;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1038,6 +1079,7 @@ static const uint32_t SAVE_VERSION = 11;   // 2: villager friendships, 3: events
                                           // 9: mailbox
                                           // 10: professions
                                           // 11: your character + farm type
+                                          // 12: farm grass
 
 namespace {
 struct W {
@@ -1160,6 +1202,11 @@ bool Game::save(const std::string& path) const {
         w.i32(t.x); w.i32(t.y); w.i32(t.type);
         w.u8(t.stage); w.u8((uint8_t)t.health); w.u8(t.stump);
     }
+    uint32_t ng = 0;
+    for (uint8_t g : farm->grass) ng += g != 0;
+    w.u32(ng);
+    for (size_t i = 0; i < farm->grass.size(); i++)
+        if (farm->grass[i]) { w.u32((uint32_t)i); w.u8(farm->grass[i]); }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1337,6 +1384,26 @@ bool Game::load(const std::string& path, std::string* err) {
             t.stage = r.u8(); t.health = (int8_t)r.u8(); t.stump = r.u8() != 0;
             farm->trees.push_back(t);
         }
+    }
+    if (version >= 12 && r.ok) {
+        uint32_t ng = r.u32();
+        std::fill(farm->grass.begin(), farm->grass.end(), 0);
+        for (uint32_t i = 0; i < ng && r.ok && i < 1000000; i++) {
+            uint32_t idx = r.u32();
+            uint8_t v = r.u8();
+            if (idx < farm->grass.size()) farm->grass[idx] = v;
+        }
+    } else {   // older saves: the map's grass, but not where you've already dug, built or placed things
+        int w = farm->map.width();
+        for (size_t i = 0; i < farm->grass.size(); i++) {
+            int x = (int)(i % w), y = (int)(i / w);
+            if (farm->soils[i].tilled || farm->debris[i]) farm->grass[i] = 0;
+            for (auto& t : farm->trees) if (t.x == x && t.y == y) farm->grass[i] = 0;
+        }
+        auto pl = placed.find("Farm");
+        if (pl != placed.end())
+            for (auto& p : pl->second)
+                if (p.x >= 0 && p.y >= 0 && p.y * w + p.x < (int)farm->grass.size()) farm->grass[p.y * w + p.x] = 0;
     }
     fclose(f);
     if (!r.ok) return false;
