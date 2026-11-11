@@ -53,7 +53,7 @@ jobs:
           curl -sSfL -o /tmp/bt.zip "$BT"
           unzip -o -q /tmp/bt.zip -d /tmp/bt
           find /tmp/bt -type f | head -20
-          install -m755 "$(find /tmp/bt -type f -name bannertool -path '*linux*' | head -1)" /usr/local/bin/bannertool
+          install -m755 "$(find /tmp/bt -type f -name bannertool -path '*linux-x86_64*' | head -1)" /usr/local/bin/bannertool
           MR=$(curl -sSf https://api.github.com/repos/3DSGuy/Project_CTR/releases/latest | grep -o 'https://[^"]*makerom[^"]*ubuntu[^"]*\.zip' | head -1)
           echo "makerom: $MR"
           curl -sSfL -o /tmp/mr.zip "$MR"
