@@ -12,7 +12,15 @@
 struct TexPage {
     C3D_Tex tex;
     int x0 = 0, y0 = 0, w = 0, h = 0, pw = 0, ph = 0;
+    long fileOff = 0;        // where this page's pixels start in the .s3t
+    u32 compLen = 0;         // S3T3: deflated size (0 = stored raw)
+    bool loaded = false;     // pages load on first draw, and can be evicted
+    u32 lastUsed = 0;        // frame number of the last draw
 };
+
+// Call once per frame (before drawing): pages drawn in an earlier frame can
+// then be evicted when GPU memory runs out.
+void texNewFrame();
 
 class Texture {
 public:
@@ -28,8 +36,15 @@ public:
 
     int width = 0, height = 0;
 
+    // free every loaded page not drawn this frame, oldest first, until one
+    // pw x ph RGBA8 page would fit; false if nothing more can go
+    static bool evictOne();
+
 private:
-    std::vector<TexPage> pages;
+    bool ensure(TexPage& p) const;
+    std::string path;
+    bool packed = false, v2 = false;
+    mutable std::vector<TexPage> pages;
 };
 
 #include <functional>

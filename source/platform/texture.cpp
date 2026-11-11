@@ -28,12 +28,25 @@ static void unflip(u32* px, int pw, int ph) {
     }
 }
 
+static u32 g_frame = 1;
+static std::vector<Texture*> g_textures;   // every live texture, for eviction
+
+void texNewFrame() { g_frame++; }
+
 Texture::~Texture() {
-    for (auto& p : pages) C3D_TexDelete(&p.tex);
+    for (auto& p : pages)
+        if (p.loaded) C3D_TexDelete(&p.tex);
+    for (size_t i = 0; i < g_textures.size(); i++)
+        if (g_textures[i] == this) {
+            g_textures[i] = g_textures.back();
+            g_textures.pop_back();
+            break;
+        }
 }
 
-bool Texture::load(const std::string& path) {
-    FILE* f = fopen(path.c_str(), "rb");
+// Read the header and page table only; pixels load when a page is drawn.
+bool Texture::load(const std::string& path_) {
+    FILE* f = fopen(path_.c_str(), "rb");
     if (!f) return false;
     char magic[4];
     u16 hdr[4];
@@ -42,8 +55,9 @@ bool Texture::load(const std::string& path) {
         fclose(f);
         return false;
     }
-    bool v2 = magic[3] >= '2', packed = magic[3] == '3';   // S3T3: each page deflated
-    std::vector<char> comp;
+    path = path_;
+    v2 = magic[3] >= '2';
+    packed = magic[3] == '3';   // S3T3: each page deflated
     width = hdr[0];
     height = hdr[1];
     int count = hdr[2];
@@ -57,33 +71,68 @@ bool Texture::load(const std::string& path) {
             if (fread(ph, 2, 4, f) != 4) break;
             p.y0 = ph[0]; p.h = ph[1]; p.pw = ph[2]; p.ph = ph[3]; p.w = width;
         }
-        if (!C3D_TexInit(&p.tex, p.pw, p.ph, GPU_RGBA8)) {
-            fclose(f);
-            return false;   // out of linear memory
-        }
         size_t bytes = (size_t)p.pw * p.ph * 4;
-        bool ok;
         if (packed) {
             u32 n = 0;
-            ok = fread(&n, 4, 1, f) == 1 && n < (64u << 20);
-            if (ok) { comp.resize(n); ok = fread(comp.data(), 1, n, f) == n; }
-            if (ok) ok = s3d_inflate((char*)p.tex.data, (int)bytes, comp.data(), (int)n) == (int)bytes;
+            if (fread(&n, 4, 1, f) != 1 || n >= (64u << 20)) break;
+            p.compLen = n;
+            p.fileOff = ftell(f);
+            if (fseek(f, n, SEEK_CUR) != 0) break;
         } else {
-            ok = fread(p.tex.data, 1, bytes, f) == bytes;
+            p.fileOff = ftell(f);
+            if (fseek(f, (long)bytes, SEEK_CUR) != 0) break;
         }
-        if (!ok) {
-            C3D_TexDelete(&p.tex);
-            fclose(f);
-            return false;
-        }
-        unflip((u32*)p.tex.data, p.pw, p.ph);
-        C3D_TexFlush(&p.tex);
-        C3D_TexSetFilter(&p.tex, GPU_NEAREST, GPU_NEAREST);
-        C3D_TexSetWrap(&p.tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
         pages.push_back(p);
     }
     fclose(f);
-    return !pages.empty();
+    if (pages.empty()) return false;
+    g_textures.push_back(this);
+    return true;
+}
+
+bool Texture::evictOne() {
+    TexPage* best = nullptr;
+    for (Texture* t : g_textures)
+        for (TexPage& p : t->pages)
+            if (p.loaded && p.lastUsed < g_frame && (!best || p.lastUsed < best->lastUsed)) best = &p;
+    if (!best) return false;
+    C3D_TexDelete(&best->tex);
+    best->loaded = false;
+    return true;
+}
+
+bool Texture::ensure(TexPage& p) const {
+    p.lastUsed = g_frame;
+    if (p.loaded) return true;
+    // citro2d remembers the last bound C3D_Tex by address; a page reloaded
+    // into the same struct must not be mistaken for what was bound before.
+    C2D_Flush();
+    while (!C3D_TexInit(&p.tex, p.pw, p.ph, GPU_RGBA8))
+        if (!evictOne()) return false;   // out of GPU memory even after evicting
+    size_t bytes = (size_t)p.pw * p.ph * 4;
+    bool ok = false;
+    FILE* f = fopen(path.c_str(), "rb");
+    if (f && fseek(f, p.fileOff, SEEK_SET) == 0) {
+        if (packed) {
+            std::vector<char> comp(p.compLen);
+            ok = fread(comp.data(), 1, p.compLen, f) == p.compLen &&
+                 s3d_inflate((char*)p.tex.data, (int)bytes, comp.data(), (int)p.compLen) == (int)bytes;
+        } else {
+            ok = fread(p.tex.data, 1, bytes, f) == bytes;
+        }
+    }
+    if (f) fclose(f);
+    if (!ok) {
+        C3D_TexDelete(&p.tex);
+        return false;
+    }
+    unflip((u32*)p.tex.data, p.pw, p.ph);
+    C3D_TexFlush(&p.tex);
+    C3D_TexSetFilter(&p.tex, GPU_NEAREST, GPU_NEAREST);
+    C3D_TexSetWrap(&p.tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+    p.loaded = true;
+    C2D_Prepare();   // forgets the cached texture binding
+    return true;
 }
 
 void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
@@ -95,6 +144,7 @@ void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flip
         int x1 = sx + sw < p.x0 + p.w ? sx + sw : p.x0 + p.w;
         int y1 = sy + sh < p.y0 + p.h ? sy + sh : p.y0 + p.h;
         if (x1 <= x0 || y1 <= y0) continue;
+        if (!ensure(const_cast<TexPage&>(p))) continue;
         int pw = x1 - x0, ph = y1 - y0;
         float lx = (float)(x0 - p.x0), ly = (float)(y0 - p.y0);
         Tex3DS_SubTexture sub;
@@ -117,6 +167,7 @@ void Texture::drawRotated(int sx, int sy, int sw, int sh, float cx, float cy, fl
                           const C2D_ImageTint* tint) const {
     for (const TexPage& p : pages) {
         if (sy < p.y0 || sy + sh > p.y0 + p.h || sx < p.x0 || sx + sw > p.x0 + p.w) continue;
+        if (!ensure(const_cast<TexPage&>(p))) return;
         float ly = (float)(sy - p.y0), lx = (float)(sx - p.x0);
         Tex3DS_SubTexture sub;
         sub.width = (u16)sw;
@@ -141,4 +192,8 @@ const Texture* TexCache::get(const std::string& name) {
     return out;
 }
 
-void TexCache::clear() { cache.clear(); }
+void TexCache::clear() {
+    C2D_Flush();
+    cache.clear();
+    C2D_Prepare();
+}

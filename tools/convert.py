@@ -55,7 +55,7 @@ except ImportError:
     sys.exit("Needs Pillow and numpy:  pip install pillow numpy")
 
 SEASONS = ["spring", "summer", "fall", "winter"]
-MAX_PAGE = 1024
+MAX_PAGE = 256   # small pages: the 3DS loads only the parts of a sheet it draws
 
 # Textures the engine needs besides map tilesheets.
 # (content path without extension, required?)
