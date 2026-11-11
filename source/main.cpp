@@ -111,8 +111,6 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
     return false;
 }
 
-static bool perfShow = false;   // L + SELECT
-
 int main() {
     gfxInitDefault();
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
@@ -334,7 +332,7 @@ int main() {
             if (game.cutscene.active) game.skipEvent();
             else ui.tab = TAB_OPTIONS;
         }
-        if ((kDown & KEY_SELECT) && (kHeld & KEY_L)) perfShow = !perfShow;   // L + SELECT: performance readout
+        if ((kDown & KEY_SELECT) && (kHeld & KEY_L)) ui.showPerf = !ui.showPerf;   // L + SELECT: performance readout
         else if (kDown & KEY_SELECT) ui.tab = (ui.tab + 1) % TAB_COUNT;
         if (!ui.shop.empty() && (kDown & KEY_B)) { ui.shop.clear(); ui.cart.clear(); }
         if (game.chestOpen && (kDown & KEY_B)) game.closeChest();
@@ -397,7 +395,7 @@ int main() {
         C2D_TargetClear(bot, C2D_Color32(0x2A, 0x1A, 0x10, 0xFF));
         C2D_SceneBegin(bot);
         drawBottom(canvas, game, ui);
-        if (perfShow) {
+        if (ui.showPerf) {
             // once a second: fps, CPU ms (game update / building the frame), GPU ms,
             // free GPU memory, texture pages loaded/evicted/failed
             static u64 since = 0;
@@ -422,7 +420,7 @@ int main() {
                 upd = cpu = gpu = 0;
             }
             canvas.rect(0, 0, 320, 30, RGBA(0, 0, 0));
-            canvas.text(4, 2, 0.4f, RGBA(255, 255, 0), line1, ALIGN_LEFT);
+            canvas.text(4, 2, 0.4f, RGBA(255, 255, 0), line1[0] ? line1 : "measuring...", ALIGN_LEFT);
             canvas.text(4, 15, 0.4f, RGBA(255, 255, 0), line2, ALIGN_LEFT);
         }
         C3D_FrameEnd(0);

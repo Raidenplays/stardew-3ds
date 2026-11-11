@@ -1166,12 +1166,15 @@ static void drawOptionsTab(Canvas& c, Game& g, Ui& ui) {
         box(c, 40, PANEL_Y + 10 + i * 40, 240, 32, COL_PANEL_DARK, COL_BORDER);
         c.text(160, PANEL_Y + 17 + i * 40, 0.55f, COL_TEXT, labels[i], ALIGN_CENTER);
     }
-    if (ui.statusTime > 0) c.text(160, PANEL_Y + 134, 0.5f, COL_TEXT, ui.status, ALIGN_CENTER);
-    c.text(160, PANEL_Y + 160, 0.38f, COL_TEXT_SOFT, "The game also saves every time you sleep.", ALIGN_CENTER);
+    box(c, 80, PANEL_Y + 130, 160, 22, COL_PANEL_DARK, COL_BORDER);
+    c.text(160, PANEL_Y + 134, 0.45f, COL_TEXT, ui.showPerf ? "Performance info: on" : "Performance info: off", ALIGN_CENTER);
+    if (ui.statusTime > 0) c.text(160, PANEL_Y + 156, 0.5f, COL_TEXT, ui.status, ALIGN_CENTER);
+    c.text(160, PANEL_Y + 172, 0.38f, COL_TEXT_SOFT, "The game also saves every time you sleep.", ALIGN_CENTER);
     (void)g;
 }
 
 static void touchOptionsTab(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
+    if (hit(tx, ty, 80, PANEL_Y + 130, 160, 22)) { ui.showPerf = !ui.showPerf; return; }
     for (int i = 0; i < 3; i++)
         if (hit(tx, ty, 40, PANEL_Y + 10 + i * 40, 240, 32)) {
             if (i == 1) {
