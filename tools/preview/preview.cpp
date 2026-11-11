@@ -540,6 +540,15 @@ int main(int argc, char** argv) {
         e.sw = 48; e.sh = 96;
         e.x = g.px + 60; e.y = g.py - 4; e.dir = 1; e.life = 1.4f;
         g.effects.push_back(e);
+        for (int i = 0; i < HOTBAR; i++)
+            if (g.inv[i].type == SLOT_OBJECT) { g.selectSlot(i); break; }
+        for (int f = 0; f < 4; f++) {
+            g.facing = f;
+            g.moving = f == 1;
+            g.walkTime = 0.15f;
+            shot(c, g, ui, "carry_" + std::to_string(f));
+        }
+        g.moving = false;
         g.addItem(390, 1);   // stone
         g.itemFlies(390, g.px + 20, g.py);
         g.addItem(388, 3);   // wood
