@@ -580,9 +580,9 @@ public:
     int houseLevel = 0;
     int houseUpgradeDays = 0;               // Robin's working on the next level
     bool canCookHere() const { return cur && cur->name == "FarmHouse" && houseLevel >= 1; }
-    int houseDX = 0, houseDY = 0;           // the first room's shift in the bigger house (by its door)
-    int furnDX(const std::string& map) const { return map == "FarmHouse" ? houseDX : 0; }
-    int furnDY(const std::string& map) const { return map == "FarmHouse" ? houseDY : 0; }
+    std::vector<FurniturePlacement> furniture;   // in your house (and anywhere else): starts from the layout
+    const FurniturePlacement* bedIn(const std::string& map) const;
+    bool houseDoor(int level, int& x, int& y) const;   // the farmhouse map's door for that upgrade level
     bool startHouseUpgrade();
     // Farm buildings and animals
     std::vector<FarmBuilding> buildings;

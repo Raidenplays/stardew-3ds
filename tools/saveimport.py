@@ -143,6 +143,16 @@ def vec(k):
 
 
 def location_lines(loc, name, ids, out, extras):
+    # furniture (the house): id and top-left tile
+    fl = loc.find("furniture")
+    if fl is not None:
+        for fu in fl:
+            fid = txt(fu, "itemId") or txt(fu, "parentSheetIndex") or txt(fu, "ParentSheetIndex")
+            tl = fu.find("tileLocation")
+            if tl is None:
+                tl = fu.find("TileLocation")
+            if fid and fid.lstrip("-").isdigit() and tl is not None:
+                out.append(["furniture", name, int(fid), num(tl, "X"), num(tl, "Y")])
     # objects: debris, machines, chests, sprinklers
     for k, o in dict_items(loc.find("objects")):
         x, y = vec(k)

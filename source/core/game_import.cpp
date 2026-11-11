@@ -52,6 +52,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     bundleDefs.clear();
     bundleGiven.clear();
     std::map<int, int> bid;   // import index -> building id
+    bool importedFurniture = false;
     int counts[8] = {};
 
     auto locFor = [&](const std::string& name) -> Location* {
@@ -218,6 +219,14 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             std::vector<uint8_t> v;
             for (char ch : f[2]) v.push_back(ch == '1');
             bundleGiven[I(f, 1)] = v;
+        } else if (k == "furniture" && f.size() > 4) {   // your house as you left it
+            if (!importedFurniture) {
+                for (size_t q = furniture.size(); q-- > 0;) if (furniture[q].map == f[1]) furniture.erase(furniture.begin() + q);
+                importedFurniture = true;
+            }
+            FurniturePlacement fp;
+            fp.map = f[1]; fp.id = I(f, 2); fp.x = I(f, 3); fp.y = I(f, 4);
+            if (data.furniture.count(fp.id)) furniture.push_back(fp);
         } else if (k == "drop" && f.size() > 4) {   // an egg or forage lying there
             Location* L = locFor(f[1]);
             if (!L || !data.object(I(f, 4))) continue;

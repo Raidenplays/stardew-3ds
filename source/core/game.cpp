@@ -62,11 +62,7 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
     if (!loc->map.load(loc->file, err)) return nullptr;
     loc->map.name = name;
     loc->isFarm = (name == "Farm");
-    if (name == "FarmHouse") {   // the original room sits elsewhere in the bigger houses: follow the door
-        houseDX = houseDY = 0;
-        if (houseLevel > 0)
-            if (const Warp* w = loc->map.warpTo("Farm")) { houseDX = w->x - 3; houseDY = w->y - 12; }
-    }
+
     loc->mineLevel = mineLevelOf(name);
     loc->initState();
     if (loc->map.outdoors) treesFromMap(*loc);
@@ -297,6 +293,7 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
     houseLevel = houseUpgradeDays = 0;
+    furniture = data.layout.furniture;
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -465,8 +462,13 @@ void Game::wakeUp() {
     const Layout& L = data.layout;
     if (hasMap(L.wakeMap)) {
         facing = FACE_DOWN;
-        loadLocation(L.wakeMap);   // (sets the bigger house's shift)
-        warpTo(L.wakeMap, L.wakeX + furnDX(L.wakeMap), L.wakeY + furnDY(L.wakeMap));
+        int wx = L.wakeX, wy = L.wakeY;
+        if (const FurniturePlacement* bed = bedIn(L.wakeMap)) {   // just below your bed
+            auto fd = data.furniture.find(bed->id);
+            wx = bed->x;
+            wy = bed->y + (fd != data.furniture.end() ? fd->second.boxH : 3);
+        }
+        warpTo(L.wakeMap, wx, wy);
     } else {
         cur = farm;
         facing = FACE_DOWN;
@@ -487,9 +489,9 @@ std::string Game::timeString(int minutes) {
 std::string Game::timeString() const { return timeString(timeOfDay); }
 
 bool Game::buildingAt(int x, int y) const {
-    for (auto& fp : data.layout.furniture) {
+    for (auto& fp : furniture) {
         if (fp.map != cur->name) continue;
-        int fx = fp.x + furnDX(fp.map), fy = fp.y + furnDY(fp.map);
+        int fx = fp.x, fy = fp.y;
         auto it = data.furniture.find(fp.id);
         if (it != data.furniture.end() && (it->second.type == "rug" || it->second.type == "painting" || it->second.type == "window"))
             continue;   // walk over rugs; wall hangings are on the wall
@@ -713,6 +715,27 @@ bool Game::sellSlot(int i) {
 
 // ------------------------------------------------------------ actions
 
+const FurniturePlacement* Game::bedIn(const std::string& map) const {
+    for (auto& fp : furniture) {
+        if (fp.map != map) continue;
+        auto fd = data.furniture.find(fp.id);
+        if (fd != data.furniture.end() && fd->second.type == "bed") return &fp;
+    }
+    return nullptr;
+}
+
+bool Game::houseDoor(int level, int& x, int& y) const {
+    std::string p = level <= 0 ? "maps/FarmHouse.smap" : "maps/FarmHouse" + std::to_string(std::min(level, 2)) + ".smap";
+    if (!data.vfs.exists(p)) return false;
+    TileMap m;
+    if (!m.load(data.vfs.path(p), nullptr)) return false;
+    const Warp* w = m.warpTo("Farm");
+    if (!w) return false;
+    x = w->x;
+    y = w->y;
+    return true;
+}
+
 bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap; }
 
 bool Game::tryInteract(int tx, int ty) {
@@ -794,8 +817,13 @@ bool Game::tryInteract(int tx, int ty) {
         }
     }
     const Layout& L = data.layout;
-    int bx = L.bedX + furnDX(L.bedMap), by = L.bedY + furnDY(L.bedMap);
-    if (cur->name == L.bedMap && tx >= bx && tx < bx + L.bedW && ty >= by && ty < by + L.bedH) {
+    int bx = L.bedX, by = L.bedY, bw = L.bedW, bh = L.bedH;
+    if (const FurniturePlacement* bed = bedIn(cur->name)) {   // the bed where it actually is
+        auto fd = data.furniture.find(bed->id);
+        bx = bed->x; by = bed->y;
+        if (fd != data.furniture.end()) { bw = fd->second.boxW; bh = fd->second.boxH; }
+    }
+    if (cur->name == L.bedMap && tx >= bx && tx < bx + bw && ty >= by && ty < by + bh) {
         goToBed();
         return true;
     }
@@ -1272,6 +1300,10 @@ bool Game::goToBed() {
         say("You married " + spouse + "! They've moved into your house.");
     }
     if (houseUpgradeDays > 0 && --houseUpgradeDays == 0) {
+        int ox, oy, nx, ny;
+        if (houseDoor(houseLevel, ox, oy) && houseDoor(houseLevel + 1, nx, ny))
+            for (auto& fp : furniture)
+                if (fp.map == "FarmHouse") { fp.x += nx - ox; fp.y += ny - oy; }
         houseLevel++;
         locations.erase("FarmHouse");   // the bigger house loads next time
         say(houseLevel == 1 ? "Robin finished your house: you have a kitchen now!" : "Robin finished your house upgrade!");
@@ -1317,7 +1349,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 20;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 21;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1335,6 +1367,7 @@ static const uint32_t SAVE_VERSION = 20;   // 2: villager friendships, 3: events
                                           // 18: item quality
                                           // 19: house upgrades
                                           // 20: dating, engagement, marriage
+                                          // 21: furniture
 
 namespace {
 struct W {
@@ -1516,6 +1549,8 @@ bool Game::save(const std::string& path) const {
     w.i32(weddingDay);
     w.u32((uint32_t)dating.size());
     for (auto& d : dating) w.str(d);
+    w.u32((uint32_t)furniture.size());
+    for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
     // item quality: inventory, shipped, then each chest / machine in order
     for (auto& s : inv) w.u8(s.quality);
     w.u32((uint32_t)shipped.size());
@@ -1854,6 +1889,21 @@ bool Game::load(const std::string& path, std::string* err) {
         weddingDay = r.i32();
         uint32_t nd = r.u32();
         for (uint32_t k = 0; k < nd && r.ok && k < 100; k++) dating.insert(r.str());
+    }
+    furniture = data.layout.furniture;
+    if (version >= 21 && r.ok) {
+        furniture.clear();
+        uint32_t nf = r.u32();
+        for (uint32_t k = 0; k < nf && r.ok && k < 5000; k++) {
+            FurniturePlacement fp;
+            fp.map = r.str(); fp.id = r.i32(); fp.x = r.i32(); fp.y = r.i32();
+            furniture.push_back(fp);
+        }
+    } else if (houseLevel > 0) {   // older saves: the starting furniture, moved into the bigger house's first room
+        int ox, oy, nx, ny;
+        if (houseDoor(0, ox, oy) && houseDoor(houseLevel, nx, ny))
+            for (auto& fp : furniture)
+                if (fp.map == "FarmHouse") { fp.x += nx - ox; fp.y += ny - oy; }
     }
     if (version >= 18 && r.ok) {
         for (auto& s : inv) s.quality = r.u8();
