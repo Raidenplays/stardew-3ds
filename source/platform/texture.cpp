@@ -63,22 +63,32 @@ bool Texture::load(const std::string& path) {
     return !pages.empty();
 }
 
+// Page data is stored bottom row first (converter flips it), and the GPU puts
+// the first stored row at t = 1, so image row y sits at t = y / ph.
 void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
                    const C2D_ImageTint* tint, float scale) const {
+    // A sprite can straddle the seam between two 1024px pages (e.g. the title
+    // mountains on Cursors), so draw the part that falls in each page.
     for (const TexPage& p : pages) {
-        if (sy < p.y0 || sy + sh > p.y0 + p.h || sx < p.x0 || sx + sw > p.x0 + p.w) continue;
-        float ly = (float)(sy - p.y0), lx = (float)(sx - p.x0);
+        int x0 = sx > p.x0 ? sx : p.x0, y0 = sy > p.y0 ? sy : p.y0;
+        int x1 = sx + sw < p.x0 + p.w ? sx + sw : p.x0 + p.w;
+        int y1 = sy + sh < p.y0 + p.h ? sy + sh : p.y0 + p.h;
+        if (x1 <= x0 || y1 <= y0) continue;
+        int pw = x1 - x0, ph = y1 - y0;
+        float lx = (float)(x0 - p.x0), ly = (float)(y0 - p.y0);
         Tex3DS_SubTexture sub;
-        sub.width = (u16)sw;
-        sub.height = (u16)sh;
-        float l = lx / p.pw, r = (lx + sw) / p.pw;
+        sub.width = (u16)pw;
+        sub.height = (u16)ph;
+        float l = lx / p.pw, r = (lx + pw) / p.pw;
         sub.left = flipX ? r : l;
         sub.right = flipX ? l : r;
-        sub.top = 1.0f - ly / p.ph;
-        sub.bottom = 1.0f - (ly + sh) / p.ph;
+        sub.top = ly / p.ph;
+        sub.bottom = (ly + ph) / p.ph;
+        // where this piece lands on screen (mirrored across the sprite if flipped)
+        float ox = flipX ? (float)((sx + sw) - x1) : (float)(x0 - sx);
+        float oy = (float)(y0 - sy);
         C2D_Image img = {const_cast<C3D_Tex*>(&p.tex), &sub};
-        C2D_DrawImageAt(img, dx, dy, 0.5f, tint, scale, scale);
-        return;
+        C2D_DrawImageAt(img, dx + ox * scale, dy + oy * scale, 0.5f, tint, scale, scale);
     }
 }
 
@@ -92,8 +102,8 @@ void Texture::drawRotated(int sx, int sy, int sw, int sh, float cx, float cy, fl
         sub.height = (u16)sh;
         sub.left = lx / p.pw;
         sub.right = (lx + sw) / p.pw;
-        sub.top = 1.0f - ly / p.ph;
-        sub.bottom = 1.0f - (ly + sh) / p.ph;
+        sub.top = ly / p.ph;
+        sub.bottom = (ly + sh) / p.ph;
         C2D_Image img = {const_cast<C3D_Tex*>(&p.tex), &sub};
         C2D_DrawImageAtRotated(img, cx, cy, 0.5f, radians, tint, 1.0f, 1.0f);
         return;
