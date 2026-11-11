@@ -652,7 +652,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         if (fp.map != g.location().name) continue;
         auto fd = g.data.furniture.find(fp.id);
         int bh = fd != g.data.furniture.end() ? fd->second.boxH : 1;
-        items.push_back({(float)((fp.y + bh) * TILE) - 1, 5, (int)i, 0});
+        bool flat = fd != g.data.furniture.end() && fd->second.type == "rug";   // rugs lie under everything
+        items.push_back({flat ? -1000.0f : (float)((fp.y + bh) * TILE) - 1, 5, (int)i, 0});
     }
     std::stable_sort(items.begin(), items.end(),
                      [](const DrawItem& a, const DrawItem& b) { return a.sortY < b.sortY; });

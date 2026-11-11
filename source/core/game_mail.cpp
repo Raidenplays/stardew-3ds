@@ -138,6 +138,7 @@ Game::Letter Game::parseLetter(const std::string& key, const std::string& raw, c
         text.erase(a, b + 2 - a);
     }
     // the farmer's name, line breaks
+    text = fillTokens(text);
     for (size_t p; (p = text.find('@')) != std::string::npos;) text.replace(p, 1, farmer);
     L.text = text;
     return L;

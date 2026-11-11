@@ -432,6 +432,15 @@ void Game::growSoils(Location& loc, bool newSeason, bool anySeason) {
 }
 
 void Game::startDay() {
+    setDialogueToken("%farm%", me.farm);
+    setDialogueToken("%farm", me.farm);         // the game's own form ("This is %farm farm.")
+    setDialogueToken("%spouse", spouse.empty() ? "your spouse" : spouse);
+    setDialogueToken("%pet", "your pet");
+    setDialogueToken("%name%", me.name);
+    setDialogueToken("%spouse%", spouse.empty() ? "your spouse" : spouse);
+    setDialogueToken("%pet%", "your pet");
+    setDialogueToken("%year%", std::to_string(year));
+    setDialogueToken("%season%", seasonName(season));
     npcsStartDay();
     timeOfDay = DAY_START;
     clockAcc = 0;
@@ -481,6 +490,8 @@ bool Game::buildingAt(int x, int y) const {
     for (auto& fp : data.layout.furniture) {
         if (fp.map != cur->name) continue;
         auto it = data.furniture.find(fp.id);
+        if (it != data.furniture.end() && (it->second.type == "rug" || it->second.type == "painting" || it->second.type == "window"))
+            continue;   // walk over rugs; wall hangings are on the wall
         int bw = it != data.furniture.end() ? it->second.boxW : 1;
         int bh = it != data.furniture.end() ? it->second.boxH : 1;
         if (x >= fp.x && x < fp.x + bw && y >= fp.y && y < fp.y + bh) return true;

@@ -54,6 +54,9 @@ struct DialoguePage {
 };
 
 std::vector<DialoguePage> parseDialogue(const std::string& raw, const std::string& farmerName);
+// %farm%, %spouse%, %pet%... filled into dialogue, events and mail (the game keeps them current)
+void setDialogueToken(const std::string& token, const std::string& value);
+std::string fillTokens(std::string s);
 
 // Which dialogue key to use when talking today ("" = none found).
 std::string pickDialogueKey(const NpcDef& npc, const ScheduleContext& ctx, bool introduced);

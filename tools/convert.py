@@ -208,6 +208,17 @@ def farmer_bob(content, out_dir):
                 f.write(f"{r * 6 + c}\t{tops[c] - tops[0]}\n")
 
 
+# type -> ((sprite w, h), (footprint w, h)) in tiles, for data that says -1
+FURNITURE_SIZES = {
+    "chair": ((1, 2), (1, 1)), "bench": ((2, 2), (2, 1)), "couch": ((3, 2), (3, 1)),
+    "armchair": ((2, 2), (2, 1)), "dresser": ((2, 2), (2, 1)), "long table": ((5, 3), (5, 2)),
+    "painting": ((2, 2), (2, 2)), "lamp": ((1, 3), (1, 1)), "decor": ((1, 2), (1, 1)),
+    "bookcase": ((2, 3), (2, 1)), "table": ((2, 3), (2, 2)), "rug": ((3, 2), (3, 2)),
+    "window": ((1, 2), (1, 2)), "fireplace": ((2, 5), (2, 1)), "torch": ((1, 2), (1, 1)),
+    "sconce": ((1, 2), (1, 1)),
+}
+
+
 def write_furniture(content, out_dir):
     furn = _load_json(content, "Data/Furniture.json")
     n = 0
@@ -224,8 +235,10 @@ def write_furniture(content, out_dir):
                     return int(a), int(b)
                 except ValueError:
                     return dflt
-            sw, sh = wh(parts[2], (1, 2))
-            bw, bh = wh(parts[3], (1, 1))
+            # "-1": the type's usual size (sprite, then footprint)
+            dflt = FURNITURE_SIZES.get(parts[1].strip().lower(), ((1, 2), (1, 1)))
+            sw, sh = wh(parts[2], dflt[0])
+            bw, bh = wh(parts[3], dflt[1])
             f.write(f"{fid}\t{_clean(parts[0])}\t{_clean(parts[1])}\t{sw}\t{sh}\t{bw}\t{bh}\n")
             n += 1
     print(f"  furniture.dat: {n} pieces")
@@ -1670,6 +1683,13 @@ bed FarmHouse 9 5 2 3
 # furniture <map> <id> <tileX> <tileY>   id from Data/Furniture.json; tile = top-left of
 #                                        its footprint. 2048 is the starter bed.
 furniture FarmHouse 2048 9 5
+furniture FarmHouse 1451 4 7
+furniture FarmHouse 1792 6 3
+furniture FarmHouse 1466 1 3
+furniture FarmHouse 1120 4 6
+furniture FarmHouse 0 3 6
+furniture FarmHouse 1543 3 1
+furniture FarmHouse 1376 1 8
 # wake <map> <tileX> <tileY>          where you wake up (nearest open tile is used)
 wake FarmHouse 9 8
 #

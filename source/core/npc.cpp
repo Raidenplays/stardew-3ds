@@ -270,7 +270,26 @@ static std::string cleanText(std::string s, const std::string& farmer, int* port
     return trim(out);
 }
 
-std::vector<DialoguePage> parseDialogue(const std::string& raw, const std::string& farmer) {
+static std::vector<std::pair<std::string, std::string>>& tokens() {
+    static std::vector<std::pair<std::string, std::string>> t;
+    return t;
+}
+
+void setDialogueToken(const std::string& token, const std::string& value) {
+    for (auto& kv : tokens())
+        if (kv.first == token) { kv.second = value; return; }
+    tokens().push_back({token, value});
+}
+
+std::string fillTokens(std::string s) {
+    if (s.find('%') == std::string::npos) return s;
+    for (auto& kv : tokens())
+        for (size_t p; (p = s.find(kv.first)) != std::string::npos;) s.replace(p, kv.first.size(), kv.second);
+    return s;
+}
+
+std::vector<DialoguePage> parseDialogue(const std::string& raw0, const std::string& farmer) {
+    std::string raw = fillTokens(raw0);
     std::vector<DialoguePage> pages;
     std::vector<std::string> segs = split(raw, '#');
     for (size_t i = 0; i < segs.size(); i++) {

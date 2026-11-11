@@ -296,6 +296,7 @@ static bool btnEnabled(const TitleUi& t, int i) { return i == 0 || i == 3 || (i 
 
 void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     if (t.screen == TS_SPLASH) { drawSplash(c, t); return; }
+    if (t.screen == TS_DONE_CONTINUE || t.screen == TS_EXIT) { c.rect(0, 0, 400, 240, RGBA(0, 0, 0)); return; }   // leaving: not the creator
     c.rect(0, 0, 400, 240, RGBA(0x7C, 0xB8, 0xE8));   // sky
     c.rect(0, 170, 400, 70, RGBA(0x5C, 0x9C, 0x3C));  // hill
     c.rect(0, 168, 400, 4, RGBA(0x4A, 0x82, 0x30));
@@ -345,6 +346,7 @@ static void arrows(Canvas& c, float y, bool on) {
 void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 320, 240, BG);
     if (t.screen == TS_SPLASH) { c.rect(0, 0, 320, 240, RGBA(255, 255, 255)); return; }   // white, like the top
+    if (t.screen == TS_DONE_CONTINUE || t.screen == TS_EXIT) { c.rect(0, 0, 320, 240, RGBA(0, 0, 0)); return; }
     if (t.screen == TS_TITLE && officialTitle(c)) {
         drawScene(c, t, sceneCam(t), true);
         // New, Load, Co-op, Exit pop in one by one; the lit row when picked
