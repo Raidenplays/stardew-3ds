@@ -725,6 +725,17 @@ int main(int argc, char** argv) {
         printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
                tot[3] / N, tot[4] / N);
         shot(c, g, ui, "where_" + whereMap);
+        if (getenv("FEST")) {   // FEST=1 with --day=N: walk into today's festival
+            if (g.visitFestival()) {
+                const Festival* fe = g.festivalToday();
+                printf("  festival: %s in %s\n", fe->name.c_str(), g.location().name.c_str());
+                Input right; right.mx = 1;
+                step(g, ui, right, 150);
+                Input down; down.my = 1;
+                step(g, ui, down, 60);
+                shot(c, g, ui, "festival");
+            }
+        }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");
             auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];

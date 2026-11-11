@@ -131,6 +131,7 @@ bool Game::hasMap(const std::string& name) const {
 }
 
 bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
+    if (cur && festivalWarp(name)) return true;
     if (name == "Farm" && cur)   // leaving a farm building: out its own door
         if (FarmBuilding* fb = buildingForInterior(cur->name))
             if (const BuildingType* bt = typeOf(*fb)) {
@@ -475,6 +476,14 @@ void Game::startDay() {
     setDialogueToken("%year%", std::to_string(year));
     setDialogueToken("%season%", seasonName(season));
     npcsStartDay();
+    festivalActive = -1;
+    festivalDone = false;
+    if (const Festival* fe = festivalToday())
+        if (morningNote.empty()) {
+            int h = fe->start / 100;
+            morningNote = "Today is the " + fe->name + "! It starts at " + std::to_string(h % 12 == 0 ? 12 : h % 12) +
+                          (h < 12 ? "am" : "pm") + (fe->loc == "Town" ? " in town." : fe->loc == "Beach" ? " on the beach." : " in the forest.");
+        }
     timeOfDay = DAY_START;
     clockAcc = 0;
     energy = MAX_ENERGY;
@@ -1216,7 +1225,7 @@ void Game::update(float dt, const Input& in) {
         return;
     }
 
-    clockAcc += dt;
+    if (festivalActive < 0) clockAcc += dt;   // time stands still at a festival
     while (clockAcc >= SECONDS_PER_10MIN) {
         clockAcc -= SECONDS_PER_10MIN;
         timeOfDay += 10;
@@ -1227,7 +1236,8 @@ void Game::update(float dt, const Input& in) {
         }
     }
 
-    npcsUpdate(dt);
+    if (festivalActive < 0) npcsUpdate(dt);
+    else festivalUpdate(dt);
     monstersUpdate(dt);
     animalsUpdate(dt);
     if (!cur) return;   // knocked out mid-update can't leave us nowhere, but be safe

@@ -331,6 +331,7 @@ void Game::marriageTalk(NpcState& n, std::vector<DialoguePage>& pages) {
 }
 
 void Game::talkTo(NpcState& n) {
+    if (festivalTalk(n)) return;
     // turn to face the player
     float dx = px - n.x, dy = py - n.y;
     if (std::fabs(dx) > std::fabs(dy)) n.facing = dx > 0 ? FACE_RIGHT : FACE_LEFT;
@@ -434,6 +435,7 @@ void Game::dialogueChoose(int i) {
         pendingChoice.clear();
         p.choices.clear();
         dialogueNext();
+        if (what == "festival" && ch.responseKey == "festival:go") { festivalMain(); return; }
         if (what == "elevator" && ch.responseKey.rfind("mine:", 0) == 0) {
             int lv = atoi(ch.responseKey.c_str() + 5);
             if (lv <= 0) { sfx("stairsdown"); warpTo("Mine", 17, 4, false); }

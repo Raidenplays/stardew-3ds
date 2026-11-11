@@ -286,6 +286,13 @@ static const int DAY_END = 26 * 60;      // 2:00 am -> pass out
 static const float SECONDS_PER_10MIN = 7.0f;
 
 // Something Robin built on the farm (or is building).
+// Data/Festivals, as the converter indexed it
+struct Festival {
+    std::string key, name, loc, map[2];   // map[1]: the even-year layout
+    int season = 0, day = 0, start = 900, end = 1400;
+    int sx[2] = {-1, -1}, sy[2] = {-1, -1}, sdir[2] = {2, 2};
+};
+
 struct FarmBuilding {
     int id = 0;
     std::string type;             // Data/Buildings name
@@ -647,6 +654,23 @@ public:
     bool collectBuilding(FarmBuilding& b, const char* empty);
     void junimosHarvest();
     void nightEvents();
+    // ---- festivals (game_festival.cpp) ----
+    std::vector<Festival> festivals;
+    bool festivalsLoaded = false;
+    int festivalActive = -1;                 // index into festivals while you're at one
+    bool festivalDone = false;               // been (or it's over) today
+    std::map<std::string, std::string> festLines;
+    float eggHunt = 0;                       // seconds left in the egg hunt
+    int eggsFound = 0;
+    void loadFestivals();
+    const Festival* festivalToday();
+    bool festivalWarp(const std::string& name);
+    void enterFestival(const Festival& f);
+    bool festivalTalk(NpcState& n);
+    void festivalMain();
+    void festivalUpdate(float dt);
+    void endFestival();
+    bool visitFestival();                    // (previews, tests) start today and walk into its festival
     bool hasEvent(const std::string& loc, const std::string& id) const;
     bool farmSpotFree(int x, int y, int w, int h) const;
     bool randomFarmSpot(int w, int h, int& ox, int& oy);

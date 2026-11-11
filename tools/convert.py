@@ -1659,6 +1659,87 @@ def write_events(content, out_dir):
     print(f"  {n} events in {files} locations")
 
 
+def _festival_actors(content, map_name):
+    """Who stands where on a festival map: its Set-Up and MainEvent layers hold one tile per villager
+    (tile index / 4 = Data/Characters FestivalVanillaActorIndex, index % 4 = which way they face)."""
+    tmx = os.path.join(content, "Maps", map_name + ".tmx")
+    out = []
+    if not os.path.isfile(tmx):
+        return out
+    try:
+        chars = _load_json(content, "Data/Characters.json")
+    except Exception:
+        return out
+    by_idx = {}
+    for name, cd in chars.items():
+        if isinstance(cd, dict) and cd.get("FestivalVanillaActorIndex", -1) not in (None, -1):
+            by_idx[int(cd["FestivalVanillaActorIndex"])] = name
+    root = ET.parse(tmx).getroot()
+    w, h = int(root.get("width")), int(root.get("height"))
+    firsts = sorted(int(t.get("firstgid")) for t in root.findall("tileset"))
+    for lay in root.findall("layer"):
+        lname = lay.get("name") or ""
+        if lname not in ("Set-Up", "MainEvent"):
+            continue
+        lw, lh = int(lay.get("width", w)), int(lay.get("height", h))
+        raw = _decode_layer_data(lay.find("data"), lw, lh)
+        for i, gid in enumerate(raw):
+            gid &= 0x1FFFFFFF
+            if not gid:
+                continue
+            first = max([f for f in firsts if f <= gid] or [1])
+            idx = gid - first
+            who = by_idx.get(idx // 4)
+            if who:
+                out.append((lname, who, i % lw, i // lw, idx % 4))
+    return out
+
+
+def write_festivals(content, out_dir):
+    src = os.path.join(content, "Data", "Festivals")
+    if not os.path.isdir(src):
+        return
+    os.makedirs(os.path.join(out_dir, "festivals"), exist_ok=True)
+    n = 0
+    with open(os.path.join(out_dir, "festivals.dat"), "w", encoding="utf-8") as idx:
+        for fn in sorted(os.listdir(src)):
+            m = re.match(r"^(spring|summer|fall|winter)(\d+)\.json$", fn)
+            if not m:
+                continue
+            try:
+                d = json.load(open(os.path.join(src, fn), encoding="utf-8-sig"))
+            except ValueError:
+                continue
+            cond = str(d.get("conditions", "")).split("/")
+            times = (cond[1].split() if len(cond) > 1 else []) + ["900", "1400"]
+            maps, starts = [], []
+            for key in ("set-up", "set-up_y2"):
+                sc = str(d.get(key, ""))
+                mm = re.search(r"changeToTemporaryMap ([^/\s]+)", sc)
+                maps.append(mm.group(1).strip('"/') if mm else "")
+                fm = re.search(r"/farmer (-?\d+) (-?\d+) (\d)", sc)
+                starts.append(f"{fm.group(1)} {fm.group(2)} {fm.group(3)}" if fm else "-1 -1 2")
+            if not maps[1]:
+                maps[1], starts[1] = maps[0], starts[0]
+            music = str(d.get("set-up", "")).split("/")[0]
+            key = m.group(1) + m.group(2)
+            idx.write("\t".join([key, str(SEASONS.index(m.group(1))), m.group(2), _flat(d.get("name", key)), cond[0],
+                                 times[0], times[1], maps[0], maps[1], starts[0], starts[1], _flat(music)]) + "\n")
+            with open(os.path.join(out_dir, "festivals", key + ".dat"), "w", encoding="utf-8") as f:
+                for yr, mp in enumerate(maps):
+                    for (layer, who, x, y, facing) in _festival_actors(content, mp):
+                        f.write(f"actor\t{yr + 1}\t{layer}\t{who}\t{x}\t{y}\t{facing}\n")
+                for k, v in d.items():
+                    if k in ("name", "conditions") or not isinstance(v, str):
+                        continue
+                    if k.startswith("set-up") or "/" in v and re.match(r"^(pause|playSound|globalFade|move|speak) ", v):
+                        f.write(f"script\t{_flat(k)}\t{_flat(v)}\n")
+                    else:
+                        f.write(f"line\t{_flat(k)}\t{_flat(v)}\n")
+            n += 1
+    print(f"  {n} festivals")
+
+
 def write_npcs(content, out_dir, textures):
     defs = _load_npc_defs(content)
     tastes = _load_json(content, "Data/NPCGiftTastes.json") if os.path.isfile(
@@ -2251,6 +2332,7 @@ def main():
     write_data(content, os.path.join(out_root, "data"))
     print("Villagers...")
     write_npcs(content, os.path.join(out_root, "data"), textures)
+    write_festivals(content, os.path.join(out_root, "data"))
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
     print("Sound...")
