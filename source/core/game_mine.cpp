@@ -219,6 +219,32 @@ void Game::swingWeapon(const ToolDef& w) {
     }
 }
 
+// Clint cracks the geode in your hand: half the time plain resources, otherwise a mineral.
+bool Game::crackGeode() {
+    Slot& s = inv[selected];
+    if (s.type != SLOT_OBJECT) return false;
+    auto it = data.geodes.find(s.id);
+    if (it == data.geodes.end()) return false;
+    if (money < 25) { say("Opening a geode costs 25g."); return true; }
+    const GameData::GeodeDef& gd = it->second;
+    int item = -1, n = 1;
+    if (gd.basics && (rand32() % 2 || gd.items.empty())) {
+        static const int plain[3][5] = {{390, 330, 378, 382, 86}, {390, 330, 380, 382, 84}, {390, 380, 384, 382, 82}};
+        int row = s.id == 536 ? 1 : s.id == 537 ? 2 : s.id == 749 ? (int)(rand32() % 3) : 0;
+        item = plain[row][rand32() % 5];
+        n = item == 390 || item == 330 ? 1 + (int)(rand32() % 5) : item == 382 || item >= 378 ? 1 + (int)(rand32() % 3) : 1;
+    } else if (!gd.items.empty()) {
+        for (int tries = 0; tries < 8 && (item < 0 || !data.object(item)); tries++) item = gd.items[rand32() % gd.items.size()];
+    }
+    if (item < 0 || !data.object(item)) return false;
+    money -= 25;
+    if (--s.count <= 0) s = Slot();
+    sfx("hammer");
+    if (addItem(item, n)) itemFlies(item, px, py - 24, n);
+    say("The geode had " + (n > 1 ? std::to_string(n) + " " : std::string("")) + data.object(item)->name + " inside!");
+    return true;
+}
+
 void Game::enterMine(int level) {
     if (level <= 0) {
         warpTo("Mine", ENTRANCE_X, ENTRANCE_Y, false);

@@ -253,6 +253,8 @@ public:
     std::vector<NpcDef> npcs;
     std::unordered_map<std::string, NpcAnim> npcAnims;
     std::unordered_map<std::string, MonsterDef> monsters;
+    struct GeodeDef { bool basics = false; std::vector<int> items; };   // basics: stone, ore, coal...
+    std::unordered_map<int, GeodeDef> geodes;
     const MonsterDef* monster(const std::string& name) const {
         auto it = monsters.find(name);
         return it == monsters.end() ? nullptr : &it->second;
