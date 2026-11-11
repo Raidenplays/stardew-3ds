@@ -450,6 +450,7 @@ int main(int argc, char** argv) {
         g.teleport(loc, 10, 10);
         if (!g.cutscene.active && !g.startEvent(loc, key, script)) { fprintf(stderr, "couldn't start\n"); return 1; }
         int dialogues = 0, frames = 0;
+        bool heldShot = false;
         float sinceShot = 99;
         while (g.cutscene.active && frames < 60 * 600) {
             if (g.dialogue.active) {
@@ -466,8 +467,11 @@ int main(int argc, char** argv) {
                 shot(c, g, ui, "event_" + std::to_string(g_shot + 1));
                 sinceShot = 0;
             }
-            if (g_shot >= 10) break;
+            if (!g.cutscene.aboveHead.empty() && !heldShot) { heldShot = true; shot(c, g, ui, "event_item_above_head"); }
+            if (g_shot >= 14 || frames > 60 * 400) break;
         }
+        for (const Slot& s : g.inv)
+            if (s.type == SLOT_TOOL && data.tool(s.id)) printf("  has tool: %s\n", data.tool(s.id)->name.c_str());
         printf("  cutscene %s: %d dialogue pages, %d frames, %s\n", eventArg.c_str(), dialogues, frames,
                g.cutscene.active ? "still running (stopped capturing)" : "finished");
         return 0;

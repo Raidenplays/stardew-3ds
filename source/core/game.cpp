@@ -1340,6 +1340,8 @@ bool Game::load(const std::string& path, std::string* err) {
     }
     fclose(f);
     if (!r.ok) return false;
+    // saves from before events could hand out items: Willy's rod was never given
+    if (eventsSeen.count("739330") && toolLevel(TOOL_ROD) < 0) awardPrize("rod");
     startDay();
     wakeUp();
     return true;

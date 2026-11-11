@@ -182,6 +182,7 @@ struct Cutscene {
     int retFacing = 0;
     std::string after;               // "newDay", "warpOut" ...
     std::string music = "continue"; // the script's track; "continue" = keep what's playing
+    std::string aboveHead;           // itemAboveHead: "rod", "pan" or an object id held up
 };
 
 struct Input {
@@ -306,6 +307,8 @@ public:
     int itemBasePrice(const Slot& s) const;
     bool addSlot(Slot s);                 // stacks; false = no room (nothing added)
     bool addItem(int objId, int count);
+    bool giveTool(const std::string& key);   // by Data/Tools key (BambooPole, Pan...)
+    void awardPrize(const std::string& what); // event awardFestivalPrize / gifts
     std::map<std::string, std::vector<Placed>> placed;   // by location name
     const std::vector<Placed>& placedHere() const;
     Placed* placedAt(int x, int y);

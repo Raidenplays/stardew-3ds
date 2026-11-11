@@ -1,6 +1,7 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -495,6 +496,26 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     frame = a.animLoop ? a.anim[k % a.anim.size()] : a.anim[std::min(k, a.anim.size() - 1)];
                 }
                 if (a.name == "farmer") {
+                    if (!cs.aboveHead.empty()) {
+                        // holding a gift up: both arms raised (farmer_base frame 57), the item over the head
+                        drawFarmer(c, g, ax, ay, FACE_DOWN, false, 0, 57);
+                        Slot s;
+                        const std::string& h = cs.aboveHead;
+                        for (size_t ti = 0; ti < g.data.tools.size(); ti++) {
+                            const std::string& k = g.data.tools[ti].key;
+                            if ((h == "rod" && k == "BambooPole") || (h == "pan" && k == "Pan")) {
+                                s.type = SLOT_TOOL;
+                                s.id = (int)ti;
+                            }
+                        }
+                        if (s.type != SLOT_TOOL && !h.empty() && isdigit((unsigned char)h[0])) {
+                            s.type = SLOT_OBJECT;
+                            s.id = atoi(h.c_str());
+                        }
+                        s.count = 1;
+                        if (s.type != SLOT_EMPTY) slotIcon(c, g, s, std::floor(ax - 8), std::floor(ay - 50));
+                        break;
+                    }
                     drawFarmer(c, g, ax, ay, a.facing, a.moving, a.walkTime, frame);
                 } else {
                     int f = frame >= 0 ? frame : (a.facing & 3) * 4 + (a.moving ? ((int)(a.walkTime * 6)) & 3 : 0);

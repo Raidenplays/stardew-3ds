@@ -1,6 +1,7 @@
 // Cutscenes: runs event scripts from data/events/<map>.dat.
 // Script format and precondition codes follow the public modding docs.
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -536,6 +537,23 @@ bool Game::eventStep(const std::string& raw) {
     }
     if (c == "addMailReceived") {   // just a flag
         mailReceived.insert(arg(1));
+        return true;
+    }
+    if (c == "itemAboveHead") {     // hold something up (Willy's rod, the copper pan...)
+        cs.aboveHead = arg(1).empty() ? "item" : arg(1);
+        sfx("getNewSpecialItem");
+        return true;
+    }
+    if (c == "awardFestivalPrize") {
+        awardPrize(arg(1));
+        cs.aboveHead.clear();
+        return true;
+    }
+    if (c == "addItem") {           // addItem <id> [count]
+        std::string id = arg(1);
+        if (id.size() > 3 && id[0] == '(') id = id.substr(id.find(')') + 1);
+        int n = w.size() > 2 ? std::max(1, iarg(2)) : 1;
+        if (!id.empty() && isdigit((unsigned char)id[0])) addItem(atoi(id.c_str()), n);
         return true;
     }
     if (c == "skippable") {
