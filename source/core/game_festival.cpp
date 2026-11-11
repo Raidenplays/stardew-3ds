@@ -58,6 +58,7 @@ const Festival* Game::festivalToday() {
 
 // Called from warpTo: true if the festival took over (or turned you away).
 bool Game::festivalWarp(const std::string& name) {
+    if (cutscene.active) return false;   // a cutscene moving you around isn't you walking in
     if (festivalActive >= 0) {           // walking off the festival grounds ends your day there
         if (name != cur->name) { endFestival(); return true; }
         return false;

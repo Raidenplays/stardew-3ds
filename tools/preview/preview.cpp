@@ -540,6 +540,7 @@ int main(int argc, char** argv) {
     }
     if (animalsArg) {   // Robin builds a coop and a barn, Marnie sells animals, a look inside
         g.money = 100000;
+        g.invSlots = INV_SIZE;
         g.addItem(388, 999); g.addItem(390, 999);
         g.teleport("Farm", 60, 20);
         for (auto& d : const_cast<Location&>(g.location()).debris) d = DEB_NONE;   // a cleared farm

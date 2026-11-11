@@ -640,6 +640,36 @@ bool Game::eventStep(const std::string& raw) {
             }
         return true;
     }
+    if (c == "addQuest") { addQuest(arg(1)); return true; }
+    if (c == "removeQuest") {
+        for (size_t i = 0; i < quests.size(); i++)
+            if (quests[i].id == arg(1)) { quests.erase(quests.begin() + i); break; }
+        return true;
+    }
+    if (c == "addCraftingRecipe") { mailReceived.insert("craft:" + arg(1)); return true; }
+    if (c == "addCookingRecipe") { mailReceived.insert("cook:" + arg(1)); return true; }
+    if (c == "removeItem") {
+        int id = data.objectIdFor(arg(1));
+        if (id >= 0 && countItem(id) > 0) takeItem(id, std::max(1, iarg(2)));
+        return true;
+    }
+    if (c == "money") { money = std::max(0, money + iarg(1)); return true; }
+    if (c == "addObject" || c == "addBigProp" || c == "addLantern" || c == "addConversationTopic" || c == "makeInvisible" ||
+        c == "screenFlash" || c == "eyes" || c == "glow" || c == "ambientLight" || c == "farmerEat" || c == "playPetSound" ||
+        c == "specificTemporarySprite" || c == "temporarySprite" || c == "removeSprite" || c == "stopSwimming" ||
+        c == "swimming" || c == "changeYSourceRectOffset" || c == "resetVariable" || c == "addWorldState" || c == "dump" ||
+        c == "broadcastEvent" || c == "removeTile" || c == "null" || c == "doAction" || c == "updateMinigame" || c == "cutscene")
+        return true;   // set dressing the 3DS scene does without
+    if (c == "changeToTemporaryMap") {
+        std::string loc = arg(1);
+        if (!loc.empty() && hasMap(loc)) {
+            warpTo(loc, 10, 10);
+            cs.location = loc;
+            fade = 0;
+            cs.fadeTarget = 0;
+        }
+        return true;
+    }
     if (c == "changeLocation") {
         std::string loc = arg(1);
         if (!loc.empty() && loc != cur->name) {
