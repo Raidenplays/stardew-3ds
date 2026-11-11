@@ -47,9 +47,13 @@ jobs:
       - name: Build the .cia (HOME Menu install, e.g. FBI's QR install)
         run: |
           (command -v curl && command -v unzip) || (apt-get update && apt-get install -y curl unzip)
-          curl -sSfL -o /tmp/bt.zip https://github.com/Steveice10/bannertool/releases/download/1.2.0/bannertool.zip
+          # bannertool moved from Steveice10 to diasurgical: find the current release
+          BT=$(curl -sSf https://api.github.com/repos/diasurgical/bannertool/releases/latest | grep -o 'https://[^"]*\.zip' | head -1)
+          echo "bannertool: $BT"
+          curl -sSfL -o /tmp/bt.zip "$BT"
           unzip -o -q /tmp/bt.zip -d /tmp/bt
-          install -m755 /tmp/bt/linux-x86_64/bannertool /usr/local/bin/bannertool
+          find /tmp/bt -type f | head -20
+          install -m755 "$(find /tmp/bt -type f -name bannertool -path '*linux*' | head -1)" /usr/local/bin/bannertool
           MR=$(curl -sSf https://api.github.com/repos/3DSGuy/Project_CTR/releases/latest | grep -o 'https://[^"]*makerom[^"]*ubuntu[^"]*\.zip' | head -1)
           echo "makerom: $MR"
           curl -sSfL -o /tmp/mr.zip "$MR"
