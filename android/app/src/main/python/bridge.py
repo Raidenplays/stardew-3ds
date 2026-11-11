@@ -32,6 +32,8 @@ def run(content, mods, out, logo, cb, tools_dir=""):
         sys.path.insert(0, tools_dir)
         for m in _CONVERTER_MODULES:
             sys.modules.pop(m, None)
+    import warnings
+    warnings.simplefilter("ignore", ResourceWarning)   # keep the log readable
     import convert
     args = ["convert.py", content, out, "--jobs=1"]   # no extra processes on a phone
     if mods:
