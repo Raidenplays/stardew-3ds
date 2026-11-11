@@ -444,6 +444,8 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
         } else if (k == TK_UP || k == TK_DOWN || k == TK_LEFT || k == TK_RIGHT) {
             t.cursor = t.cursor ? 0 : (t.hasSave ? 1 : 0);
         }
+        if ((k == TK_A || k == TK_START) && t.sound && (t.cursor == 0 || t.cursor == 3 || (t.cursor == 1 && t.hasSave)))
+            t.sound("select");
         if (k == TK_A || k == TK_START) {
             if (t.cursor == 0) t.screen = TS_CREATE;
             else if (t.cursor == 1 && t.hasSave) t.screen = TS_DONE_CONTINUE;

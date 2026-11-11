@@ -148,6 +148,7 @@ bool Game::craft(const Recipe& r) {
     addSlot(out);
     say("Crafted " + itemName(out));
     questCrafted(r.outBig, r.outId);
+    sfx("coin");
     return true;
 }
 

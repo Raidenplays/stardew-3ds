@@ -54,6 +54,7 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
     Tree* t = treeAt(tx, ty);
     if (!t) return false;
     t->shake = 0.25f;
+    sfx("axchop");
     if (t->stage < TREE_GROWN && !t->stump) {   // saplings come out in one go
         const TreeDef* d = data.trees.count(t->type) ? &data.trees.at(t->type) : nullptr;
         if (t->stage > 0 && d && d->seed >= 0) addItem(d->seed, 1);
@@ -79,6 +80,7 @@ bool Game::chopTree(int tx, int ty, int axeLevel) {
             if (so) msg += ", +" + std::to_string(n) + " " + so->name;
         }
         say(msg);
+        sfx("treecrack");
         gainXp(SK_FORAGING, 12);
         t->stump = true;
         t->health = STUMP_HEALTH;

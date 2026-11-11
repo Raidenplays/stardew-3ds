@@ -256,6 +256,10 @@ public:
     const BigDef* big(int id) const;
     bool isMachine(int bigId) const;
     std::unordered_map<std::string, std::string> locationNames;   // from Data/Locations
+    // Location music (Data/Locations Music / MusicDefault), data/music.dat
+    struct MusicEntry { std::string track; int from = 0, to = 2600; };   // hhmm
+    struct LocationMusic { std::string def; bool ignoreRain = false, townTheme = false; std::vector<MusicEntry> timed; };
+    std::unordered_map<std::string, LocationMusic> music;
     std::unordered_map<std::string, LocationForage> forage;
     std::vector<SpawnArea> spawnAreas;
     std::vector<int> farmerBob;    // per body frame: pixels the body drops

@@ -13,6 +13,9 @@
 #include "render/scene.h"
 #include "render/setupscreen.h"
 #include "setup/setup.h"
+#include "audio/audio.h"
+#include "core/music.h"
+#include "platform/audio_ndsp.h"
 #include "render/title.h"
 
 using namespace sv;
@@ -134,6 +137,12 @@ int main() {
         return 0;
     }
 
+    // ---- sound: your own XACT files in audio/ + mod music; silent if either is missing
+    NdspBackend soundOut;
+    audio::Engine sound;
+    sound.init(root, &soundOut);
+    MusicState musicState;
+
     // ---- mod loader: new/missing mods (or SELECT held at boot) open the mod screen
     ModScreen mods;
     hidScanInput();
@@ -194,12 +203,17 @@ int main() {
             return b == SWKBD_BUTTON_RIGHT ? std::string(buf) : cur;
         };
         if (hasSave) game.load(savePath);   // the title shows your farmer
+        title.sound = [&sound](const char* cue) { sound.play(cue); };
         u64 tLast = osGetTime();
         while (aptMainLoop() && (title.screen == TS_SPLASH || title.screen == TS_TITLE || title.screen == TS_CREATE)) {
             hidScanInput();
             u64 tNow = osGetTime();
-            titleTick(title, std::min(0.1f, (tNow - tLast) / 1000.0f));
+            float tdt = std::min(0.1f, (tNow - tLast) / 1000.0f);
+            titleTick(title, tdt);
             tLast = tNow;
+            // the title theme starts as the scene fades in, like the original
+            sound.music(title.screen == TS_SPLASH ? "" : "MainTheme");
+            sound.update(tdt);
             u32 k = hidKeysDown();
             if (k & KEY_UP) titleKey(title, data, TK_UP);
             if (k & KEY_DOWN) titleKey(title, data, TK_DOWN);
@@ -315,6 +329,13 @@ int main() {
 
         game.update(dt, in);
         if (sceneAfterUpdate(game, ui, savePath)) canvas.dropTextures();
+
+        // music for where you are, then this frame's sound effects
+        std::string want = chooseMusic(game, musicState, sound.currentMusic(), soundOut.musicPlaying());
+        if (want != KEEP_MUSIC) sound.music(want);
+        for (auto& cue : game.sounds) sound.play(cue);
+        game.sounds.clear();
+        sound.update(dt);
 
         uint32_t timeMs = (uint32_t)(now & 0xFFFFFFFF);
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);

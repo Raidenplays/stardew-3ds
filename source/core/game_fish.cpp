@@ -81,6 +81,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
             }
             energy = std::max(0, energy - CAST_ENERGY);
             f.state = FS_CAST;
+            sfx("cast");
             f.t = 0;
             return;
         }
@@ -104,6 +105,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                     return;
                 }
                 f.state = FS_BITE;
+                sfx("fishBite");
                 f.t = 0;
             }
             return;
@@ -112,6 +114,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                 auto fd = data.fish.find(f.fish);
                 if (fd == data.fish.end()) {   // junk and such: straight in
                     f.caught = true;
+                    sfx("jingle1");
                     f.state = FS_DONE;
                     f.t = 0;
                     addItem(f.fish, 1);
@@ -122,6 +125,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                     return;
                 }
                 f.state = FS_REEL;
+                sfx("FishHit");
                 f.t = 0;
                 f.barSize = 0.18f + 0.016f * skillLevel(SK_FISHING);
                 f.barPos = 0.0f;
@@ -167,6 +171,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
             else { f.progress -= (0.12f + diff * 0.2f) * dt; f.perfect = false; }
             if (f.progress >= 1.0f) {
                 f.caught = true;
+                sfx("jingle1");
                 f.size = d.minSize + (int)(frand(rand32()) * (d.maxSize - d.minSize + 1));
                 addItem(f.fish, 1);
                 questItem(f.fish, 1);
@@ -180,6 +185,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
             } else if (f.progress <= 0) {
                 say("The fish escaped");
                 f.caught = false;
+                sfx("fishEscape");
                 f.state = FS_DONE;
                 f.t = 0;
             }

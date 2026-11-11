@@ -278,7 +278,7 @@ class Pack:
             except ValueError:
                 return ""
         if low == "absolutefilepath":
-            return os.path.join(self.folder, arg)
+            return os.path.join(self.folder, arg.strip())
         if low == "firstvalidfile":
             for f in arg.split(","):
                 if sjson.ci_path(self.folder, f.strip()):

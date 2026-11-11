@@ -18,6 +18,22 @@ jobs:
           python3 tests/make_xnb_samples.py /tmp/xnbs
           g++ -std=c++17 -O2 -Wall -Isource tests/xnb_test.cpp source/setup/xnb.cpp source/setup/lzx.cpp source/setup/s3t_write.cpp -o /tmp/xnb_test
           /tmp/xnb_test /tmp/xnbs
+      - name: Sound (XACT reader, MS-ADPCM, engine)
+        run: |
+          python3 tests/make_xact_samples.py /tmp/xact
+          mkdir -p /tmp/xact/root/audio /tmp/xact/root/data
+          cp /tmp/xact/test.xwb /tmp/xact/test.xsb /tmp/xact/root/audio/
+          gcc -O2 -c source/third_party/stb_vorbis.c -o /tmp/stbv.o
+          g++ -std=c++17 -O2 -Wall -Isource tests/audio_test.cpp source/audio/*.cpp source/core/vfs.cpp /tmp/stbv.o -o /tmp/audio_test
+          /tmp/audio_test /tmp/xact
+      - name: Game rules
+        run: |
+          python3 tests/make_fake_content.py /tmp/fake
+          python3 tools/convert.py "/tmp/fake/Content (unpacked)" /tmp/fakeout
+          g++ -std=c++17 -O2 -Isource -Isource/core tests/craft_test.cpp source/core/*.cpp -o /tmp/craft_test
+          g++ -std=c++17 -O2 -Isource -Isource/core tests/core_test.cpp source/core/*.cpp -o /tmp/core_test
+          /tmp/craft_test /tmp/fakeout/3ds/stardew3ds/
+          /tmp/core_test /tmp/fakeout/3ds/stardew3ds/
   build-3dsx:
     needs: host-tests
     runs-on: ubuntu-latest

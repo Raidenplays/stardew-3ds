@@ -5,7 +5,9 @@
 
 #include <cerrno>
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <dirent.h>
 #include <sys/stat.h>
 
 namespace setup {
@@ -132,6 +134,29 @@ void Setup::begin() {
         j.run = [this](std::string& err) {
             if (fileExists(root_ + "data/font_small.dat")) return true;
             return convertSmallFont(content_, root_, 16, err);
+        };
+        jobs_.push_back(std::move(j));
+    }
+    {
+        // the game reads your XACT sound banks directly: just move them over
+        Job j;
+        j.stage = "Sound";
+        j.item = "Content/XACT";
+        j.run = [this](std::string& err) {
+            std::string src = content_ + "XACT/", dst = root_ + "audio/";
+            DIR* d = opendir(src.c_str());
+            if (!d) return true;   // no sound files: the game runs silently
+            makeDirs(dst);
+            while (dirent* e = readdir(d)) {
+                std::string n = e->d_name;
+                std::string low = n;
+                for (char& c : low) c = (char)tolower((unsigned char)c);
+                if (low.size() < 4 || (low.compare(low.size() - 4, 4, ".xwb") && low.compare(low.size() - 4, 4, ".xsb"))) continue;
+                remove((dst + n).c_str());
+                if (rename((src + n).c_str(), (dst + n).c_str()) != 0) err = "couldn't move " + n;
+            }
+            closedir(d);
+            return err.empty();
         };
         jobs_.push_back(std::move(j));
     }
