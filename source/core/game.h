@@ -91,6 +91,9 @@ struct Location {
     std::vector<uint8_t> grass;        // per tile: tufts 0-4 (low bits), bit 3 = blue grass
     struct Rustle { int cell; float t; };
     std::vector<Rustle> rustles;       // grass swaying after you walk through it
+    bool nightTiles = false;           // NightTiles applied (lit windows)
+    struct Light { int x, y, type; };  // the map's Light property: glows at night
+    std::vector<Light> lights;
     int spawnDay = -1;                 // absolute day the objects were spawned
     std::string file;                  // which .smap is loaded (seasonal variants differ)
     void initState();
@@ -451,6 +454,8 @@ public:
     // n bits of a sprite (each `piece` px square) burst out from world (x, y)
     void burst(const std::string& tex, int sx, int sy, int sw, int sh, float x, float y, int n, int piece = 4);
     void updateEffects(float dt);
+    bool isDark() const;               // lamps on / windows lit
+    void updateNightTiles();
     // an item pops out of (x, y) world px, bounces, then flies into the farmer
     void itemFlies(int objId, float x, float y, int count = 1);
     // "Wood x3" pop-ups at the bottom left (same item stacks onto one)

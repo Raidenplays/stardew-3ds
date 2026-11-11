@@ -64,6 +64,19 @@ Location* Game::loadLocation(const std::string& name, std::string* err) {
     loc->isFarm = (name == "Farm");
     loc->initState();
     if (loc->map.outdoors) treesFromMap(*loc);
+    {   // Light: "x y type x y type ..."
+        const std::string& l = loc->map.prop("Light");
+        std::vector<int> v;
+        const char* p = l.c_str();
+        char* end;
+        while (*p) {
+            long n = strtol(p, &end, 10);
+            if (end == p) { p++; continue; }
+            v.push_back((int)n);
+            p = end;
+        }
+        for (size_t i = 0; i + 2 < v.size(); i += 3) loc->lights.push_back({v[i], v[i + 1], v[i + 2]});
+    }
     Location* out = loc.get();
     locations[name] = std::move(loc);
     return out;
@@ -835,7 +848,22 @@ void Game::burst(const std::string& tex, int sx, int sy, int sw, int sh, float x
     }
 }
 
+bool Game::isDark() const {
+    int start = season == WINTER ? 17 * 60 + 30 : season == FALL ? 18 * 60 + 30 : 19 * 60;
+    return timeOfDay >= start || raining && timeOfDay >= 17 * 60;
+}
+
+void Game::updateNightTiles() {
+    if (!cur) return;
+    bool dark = isDark();
+    if (dark == cur->nightTiles) return;
+    const std::string& list = cur->map.prop(dark ? "NightTiles" : "DayTiles");
+    if (!list.empty()) cur->map.applyTileSwaps(list);
+    cur->nightTiles = dark;
+}
+
 void Game::updateEffects(float dt) {
+    updateNightTiles();
     for (auto& n : notices) n.t -= dt;
     notices.erase(std::remove_if(notices.begin(), notices.end(), [](const Notice& n) { return n.t <= 0; }), notices.end());
     if (cur) {

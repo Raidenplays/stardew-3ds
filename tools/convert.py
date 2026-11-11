@@ -84,6 +84,8 @@ EXTRA_TEXTURES = [
     ("TileSheets/rain", False),
     ("TileSheets/bobbers", False),
     ("TileSheets/critters", False),
+    ("LooseSprites/Lighting/lantern", False),
+    ("LooseSprites/Lighting/windowLight", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
     ("Minigames/TitleButtons", False),
@@ -480,6 +482,16 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
             ab = a.encode()[:65535]
             f.write(struct.pack("<HHH", cell & 0xFFFF, cell >> 16, len(ab)))
             f.write(ab)
+        # optional trailer: the map's own properties (DayTiles/NightTiles, Light, Doors...)
+        keep = [(k, v) for k, v in sorted(mprops.items()) if k != "Warp"][:255]
+        f.write(b"PRP1")
+        f.write(struct.pack("<H", len(keep)))
+        for k, v in keep:
+            kb, vb = str(k).encode()[:255], str(v).encode()[:65535]
+            f.write(struct.pack("<B", len(kb)))
+            f.write(kb)
+            f.write(struct.pack("<H", len(vb)))
+            f.write(vb)
     nd = sum(1 for b in flags if b & F_DIGGABLE)
     print(f"  map {name}: {w}x{h}, {len(tilesets)} sheets, {len(warps)} warps, "
           f"{len(actions)} actions, {nd} diggable")
