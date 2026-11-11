@@ -538,7 +538,10 @@ int main(int argc, char** argv) {
         printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
                tot[3] / N, tot[4] / N);
         shot(c, g, ui, "where_" + whereMap);
-        if (panArg) {   // walk the camera around: the map cache has to follow
+        if (panArg) {
+            ui.tab = TAB_OPTIONS;
+            shot(c, g, ui, "options_tab");
+            ui.tab = TAB_ITEMS;   // walk the camera around: the map cache has to follow
             int bx = (int)(g.px / 16), by = (int)(g.py / 16);
             static const int path[6][2] = {{5, 0}, {11, 2}, {17, 9}, {9, 14}, {-6, 6}, {-14, -3}};
             for (int k = 0; k < 6; k++) {
