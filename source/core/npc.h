@@ -15,6 +15,7 @@ struct SchedEntry {
     std::string loc;
     int x = 0, y = 0;
     int facing = 0;      // ours: 0 down 1 right 2 up 3 left
+    std::string anim;    // animation played on arrival (Data/animationDescriptions), or ""
 };
 
 struct ScheduleContext {

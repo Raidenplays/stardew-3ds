@@ -159,6 +159,12 @@ struct NpcDef {
     std::unordered_map<std::string, std::string> dialogue;
 };
 
+// A villager's animation at a schedule stop (Data/animationDescriptions):
+// frame numbers on their 16x32 sheet, 4 per row.
+struct NpcAnim {
+    std::vector<int> intro, loop, outro;
+};
+
 // A way from one map to another (map-edge warp or door).
 struct GraphEdge {
     int x, y;            // tile on the source map
@@ -237,6 +243,11 @@ public:
     std::vector<ToolDef> tools;
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
     std::vector<NpcDef> npcs;
+    std::unordered_map<std::string, NpcAnim> npcAnims;
+    const NpcAnim* npcAnim(const std::string& name) const {
+        auto it = npcAnims.find(name);
+        return it == npcAnims.end() ? nullptr : &it->second;
+    }
     std::unordered_map<int, FurnitureDef> furniture;
     std::unordered_map<int, BigDef> bigs;
     std::vector<Recipe> recipes;

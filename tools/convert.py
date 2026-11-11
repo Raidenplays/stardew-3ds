@@ -1442,7 +1442,18 @@ def write_npcs(content, out_dir, textures):
                 if find_png(content, f"{folder}/{name}"):
                     textures.add(f"{folder}/{name}")
                     n_spr += 1
-    print(f"  {len(defs)} villagers, {n_sched} schedules, {n_dia} dialogue files, {n_spr} sprites/portraits")
+    # schedule-stop animations: name -> intro/loop/outro frame lists on the villager's sheet
+    n_anim = 0
+    if os.path.isfile(os.path.join(content, "Data", "animationDescriptions.json")):
+        anims = _load_json(content, "Data/animationDescriptions.json")
+        with open(os.path.join(out_dir, "animations.dat"), "w", encoding="utf-8") as g:
+            for k, v in anims.items():
+                parts = str(v).split("/")
+                if len(parts) < 3:
+                    continue
+                g.write(f"{_flat(k)}\t{parts[0]}\t{parts[1]}\t{parts[2]}\n")
+                n_anim += 1
+    print(f"  {len(defs)} villagers, {n_sched} schedules, {n_dia} dialogue files, {n_spr} sprites/portraits, {n_anim} animations")
 
 
 DEFAULT_LAYOUT = """\

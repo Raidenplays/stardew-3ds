@@ -139,6 +139,8 @@ std::vector<SchedEntry> resolveSchedule(const NpcDef& n, const ScheduleContext& 
             static const int conv[4] = {2, 1, 0, 3};   // game: 0 up 1 right 2 down 3 left
             e.facing = conv[atoi(w[i + 2].c_str()) & 3];
         }
+        for (size_t k = i + 3; k < w.size(); k++)
+            if (!isNumber(w[k]) && w[k][0] != '"') { e.anim = w[k]; break; }
         out.push_back(e);
     }
     std::stable_sort(out.begin(), out.end(),

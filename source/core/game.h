@@ -125,6 +125,10 @@ struct NpcState {
     std::vector<std::pair<int, int>> path;   // on-screen A* path
     size_t pathIdx = 0;
     int endFacing = 0;
+    std::string endAnim;      // animation to start on reaching the stop
+    const NpcAnim* anim = nullptr;   // playing now (standing at a stop)
+    float animTime = 0;
+    bool animOut = false;     // playing the outro before walking off
 
     int friendship = 0;       // 250 per heart
     bool introduced = false;
@@ -132,6 +136,7 @@ struct NpcState {
     int giftsToday = 0, giftsWeek = 0;
 
     int hearts() const { return friendship / 250; }
+    int animFrame() const;
     int tileX() const { return (int)(x / 16); }
     int tileY() const { return (int)((y - 4) / 16); }
 };
@@ -490,14 +495,15 @@ public:
     bool eventConditionsMet(const std::string& key) const;
     void skipEvent();
     EventActor* eventActor(const std::string& name);
+    void npcsUpdate(float dt);         // villagers walk their schedules (public for tools)
 
 private:
     void eventUpdate(float dt);
     bool eventStep(const std::string& cmd);   // false = wait before the next command
     void endEvent();
     void npcsStartDay();
-    void npcsUpdate(float dt);
     void npcPlan(NpcState& n, const SchedEntry& e);
+    void startAnim(NpcState& n);
     void npcFinishLeg(NpcState& n);
     void npcsEnterLocation();          // place villagers when the player arrives
     NpcState* npcAt(int tx, int ty);
