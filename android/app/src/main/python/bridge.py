@@ -21,7 +21,7 @@ class _Lines:
             self.buf = ""
 
 
-_CONVERTER_MODULES = ("convert", "cp", "sjson", "tbin", "tmxmap", "xnb", "layer")
+_CONVERTER_MODULES = ("convert", "cp", "sjson", "tbin", "tmxmap", "xnb", "layer", "saveimport")
 
 
 def run(content, mods, out, logo, cb, tools_dir=""):
@@ -61,3 +61,31 @@ def run(content, mods, out, logo, cb, tools_dir=""):
         except Exception:
             pass
         sys.stdout, sys.stderr, sys.argv = old
+
+
+def import_save(save, out, cb, tools_dir=""):
+    """A PC save -> import.txt in the converted folder (tools/saveimport.py)."""
+    if tools_dir and os.path.isfile(os.path.join(tools_dir, "saveimport.py")):
+        if tools_dir in sys.path:
+            sys.path.remove(tools_dir)
+        sys.path.insert(0, tools_dir)
+        sys.modules.pop("saveimport", None)
+    import saveimport
+    old = sys.stdout, sys.stderr
+    sys.stdout = sys.stderr = _Lines(cb)
+    try:
+        saveimport.import_save(save, out)
+        return 0
+    except SystemExit as e:
+        if e.code and not isinstance(e.code, int):
+            print("Error: " + str(e.code))
+        return e.code if isinstance(e.code, int) else 1
+    except Exception:
+        traceback.print_exc()
+        return 1
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+        sys.stdout, sys.stderr = old

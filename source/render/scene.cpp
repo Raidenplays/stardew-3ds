@@ -684,7 +684,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 drawPlayerWithTool(c, g, g.px - camX, g.py - camY);
                 const ToolDef* td = nullptr;
                 const ToolDef* wd = g.inv[g.selected].type == SLOT_TOOL ? g.data.tool(g.inv[g.selected].id) : nullptr;
-                if (g.toolTimer > 0 && wd && wd->kind == TOOL_WEAPON) {
+                if (g.toolTimer > 0 && wd && (wd->kind == TOOL_WEAPON || (wd->kind == TOOL_SCYTHE && wd->texture != "TileSheets_tools"))) {
                     // the blade sweeps a quarter circle across the way you face
                     float k = 1.0f - g.toolTimer / TOOL_SWING;
                     static const float base[4] = {1.5708f, 0.0f, -1.5708f, 3.14159f};

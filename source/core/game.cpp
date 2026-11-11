@@ -1664,6 +1664,19 @@ bool Game::load(const std::string& path, std::string* err) {
     if (!r.ok) return false;
     // saves from before events could hand out items: Willy's rod was never given
     if (eventsSeen.count("739330") && toolLevel(TOOL_ROD) < 0) awardPrize("rod");
+    // conversions before build 64 had no scythe (1.6 keeps it with the weapons): hand one over once
+    if (!eventsSeen.count("s3d_scythe") && data.toolByKind(TOOL_SCYTHE)) {
+        bool have = false;
+        for (auto& s : inv)
+            if (s.type == SLOT_TOOL)
+                if (const ToolDef* t = data.tool(s.id)) have |= t->kind == TOOL_SCYTHE;
+        for (auto& kv : placed)
+            for (auto& p : kv.second)
+                for (auto& s : p.items)
+                    if (s.type == SLOT_TOOL)
+                        if (const ToolDef* t = data.tool(s.id)) have |= t->kind == TOOL_SCYTHE;
+        if (have || giveTool(data.toolByKind(TOOL_SCYTHE)->key)) eventsSeen.insert("s3d_scythe");
+    }
     startDay();
     wakeUp();
     return true;

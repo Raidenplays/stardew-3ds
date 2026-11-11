@@ -192,6 +192,29 @@ int main() {
     bool ok = data.load(root, &err);
     loadUiFonts(canvas, [&data](const std::string& rel) { return data.vfs.path(rel); });
     bool newFarm = false;
+    std::string importNote;
+    if (ok) {   // a PC save brought over with tools/saveimport.py: build the farm from it once
+        std::string imp = root + "import.txt";
+        if (FILE* fi = fopen(imp.c_str(), "r")) {
+            fclose(fi);
+            if (FILE* old = fopen(savePath.c_str(), "rb")) {   // keep the farm that was here
+                std::string bak = savePath + ".before_import";
+                if (FILE* nb = fopen(bak.c_str(), "wb")) {
+                    char cb[4096];
+                    size_t n;
+                    while ((n = fread(cb, 1, sizeof cb, old)) > 0) fwrite(cb, 1, n, nb);
+                    fclose(nb);
+                }
+                fclose(old);
+            }
+            if (game.newGame((uint32_t)osGetTime(), &err) && game.applyImport(imp, &importNote) && game.save(savePath)) {
+                remove((root + "import_done.txt").c_str());
+                rename(imp.c_str(), (root + "import_done.txt").c_str());
+            } else {
+                importNote = "Couldn't bring your PC save over (import.txt).";
+            }
+        }
+    }
     if (ok) {
         // ---- title screen: Continue your farm, or make a new one
         FILE* sf = fopen(savePath.c_str(), "rb");
@@ -261,6 +284,7 @@ int main() {
         }
         canvas.dropTextures();
     }
+    if (ok && !importNote.empty()) game.notify(importNote);
     if (ok && newFarm) {
         // Grandpa's story, the Joja office and the bus ride (START skips)
         StoryUi story;

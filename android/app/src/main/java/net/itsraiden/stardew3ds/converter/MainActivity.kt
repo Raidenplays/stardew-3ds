@@ -88,6 +88,9 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putString("modZips", modZips.joinToString("\n")).remove("mods").apply(); refresh()
         }
     }
+    private val pickPcSave = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importPcSave(uri)
+    }
     private val pickSaveTo = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) { keep(uri); saveTo(uri) }
     }
@@ -117,6 +120,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.pickModZips).setOnClickListener { pickModZips.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
         findViewById<Button>(R.id.clearMods).setOnClickListener { modsUri = null; modZips = emptyList(); prefs.edit().remove("mods").remove("modZips").apply(); refresh() }
         findViewById<Button>(R.id.convert).setOnClickListener { convert() }
+        findViewById<Button>(R.id.importSave).setOnClickListener {
+            if (!File(outDir, "3ds/stardew3ds/data").isDirectory) say("Convert first, then bring your PC save")
+            else {
+                say("Pick your save: the file named like its folder (e.g. Raiden_123456789), or a zip of that folder")
+                pickPcSave.launch(arrayOf("*/*"))
+            }
+        }
         findViewById<Button>(R.id.saveTo).setOnClickListener {
             if (!File(outDir, "3ds/stardew3ds").isDirectory) say("Convert first") else pickSaveTo.launch(null)
         }
@@ -247,12 +257,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // A PC save (Saves/<Name_id>/<Name_id>, or that folder zipped) -> import.txt for the 3DS
+    private fun importPcSave(uri: Uri) {
+        if (busy) return
+        setBusy(true)
+        thread(name = "import") {
+            try {
+                val dir = File(cacheDir, "pcsave")
+                dir.deleteRecursively()
+                dir.mkdirs()
+                val name = nameOf(uri).substringAfterLast('/').replace(':', '_').ifBlank { "save" }
+                if (name.endsWith(".zip", ignoreCase = true)) unzipIn(uri, dir, "your save")
+                else contentResolver.openInputStream(uri)!!.use { inp -> File(dir, name).outputStream().use { inp.copyTo(it) } }
+                val files = dir.walkTopDown().filter {
+                    it.isFile && !it.name.startsWith("SaveGameInfo") && !it.name.endsWith("_old") && !it.name.endsWith(".zip")
+                }.toList()
+                val save = files.firstOrNull { it.name == it.parentFile?.name } ?: files.maxByOrNull { it.length() }
+                if (save == null) { say("! No save file in what you picked"); return@thread }
+                say("Reading ${save.name}...")
+                val cb = object : LineSink { override fun onLine(line: String) { say(line) } }
+                val code = Python.getInstance().getModule("bridge").callAttr(
+                    "import_save", save.absolutePath, File(outDir, "3ds/stardew3ds").absolutePath, cb, toolsDir.absolutePath).toInt()
+                say(if (code == 0) "Your PC farm is ready. Save or send it to your 3DS, then start the game."
+                    else "Couldn't read that save (code $code)")
+            } catch (e: Throwable) {
+                say("! ${e.javaClass.simpleName}: ${e.message}")
+            } finally {
+                setBusy(false)
+            }
+        }
+    }
+
     interface LineSink { fun onLine(line: String) }
 
     // ---------------------------------------------------------------- updates from the repo
     private val repo = "Raidenplays/stardew-3ds"
     private val converterFiles = listOf("convert.py", "cp.py", "sjson.py", "tbin.py", "tmxmap.py", "xnb.py", "layer.py",
-        "xnbfile.py", "xnbunpack.py", "netschema.py")
+        "xnbfile.py", "xnbunpack.py", "netschema.py", "saveimport.py")
 
     private fun fetch(url: String, to: File? = null, onBytes: ((Long, Long) -> Unit)? = null): String? {
         val c = URL(url).openConnection() as HttpURLConnection
