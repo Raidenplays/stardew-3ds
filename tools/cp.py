@@ -65,7 +65,11 @@ class Content:
                 try:
                     os.link(s, d)
                 except OSError:
-                    shutil.copy2(s, d)
+                    # copyfile, not copy2: Android refuses to copy file
+                    # permissions/xattrs into app storage.
+                    if os.path.lexists(d):
+                        os.remove(d)
+                    shutil.copyfile(s, d)
                 root, ext = os.path.splitext(f)
                 if ext.lower() in ASSET_EXTS:
                     a = norm_asset(os.path.join(rel, root) if rel != "." else root)
