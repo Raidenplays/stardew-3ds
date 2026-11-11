@@ -7,7 +7,7 @@ extern "C" unsigned char* s3d_deflate(const unsigned char* data, int len, int* o
 
 namespace s3t {
 namespace {
-constexpr int MAX_PAGE = 1024;
+constexpr int MAX_PAGE = 256;   // small pages: the 3DS loads only what it draws
 
 int nextPow2(int v) { int p = 8; while (p < v) p <<= 1; return p; }
 

@@ -28,6 +28,7 @@ static void fatalScreen(C2DCanvas& c, C3D_RenderTarget* top, const std::string& 
         hidScanInput();
         if (hidKeysDown() & KEY_START) break;
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        texNewFrame();
         c.beginFrame();
         C2D_TargetClear(top, C2D_Color32(0x2A, 0x1A, 0x10, 0xFF));
         C2D_SceneBegin(top);
@@ -97,6 +98,7 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
         }
         float t = (osGetTime() - t0) / 1000.0f;
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        texNewFrame();
         c.beginFrame();
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
         C2D_SceneBegin(top);
@@ -165,6 +167,7 @@ int main() {
             modScreenTouch(mods, tp.px, tp.py);
         }
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        texNewFrame();
         canvas.beginFrame();
         C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
         C2D_SceneBegin(top);
@@ -229,6 +232,7 @@ int main() {
                 titleTouch(title, data, tp.px, tp.py);
             }
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+            texNewFrame();
             canvas.beginFrame();
             C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
             C2D_SceneBegin(top);
@@ -273,6 +277,7 @@ int main() {
             sound.music(storyMusic(story));
             sound.update(sdt);
             C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+            texNewFrame();
             canvas.beginFrame();
             C2D_TargetClear(top, C2D_Color32(0, 0, 0, 0xFF));
             C2D_SceneBegin(top);
@@ -370,6 +375,7 @@ int main() {
 
         uint32_t timeMs = (uint32_t)(now & 0xFFFFFFFF);
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        texNewFrame();
         canvas.beginFrame();
 
         float slider = osGet3DSliderState();
