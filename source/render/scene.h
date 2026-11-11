@@ -45,6 +45,12 @@ struct Ui {
 bool sceneAfterUpdate(sv::Game& g, Ui& ui, const std::string& savePath);
 
 void drawTop(Canvas& c, sv::Game& g, Ui& ui, uint32_t timeMs);
+
+// Time spent building each part of the top screen (performance readout).
+// g_profClock is set by the platform; without it nothing is measured.
+enum { PROF_MAP, PROF_OBJECTS, PROF_FRONT, PROF_WEATHER, PROF_HUD, PROF_COUNT };
+extern float g_profMs[PROF_COUNT];
+extern double (*g_profClock)();   // milliseconds
 void drawBottom(Canvas& c, sv::Game& g, Ui& ui);
 void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath);
 void dialogueAdvance(sv::Game& g, Ui& ui);

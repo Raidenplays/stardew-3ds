@@ -124,6 +124,7 @@ void HostCanvas::blend(int x, int y, uint32_t c) {
 
 void HostCanvas::image(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                        bool flipX, uint32_t tint) {
+    draws++;
     const HostTexture* t = get(tex);
     if (!t) return;
     int bx = (int)std::floor(dx), by = (int)std::floor(dy);

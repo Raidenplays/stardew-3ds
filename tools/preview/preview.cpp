@@ -1,3 +1,5 @@
+#include <chrono>
+#include <algorithm>
 #include <algorithm>
 // PC screenshot tool. Runs the real game code through a scripted walk and
 // writes 3DS-shaped PNGs (top screen over bottom screen) using the same
@@ -83,6 +85,7 @@ int main(int argc, char** argv) {
     bool fishDemo = false;
     bool mailDemo = false;
     bool titleDemo = false;   // title screen + character creation
+    std::string whereMap;
     bool swingDemo = false, setupDemo = false;
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
@@ -101,6 +104,7 @@ int main(int argc, char** argv) {
         else if (a.rfind("--intro-frames=", 0) == 0) { introFrames = true; introFps = atoi(a.c_str() + 15); }
         else if (a == "--setup") setupDemo = true;
         else if (a == "--swing") swingDemo = true;
+        else if (a.rfind("--where=", 0) == 0) whereMap = a.substr(8);
         else if (a == "--story") storyDemo = true;
         else font = a;
     }
@@ -486,6 +490,30 @@ int main(int argc, char** argv) {
     if (!walkUntilWarp(g, ui, 0, 1)) printf("  ! couldn't leave the farmhouse\n");
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
+    if (!whereMap.empty()) {
+        // time the top screen at a location (centre of the map), per drawing stage
+        if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
+        g.teleport(whereMap, 10, 10);
+        g.teleport(whereMap, g.map().width() / 2, g.map().height() / 2);
+        const TileMap& mm = g.map();
+        step(g, ui, none, 5);
+        for (int k = 0; k < 3; k++) drawTop(c, g, ui, 0);   // warm up: load its textures
+        g_profClock = [] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+        float tot[PROF_COUNT] = {};
+        c.draws = 0;
+        const int N = 20;
+        for (int k = 0; k < N; k++) {
+            drawTop(c, g, ui, (uint32_t)(k * 16));
+            for (int q = 0; q < PROF_COUNT; q++) tot[q] += g_profMs[q];
+        }
+        printf("  %s (%dx%d tiles, %zu tilesets, %zu NPCs here): draws/frame %u\n", whereMap.c_str(), mm.width(), mm.height(),
+               mm.tilesets.size(), (size_t)std::count_if(g.npcs.begin(), g.npcs.end(), [&](const NpcState& n) { return n.loc == whereMap; }),
+               c.draws / N);
+        printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
+               tot[3] / N, tot[4] / N);
+        shot(c, g, ui, "where_" + whereMap);
+        return 0;
+    }
     if (swingDemo) {
         // every tool x facing x phase, the top screen only (crop around the farmer later)
         for (int i = 0; i < HOTBAR; i++) {

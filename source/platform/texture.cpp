@@ -112,14 +112,21 @@ bool Texture::evictOne() {
     return true;
 }
 
+static u32 g_allocFailFrame = 0;   // out of GPU memory this frame: stop trying until the next
+
 bool Texture::ensure(TexPage& p) const {
     p.lastUsed = g_frame;
     if (p.loaded) return true;
+    if (p.bad || g_allocFailFrame == g_frame) return false;
     // citro2d remembers the last bound C3D_Tex by address; a page reloaded
     // into the same struct must not be mistaken for what was bound before.
     C2D_Flush();
     while (!C3D_TexInit(&p.tex, p.pw, p.ph, GPU_RGBA8))
-        if (!evictOne()) { g_stats.failed++; return false; }   // out of GPU memory even after evicting
+        if (!evictOne()) {   // out of GPU memory even after evicting
+            g_stats.failed++;
+            g_allocFailFrame = g_frame;
+            return false;
+        }
     size_t bytes = (size_t)p.pw * p.ph * 4;
     bool ok = false;
     FILE* f = fopen(path.c_str(), "rb");
@@ -135,6 +142,8 @@ bool Texture::ensure(TexPage& p) const {
     if (f) fclose(f);
     if (!ok) {
         C3D_TexDelete(&p.tex);
+        p.bad = true;
+        g_stats.failed++;
         return false;
     }
     unflip((u32*)p.tex.data, p.pw, p.ph);

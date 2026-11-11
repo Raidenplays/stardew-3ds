@@ -15,6 +15,7 @@ struct HostTexture {
 
 class HostCanvas : public Canvas {
 public:
+    unsigned draws = 0;
     HostCanvas(const std::string& root, const std::string& fontPath);
     // optional: resolve "tex/Name.s3t" through mod layers
     std::string (*resolveFn)(const std::string& rel, void* ctx) = nullptr;

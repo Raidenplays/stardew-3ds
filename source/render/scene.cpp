@@ -325,7 +325,18 @@ struct DrawItem {
     int a, b;
 };
 
+float g_profMs[PROF_COUNT];
+double (*g_profClock)() = nullptr;
+static double profNow() { return g_profClock ? g_profClock() : 0.0; }
+static double g_profMark = 0;
+static void profEnd(int section) {   // time since the last mark goes to `section`
+    double t = profNow();
+    g_profMs[section] = (float)(t - g_profMark);
+    g_profMark = t;
+}
+
 static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
+    g_profMark = profNow();
     const TileMap& m = g.map();
     int mapW = m.width() * TILE, mapH = m.height() * TILE;
     const Cutscene& cs = g.cutscene;
@@ -356,8 +367,17 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         tsCols[i] = m.tilesets[i].columns > 0 ? m.tilesets[i].columns : c.texWidth(tsTex[i]) / 16;
     }
 
+    // each tilesheet looked up once per frame, not once per tile
+    std::vector<const void*> tsHandle(tsTex.size());
+    for (size_t i = 0; i < tsTex.size(); i++) tsHandle[i] = c.texLookup(tsTex[i]);
+    // Tiles in one layer never overlap, so they can be drawn in any order:
+    // grouping them by sheet and by area of the sheet keeps the GPU on one
+    // texture page for long runs instead of switching for nearly every tile.
+    struct TileDraw { uint32_t key; int16_t dx, dy; uint16_t sx, sy; uint8_t ts; };
+    static std::vector<TileDraw> tileDraws;
     auto drawLayer = [&](int layer, float depth) {
         float sh = c.shift(depth);
+        tileDraws.clear();
         for (int y = y0; y <= y1; y++)
             for (int x = x0; x <= x1; x++) {
                 uint16_t t = m.tile(layer, x, y);
@@ -366,18 +386,28 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 int cols = tsCols[ts];
                 if (cols <= 0) continue;
                 t = m.animatedTile(ts, t, timeMs);
-                c.image(tsTex[ts], (t % cols) * 16, (t / cols) * 16, 16, 16,
-                        x * TILE - camX + sh, y * TILE - camY);
+                TileDraw d;
+                d.sx = (uint16_t)((t % cols) * 16);
+                d.sy = (uint16_t)((t / cols) * 16);
+                d.ts = (uint8_t)ts;
+                d.dx = (int16_t)(x * TILE - camX);
+                d.dy = (int16_t)(y * TILE - camY);
+                d.key = ((uint32_t)ts << 24) | ((uint32_t)(d.sy >> 8) << 12) | (uint32_t)(d.sx >> 8);   // sheet, 256px block
+                tileDraws.push_back(d);
             }
+        std::sort(tileDraws.begin(), tileDraws.end(), [](const TileDraw& a, const TileDraw& b) { return a.key < b.key; });
+        for (const TileDraw& d : tileDraws)
+            c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx + sh, d.dy);
     };
 
-    drawLayer(L_BACK, -1.0f);
+    drawLayer(L_BACK, 0.0f);   // the whole world sits at one depth: objects split across
+                                  // layers (walls/roofs, trunks/leaves) must not come apart in 3D
 
     // Tilled soil
     if (g.location().isFarm) {
         bool wetHalf = c.texWidth("TerrainFeatures_hoeDirt") >= 128;
         auto tilled = [&](int x, int y) { return m.inBounds(x, y) && g.soil(x, y).tilled; };
-        float sh = c.shift(-1.0f);
+        float sh = c.shift(0.0f);
         for (int y = y0; y <= y1; y++)
             for (int x = x0; x <= x1; x++) {
                 const Soil& s = g.soil(x, y);
@@ -395,7 +425,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
     }
 
-    drawLayer(L_BUILDINGS, -0.5f);
+    drawLayer(L_BUILDINGS, 0.0f);
+    profEnd(PROF_MAP);
 
     std::vector<DrawItem> items;
     for (int y = y0; y <= y1; y++)
@@ -562,7 +593,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     c.image(tex, 32, 96, 16, 32, bx, by - 32);
                 } else if (t.stage >= TREE_GROWN) {
                     c.image(tex, 32, 96, 16, 32, bx, by - 32);   // roots: the stump under the trunk
-                    c.image(tex, 0, 0, 48, 96, bx - 16 + wob + c.shift(1.0f), by - 96 + 8);
+                    c.image(tex, 0, 0, 48, 96, bx - 16 + wob, by - 96 + 8);
                 } else if (t.stage >= 3) {
                     c.image(tex, 0, 96, 16, 32, bx + wob, by - 32);
                 } else {
@@ -584,7 +615,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 bigSprite(c, g, p.id, 0, x + wob, y - 16);
                 if (g.machineReady(p)) {   // bubble with the finished item
                     float bob = std::sin(timeMs / 250.0f) * 1.5f;
-                    float bx = x - 2 + c.shift(-1.0f), by = y - 34 + bob;
+                    float bx = x - 2, by = y - 34 + bob;
                     c.rect(bx, by, 20, 20, RGBA(0xFF, 0xFF, 0xFF, 0xD0));
                     c.rect(bx + 8, by + 20, 4, 3, RGBA(0xFF, 0xFF, 0xFF, 0xD0));
                     slotIcon(c, g, p.held, bx + 2, by + 2);
@@ -617,8 +648,10 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         }
     }
 
-    drawLayer(L_FRONT, 1.0f);
-    drawLayer(L_ALWAYSFRONT, 1.5f);
+    profEnd(PROF_OBJECTS);
+    drawLayer(L_FRONT, 0.0f);
+    drawLayer(L_ALWAYSFRONT, 0.0f);
+    profEnd(PROF_FRONT);
 
     if (g.fishingActive() && !cs.active) {
         const Fishing& f = g.fishing;
@@ -650,7 +683,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         int lv = g.chargeLevel();
         g.chargedTiles(lv, tiles);
         for (auto& t : tiles)
-            c.rect(t.first * TILE - camX + c.shift(-1.0f), t.second * TILE - camY, 16, 16,
+            c.rect(t.first * TILE - camX, t.second * TILE - camY, 16, 16,
                    RGBA(0xFF, 0xFF, 0xFF, 0x50));
         const ToolDef* td = g.data.tool(g.inv[g.selected].id);
         int max = td ? std::max(1, td->upgrade) : 1;
@@ -662,7 +695,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     if (!sel.empty() && g.toolTimer <= 0 && !cs.active && !g.charging && !g.fishingActive()) {
         int tx, ty;
         g.targetTile(tx, ty);
-        float cx = tx * TILE - camX + c.shift(-1.0f), cy = ty * TILE - camY;
+        float cx = tx * TILE - camX, cy = ty * TILE - camY;
         uint32_t col = RGBA(0xFF, 0xFF, 0xFF, 0x60);
         c.rect(cx, cy, 16, 1, col);
         c.rect(cx, cy + 15, 16, 1, col);
@@ -803,6 +836,7 @@ void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
     c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));
     drawWorld(c, g, timeMs);
     drawWeatherAndLight(c, g, timeMs);
+    profEnd(PROF_WEATHER);
     if (g.cutscene.active) {
         if (g.cutscene.fade > 0)
             c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(std::min(1.0f, g.cutscene.fade) * 255)));
@@ -812,6 +846,7 @@ void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
         return;
     }
     drawHud(c, g);
+    profEnd(PROF_HUD);
     if (g.fade > 0) c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(g.fade * 255)));
 }
 
