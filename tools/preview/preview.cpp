@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
     bool mailDemo = false;
     bool titleDemo = false;   // title screen + character creation
     std::string whereMap, weatherArg;
+    int atX = -1, atY = -1;
     bool swingDemo = false, setupDemo = false;
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
@@ -106,6 +107,7 @@ int main(int argc, char** argv) {
         else if (a == "--swing") swingDemo = true;
         else if (a.rfind("--where=", 0) == 0) whereMap = a.substr(8);
         else if (a.rfind("--weather=", 0) == 0) weatherArg = a.substr(10);
+        else if (a.rfind("--at=", 0) == 0) sscanf(a.c_str() + 5, "%d,%d", &atX, &atY);
         else if (a == "--story") storyDemo = true;
         else font = a;
     }
@@ -495,12 +497,13 @@ int main(int argc, char** argv) {
         // time the top screen at a location (centre of the map), per drawing stage
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
         g.teleport(whereMap, 10, 10);
-        g.teleport(whereMap, g.map().width() / 2, g.map().height() / 2);
+        g.teleport(whereMap, atX >= 0 ? atX : g.map().width() / 2, atY >= 0 ? atY : g.map().height() / 2);
         const TileMap& mm = g.map();
         step(g, ui, none, 5);
         if (weatherArg == "rain" || weatherArg == "storm") { g.raining = true; g.stormy = weatherArg == "storm"; }
         if (weatherArg == "snow") { g.season = 3; g.snowing = true; }
         if (weatherArg == "storm") g.lightning = 0.6f;
+        if (weatherArg == "night") { g.timeOfDay = 21 * 60; g.updateNightTiles(); }
         for (int k = 0; k < 3; k++) drawTop(c, g, ui, 0);   // warm up: load its textures
         g_profClock = [] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
         float tot[PROF_COUNT] = {};

@@ -404,6 +404,9 @@ static void profEnd(int section) {   // time since the last mark goes to `sectio
     g_profMark = t;
 }
 
+static float g_camX = 0, g_camY = 0;   // the camera drawWorld used this frame
+static void worldCamera(const Game&, float& x, float& y) { x = g_camX; y = g_camY; }
+
 static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     g_profMark = profNow();
     const TileMap& m = g.map();
@@ -424,6 +427,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     if (mapH < TOP_H) camY = (mapH - TOP_H) / 2.0f;
     camX = std::floor(camX);
     camY = std::floor(camY);
+    g_camX = camX;
+    g_camY = camY;
 
     int x0 = std::max(0, (int)std::floor(camX / TILE) - 1), y0 = std::max(0, (int)std::floor(camY / TILE) - 1);
     int x1 = std::min(m.width() - 1, (int)((camX + TOP_W) / TILE) + 1);
@@ -930,6 +935,21 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     if (t > 18 * 60) {
         float k = std::min(1.0f, (t - 18 * 60) / 120.0f);
         c.rect(0, 0, TOP_W, TOP_H, RGBA(0x10, 0x10, 0x40, (uint8_t)(k * 120)));
+    }
+    // the map's lamps (its Light property) glow once it's dark
+    if (g.isDark() && !g.location().lights.empty()) {
+        float camX, camY;
+        worldCamera(g, camX, camY);
+        for (const auto& L : g.location().lights) {
+            // 1 lantern, 2 window (others use the lantern glow: the big sheets cost too much GPU memory)
+            const char* tex = L.type == 2 ? "LooseSprites_Lighting_windowLight" : "LooseSprites_Lighting_lantern";
+            int tw = c.texWidth(tex), th = c.texHeight(tex);
+            if (tw <= 0) continue;
+            float scale = 72.0f / tw;   // about 4.5 tiles across
+            float x = L.x * TILE + 8 - camX - tw * scale / 2, y = L.y * TILE + 8 - camY - th * scale / 2;
+            if (x > TOP_W || y > TOP_H || x + tw * scale < 0 || y + th * scale < 0) continue;
+            c.imageScaled(tex, 0, 0, tw, th, x, y, scale, false, RGBA(0xFF, 0xD8, 0x90, 0x90));
+        }
     }
 }
 

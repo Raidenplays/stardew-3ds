@@ -38,6 +38,8 @@ static const struct { const char* path; bool required; } EXTRA_TEXTURES[] = {
     {"TileSheets/rain", false},
     {"TileSheets/bobbers", false},
     {"TileSheets/critters", false},
+    {"LooseSprites/Lighting/lantern", false},
+    {"LooseSprites/Lighting/windowLight", false},
     {"LooseSprites/font_bold", false},
     {"LooseSprites/letterBG", false},
     {"Minigames/TitleButtons", false},

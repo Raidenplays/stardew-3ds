@@ -138,6 +138,18 @@ bool TileMap::load(const std::string& path, std::string* err) {
         }
         std::sort(actions.begin(), actions.end());
     }
+    props.clear();
+    if (r.ok && r.pos + 6 <= data.size() && memcmp(&data[r.pos], "PRP1", 4) == 0) {
+        r.pos += 4;
+        int n = r.u16();
+        for (int i = 0; i < n && r.ok; i++) {
+            std::string k(r.u8(), ' ');
+            r.bytes(&k[0], k.size());
+            std::string v(r.u16(), ' ');
+            r.bytes(&v[0], v.size());
+            props[k] = v;
+        }
+    }
     if (!r.ok) {
         if (err) *err = "truncated map file " + path;
         return false;
@@ -174,6 +186,30 @@ uint16_t TileMap::animatedTile(int ts, uint16_t t, uint32_t timeMs) const {
     if (ai < 0) return t;
     const TileAnim& a = s.anims[ai];
     return a.frames[(timeMs / a.durationMs) % a.frames.size()];
+}
+
+const std::string& TileMap::prop(const std::string& key) const {
+    static const std::string none;
+    auto it = props.find(key);
+    return it == props.end() ? none : it->second;
+}
+
+void TileMap::applyTileSwaps(const std::string& list) {
+    static const char* names[L_COUNT] = {"Back", "Buildings", "Paths", "Front", "AlwaysFront"};
+    std::vector<std::string> t;
+    std::string cur;
+    for (char ch : list) {
+        if (ch == ' ') { if (!cur.empty()) t.push_back(cur); cur.clear(); }
+        else cur += ch;
+    }
+    if (!cur.empty()) t.push_back(cur);
+    for (size_t i = 0; i + 3 < t.size(); i += 4) {
+        int layer = -1;
+        for (int L = 0; L < L_COUNT; L++)
+            if (t[i] == names[L]) layer = L;
+        if (layer < 0) continue;
+        setTile(layer, atoi(t[i + 1].c_str()), atoi(t[i + 2].c_str()), (uint16_t)atoi(t[i + 3].c_str()));
+    }
 }
 
 } // namespace sv
