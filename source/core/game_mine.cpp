@@ -40,7 +40,20 @@ void Game::mineGenerate(Location& loc) {
             if (t == LADDER_UP) { ux = x; uy = y; }
             if (t == LADDER_DOWN) hasLadder = true;
         }
-    if (hasLadder) return;   // a rest floor: already has its way down
+    if (hasLadder) {   // a rest floor: already has its way down (and maybe a treasure chest)
+        bool reward = level == 20 || level == 60 || level == 90 || level == 100;
+        if (reward && !mailReceived.count("s3d_minechest_" + std::to_string(level))) {
+            int cx = m.width() / 2, cy = m.height() / 2;
+            for (int r = 0; r < 10 && loc.chestX < 0; r++)
+                for (int dy = -r; dy <= r && loc.chestX < 0; dy++)
+                    for (int dx = -r; dx <= r && loc.chestX < 0; dx++) {
+                        int x = cx + dx, y = cy + dy;
+                        if (m.inBounds(x, y) && m.tile(L_BACK, x, y) != NO_TILE && m.tile(L_BUILDINGS, x, y) == NO_TILE &&
+                            m.tile(L_FRONT, x, y) == NO_TILE && !(m.flags(x, y) & CF_BLOCKED)) { loc.chestX = x; loc.chestY = y; }
+                    }
+        }
+        return;
+    }
 
     static const int brown[6] = {32, 34, 36, 38, 40, 42}, ice[4] = {48, 50, 52, 54}, lava[3] = {56, 58, 32};
     loc.objects.clear();
@@ -106,8 +119,22 @@ void Game::mineSpawnMonsters(Location& loc) {
     for (int i = 0; i < n; i++) {
         auto c = open[rand32() % open.size()];
         Location::Monster mo;
-        bool bug = level < 40 && level > 1 && rand32() % 100 < 35;
-        mo.kind = bug ? "Bug" : level >= 80 ? "Sludge" : level >= 40 ? "Frost Jelly" : "Green Slime";
+        // who lives at this depth
+        int roll = (int)(rand32() % 100);
+        bool bug = false;
+        if (level < 40) {
+            if (level > 1 && roll < 25) { mo.kind = "Bug"; bug = true; mo.ai = 1; }
+            else if (level > 30 && roll < 55) { mo.kind = "Bat"; mo.ai = 2; }
+            else if (level < 30 && roll < 45) { mo.kind = "Rock Crab"; mo.ai = 4; mo.hidden = true; }
+            else mo.kind = "Green Slime";
+        } else if (level < 80) {
+            if (roll < 30) { mo.kind = "Dust Spirit"; mo.ai = 3; }
+            else if (roll < 50) { mo.kind = "Frost Bat"; mo.ai = 2; }
+            else mo.kind = "Frost Jelly";
+        } else {
+            if (roll < 35) { mo.kind = "Lava Bat"; mo.ai = 2; }
+            else mo.kind = "Sludge";
+        }
         const MonsterDef* d = data.monster(mo.kind);
         mo.hp = d ? d->health : 20;
         mo.damage = d ? d->damage : 5;
@@ -135,12 +162,32 @@ void Game::monstersUpdate(float dt) {
         if (mo.hurt > 0) mo.hurt -= dt;
         float dx = px - mo.x, dy = py - mo.y;
         float dist = std::sqrt(dx * dx + dy * dy);
+        if (mo.ai == 2) {   // bats: straight at you through anything, once they notice
+            if (dist < 9 * TILE && dist > 1) {
+                float sp = mo.kind == "Bat" ? 55.0f : 70.0f;
+                mo.vx += (dx / dist * sp - mo.vx) * std::min(1.0f, dt * 2.5f);
+                mo.vy += (dy / dist * sp - mo.vy) * std::min(1.0f, dt * 2.5f);
+            } else {
+                mo.vx *= 0.95f;
+                mo.vy *= 0.95f;
+            }
+            mo.x += (mo.vx + mo.kx) * dt;
+            mo.y += (mo.vy + mo.ky) * dt;
+            mo.kx *= std::pow(0.02f, dt);
+            mo.ky *= std::pow(0.02f, dt);
+            if (dist < 12 && invuln <= 0 && mo.hurt <= 0) hurtPlayer(mo.damage, mo.x, mo.y);
+            continue;
+        }
+        if (mo.ai == 4 && mo.hidden) {   // a rock crab: just a rock, until you come too close
+            if (dist < 20) { mo.hidden = false; mo.think = 0; }
+            else continue;
+        }
         if (!mo.bug) {   // slimes hop at you when you're near
             mo.think -= dt;
             if (mo.think <= 0) {
                 if (dist < 8 * TILE && dist > 1) {
                     const MonsterDef* d = data.monster(mo.kind);
-                    float sp = 22.0f + (d ? d->speed : 2) * 12.0f;
+                    float sp = (22.0f + (d ? d->speed : 2) * 12.0f) * (mo.ai == 3 ? 1.6f : mo.ai == 4 ? 0.6f : 1.0f);
                     mo.vx = dx / dist * sp;
                     mo.vy = dy / dist * sp;
                 } else {
@@ -198,6 +245,7 @@ void Game::swingWeapon(const ToolDef& w) {
         int dmg = w.minDamage + (int)(rand32() % (uint32_t)std::max(1, w.maxDamage - w.minDamage + 1));
         mo.hp -= std::max(1, dmg);
         mo.hurt = 0.3f;
+        mo.hidden = false;
         mo.kx = fx[f] * 160.0f;
         mo.ky = fy[f] * 160.0f;
         if (!mo.bug) mo.think = 0.6f;
@@ -205,9 +253,15 @@ void Game::swingWeapon(const ToolDef& w) {
         if (mo.hp > 0) continue;
         // defeated: a puff and its drops
         const MonsterDef* d = data.monster(mo.kind);
-        sfx(mo.bug ? "monsterdead" : "slimedead");
+        bool slime = mo.ai == 0;
+        sfx(slime ? "slimedead" : "monsterdead");
         if (mo.bug) burst("Characters_Monsters_Bug", 0, 0, 16, 16, mo.x, mo.y - 8, 8);
-        else burst("Characters_Monsters_Green_Slime", 0, 0, 16, 24, mo.x, mo.y - 10, 8);
+        else if (slime) burst("Characters_Monsters_Green_Slime", 0, 0, 16, 24, mo.x, mo.y - 10, 8);
+        else {
+            std::string t = "Characters_Monsters_" + mo.kind;
+            for (auto& ch : t) if (ch == ' ') ch = '_';
+            burst(t, 16, 0, 16, 24, mo.x, mo.y - 12, 8);
+        }
         if (d) {
             for (auto& dr : d->drops)
                 if ((rand32() % 1000) / 1000.0f < dr.second && data.object(dr.first) && addItem(dr.first, 1))
@@ -275,7 +329,7 @@ void Game::enterMine(int level) {
                 if (const ToolDef* t = data.tool(sl.id)) armed |= t->kind == TOOL_WEAPON;
         if (armed || (data.toolByKey("Weapon_0") >= 0 && giveTool("Weapon_0"))) {
             eventsSeen.insert("s3d_rustySword");
-            if (!armed) say("Marlon left you a Rusty Sword: there are monsters down here!");
+            if (!armed) say("Marlon left you a Rusty Sword!");
         }
     }
 }
@@ -301,6 +355,18 @@ void Game::openElevator() {
 // A for the ladders and the elevator inside the mine.
 bool Game::mineInteract(int tx, int ty) {
     if (!cur || !cur->mineLevel || !cur->map.inBounds(tx, ty)) return false;
+    if (tx == cur->chestX && ty == cur->chestY) {   // a treasure chest
+        int lv = cur->mineLevel;
+        bool ok = false;
+        if (lv == 100) ok = addItem(434, 1);   // a stardrop
+        else ok = giveTool(lv == 20 ? "Weapon_11" : lv == 60 ? "Weapon_21" : "Weapon_8");
+        if (ok) {
+            sfx("openChest");
+            mailReceived.insert("s3d_minechest_" + std::to_string(lv));
+            cur->chestX = cur->chestY = -1;
+        }
+        return true;
+    }
     uint16_t t = cur->map.tile(L_BUILDINGS, tx, ty);
     if (t == LADDER_DOWN) { enterMine(cur->mineLevel + 1); return true; }
     if (t == LADDER_UP) { sfx("stairsdown"); warpTo("Mine", ENTRANCE_X, ENTRANCE_Y, false); return true; }

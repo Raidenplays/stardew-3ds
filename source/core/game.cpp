@@ -509,6 +509,7 @@ bool Game::tileSolid(int tx, int ty) const {
     if (!cur->clumps.empty() && clumpAt(tx, ty) >= 0) return true;
     if (!cur->fruitTrees.empty() && fruitTreeAt(tx, ty) >= 0) return true;
     if (cur->mineLevel && m.tile(L_BUILDINGS, tx, ty) != NO_TILE) return true;   // a ladder that turned up
+    if (cur->mineLevel && tx == cur->chestX && ty == cur->chestY) return true;
     const Soil& s = cur->soils[i];
     if (s.seed >= 0) {
         const CropDef* c = data.cropForSeed(s.seed);

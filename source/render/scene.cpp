@@ -596,6 +596,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         if (b.x >= x0 - 3 && b.x <= x1 && b.y >= y0 && b.y <= y1 + 3) items.push_back({(float)((b.y + 1) * TILE - 2), 11, (int)i, 0});
     }
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
+    if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
     if (here.isFarm)
         for (size_t i = 0; i < g.buildings.size(); i++) {
             const BuildingType* bt = g.typeOf(g.buildings[i]);
@@ -897,6 +898,9 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 }
                 break;
             }
+            case 18:   // a mine treasure chest
+                bigSprite(c, g, 130, 0, it.a * TILE - camX, (it.b - 1) * TILE - camY);
+                break;
             case 16:   // the feed hopper
                 bigSprite(c, g, 99, 0, it.a * TILE - camX, (it.b - 1) * TILE - camY);
                 break;
@@ -910,6 +914,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     int f = (int)(mo.anim * 10) & 3;
                     c.image("Characters_Monsters_Bug", f * 16, row * 16, 16, 16, mx - 8, my - 22, false,
                             flash ? RGBA(0xFF, 0x60, 0x60) : 0);
+                } else if (mo.ai >= 2) {   // bats, dust spirits, rock crabs: 16x24 frames on their own sheets
+                    std::string tex = "Characters_Monsters_" + mo.kind;
+                    for (auto& ch : tex) if (ch == ' ') ch = '_';
+                    int f = mo.ai == 2 ? ((int)(mo.anim * 10) & 3) : mo.ai == 3 ? ((int)(mo.anim * 8) & 3)
+                          : mo.hidden ? 0 : 1 + ((int)(mo.anim * 6) % 3);
+                    float lift = mo.ai == 2 ? 14 + std::sin(mo.anim * 6) * 2 : 0;   // bats fly
+                    c.image(tex, f * 16, 0, 16, 24, mx - 8, my - 22 - lift, false, flash ? RGBA(0xFF, 0x60, 0x60) : 0);
                 } else {
                     // a slime bounces while it hops; grey on the sheet, tinted per kind
                     int f = mo.think > 0.4f && (std::fabs(mo.vx) + std::fabs(mo.vy) > 5) ? ((int)(mo.anim * 8) & 3) : ((int)(mo.anim * 3) & 1);

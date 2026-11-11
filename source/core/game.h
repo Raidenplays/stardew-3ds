@@ -92,6 +92,7 @@ struct Location {
     TileMap map;
     bool isFarm = false;
     int mineLevel = 0;                 // UndergroundMine<n>: the floor number
+    int chestX = -1, chestY = -1;      // a mine treasure chest on this floor
     std::vector<Soil> soils;
     std::vector<uint8_t> debris, debrisVar;
     std::vector<WorldObject> objects;
@@ -115,6 +116,8 @@ struct Location {
         float hurt = 0, anim = 0, think = 0;
         bool bug = false;              // flies straight, bounces off walls
         uint32_t tint = 0;             // slimes are grey on the sheet
+        int ai = 0;                    // 0 slime hop, 1 bug, 2 bat (flies through walls), 3 dust spirit, 4 rock crab
+        bool hidden = false;           // a rock crab still pretending to be a rock
     };
     std::vector<Monster> monsters;
     std::vector<uint8_t> grass;        // per tile: tufts 0-4 (low bits), bit 3 = blue grass
