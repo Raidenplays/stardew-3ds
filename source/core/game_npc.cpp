@@ -336,6 +336,17 @@ void Game::talkTo(NpcState& n) {
     if (std::fabs(dx) > std::fabs(dy)) n.facing = dx > 0 ? FACE_RIGHT : FACE_LEFT;
     else n.facing = dy > 0 ? FACE_DOWN : FACE_UP;
 
+    if (n.def->dialogue.count("fact_0")) {   // a talking prop (Raiden): a random fact, nothing else
+        std::vector<const std::string*> facts;
+        for (auto& kv : n.def->dialogue)
+            if (kv.first.rfind("fact_", 0) == 0) facts.push_back(&kv.second);
+        uint32_t r = rand32() % facts.size();
+        if (facts.size() > 1 && r == n.lastFact) r = (r + 1) % facts.size();
+        n.lastFact = r;
+        auto pages = parseDialogue("Oh, hey! Did you know...$h#$b#" + *facts[r], me.name);
+        showDialogue(n, pages);
+        return;
+    }
     std::string key = pickDialogueKey(*n.def, scheduleContext(n), n.introduced);
     std::vector<DialoguePage> pages;
     if (n.def->name == spouse) marriageTalk(n, pages);
@@ -368,6 +379,7 @@ void Game::giveGift(NpcState& n, int slot) {
         if (--sl.count <= 0) sl = Slot();
         return;
     }
+    if (n.def->dialogue.count("fact_0")) { say(n.def->display + " is too busy racing to take that."); return; }
     if (romanceGift(n, slot)) return;
     bool bday = isBirthday(*n.def);
     if (n.giftsToday >= 1) {

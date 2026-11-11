@@ -137,6 +137,7 @@ struct NpcState {
     std::string loc;
     float x = 0, y = 0;       // feet, map pixels
     int facing = 0;
+    uint32_t lastFact = 0;   // a talking prop: the fact it told last
     bool moving = false;
     float walkTime = 0;
 
