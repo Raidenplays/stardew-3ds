@@ -71,6 +71,7 @@ EXTRA_TEXTURES = [
     ("TileSheets/Craftables", False),
     ("Characters/Farmer/shirts", False),
     ("Buildings/houses", False),
+    ("Buildings/Mailbox", False),
     ("Buildings/Shipping Bin", False),
     ("LooseSprites/Cursors", False),
     ("TileSheets/emotes", False),
@@ -1441,6 +1442,8 @@ building shippingbin Buildings_Shipping_Bin 0 0 32 32 71 14 2 1
 door 64 17
 # spawn <tileX> <tileY>       where you wake up each morning
 spawn 64 18
+# mailbox <tileX> <tileY>     the farmhouse mailbox (A on it reads your mail)
+mailbox 68 16
 # bin <tileX> <tileY>         tiles that open the shipping bin
 bin 71 14
 bin 72 14

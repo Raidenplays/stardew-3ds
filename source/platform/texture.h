@@ -21,6 +21,9 @@ struct TexPage {
 // Call once per frame (before drawing): pages drawn in an earlier frame can
 // then be evicted when GPU memory runs out.
 void texNewFrame();
+// counters for the on-screen performance readout
+struct TexStats { unsigned loads = 0, evictions = 0, failed = 0; };
+TexStats& texStats();
 
 class Texture {
 public:
@@ -42,8 +45,11 @@ public:
 
 private:
     bool ensure(TexPage& p) const;
+    void drawPart(const TexPage& p, int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
+                  const C2D_ImageTint* tint, float scale) const;
     std::string path;
     bool packed = false, v2 = false;
+    int gridCols = 0, gridW = 0, gridH = 0;   // pages form a regular grid (0 = search them all)
     mutable std::vector<TexPage> pages;
 };
 

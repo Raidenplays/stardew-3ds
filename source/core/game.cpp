@@ -99,7 +99,7 @@ bool Game::hasMap(const std::string& name) const {
     return locations.count(name) || data.vfs.exists("maps/" + name + ".smap");
 }
 
-bool Game::warpTo(const std::string& name, int tx, int ty) {
+bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     Location* dest = loadLocation(name);
     if (!dest) {
         say("Can't go there yet (" + name + " not converted)");
@@ -115,7 +115,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
                 n.path.clear();
                 n.pathIdx = 0;
             }
-    if (prev && prev != dest) sfx("doorClose");
+    if (door && prev && prev != dest) sfx("doorClose");
     cur = dest;
     // Only the farm and where you are stay in memory.
     if (prev && prev != farm && prev != cur) {
@@ -150,10 +150,10 @@ bool Game::warpTo(const std::string& name, int tx, int ty) {
     return true;
 }
 
-bool Game::enterFrom(const std::string& name) {
+bool Game::enterFrom(const std::string& name, bool door) {
     std::string from = cur ? cur->name : "";
     Location* dest = loadLocation(name);
-    if (!dest) return warpTo(name, 0, 0);
+    if (!dest) return warpTo(name, 0, 0, door);
     // Arrive just inside the warp that leads back where we came from.
     const Warp* back = dest->map.warpTo(from);
     if (back) {
@@ -164,9 +164,9 @@ bool Game::enterFrom(const std::string& name) {
         if (tx >= dest->map.width()) tx = dest->map.width() - 1;
         if (ty < 0) ty = 0;
         facing = FACE_UP;
-        return warpTo(name, tx, ty);
+        return warpTo(name, tx, ty, door);
     }
-    return warpTo(name, dest->map.width() / 2, dest->map.height() / 2);
+    return warpTo(name, dest->map.width() / 2, dest->map.height() / 2, door);
 }
 
 // Parses tile Action strings from the maps.
@@ -191,7 +191,7 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
                 return true;
             }
         }
-        warpTo(target, x, y);
+        warpTo(target, x, y, verb != "MagicWarp");   // doors click; magic warps don't
         return true;
     }
     if (bumped) return false;   // everything else needs a button press
@@ -617,8 +617,12 @@ bool Game::tryInteract(int tx, int ty) {
                 say("Hold something to ship");
                 return true;
             }
+        if (tx == data.layout.mailX && ty == data.layout.mailY) {
+            if (!openMail()) say("No new mail");
+            return true;
+        }
         if (tx == data.layout.doorX && ty == data.layout.doorY) {
-            if (hasMap("FarmHouse")) enterFrom("FarmHouse");
+            if (hasMap("FarmHouse")) enterFrom("FarmHouse", true);
             else goToBed();
             return true;
         }
