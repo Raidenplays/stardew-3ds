@@ -107,7 +107,7 @@ void titleTick(TitleUi& t, float dt) {
     if (t.screen == TS_SPLASH) {
         if (t.sound)
             for (float at : LOGO_CLICKS)
-                if (t.splashT < at && t.splashT + dt >= at) t.sound("logoClick");
+                if (t.splashT < at && t.splashT + dt >= at) t.sound("mouseClick");
         t.splashT += dt;
         if (t.splashT >= SPLASH_SECONDS) { t.screen = TS_TITLE; t.introT = 0; }
         return;
