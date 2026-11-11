@@ -305,6 +305,7 @@ int main() {
     }
 
     Ui ui;
+    loadUiSettings(ui, root + "settings.txt");
     u64 last = osGetTime();
     float holdA = 0;
     while (aptMainLoop() && !ui.quit) {

@@ -1521,9 +1521,37 @@ static void drawOptionsTab(Canvas& c, Game& g, Ui& ui) {
     (void)g;
 }
 
+void loadUiSettings(Ui& ui, const std::string& path) {
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return;
+    char line[128];
+    while (fgets(line, sizeof line, f)) {
+        int v;
+        if (sscanf(line, "fastMap=%d", &v) == 1) ui.mapCache = std::max(0, std::min(2, v));
+        if (sscanf(line, "perfInfo=%d", &v) == 1) ui.showPerf = v != 0;
+    }
+    fclose(f);
+}
+
+void saveUiSettings(const Ui& ui, const std::string& path) {
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f) return;
+    fprintf(f, "fastMap=%d\nperfInfo=%d\n", ui.mapCache, ui.showPerf ? 1 : 0);
+    fclose(f);
+}
+
+static std::string settingsPath(const std::string& savePath) {
+    size_t s = savePath.find_last_of('/');
+    return (s == std::string::npos ? std::string() : savePath.substr(0, s + 1)) + "settings.txt";
+}
+
 static void touchOptionsTab(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
-    if (hit(tx, ty, 14, PANEL_Y + 130, 142, 22)) { ui.showPerf = !ui.showPerf; return; }
-    if (hit(tx, ty, 164, PANEL_Y + 130, 142, 22)) { ui.mapCache = (ui.mapCache + 1) % 3; return; }
+    if (hit(tx, ty, 14, PANEL_Y + 130, 142, 22)) { ui.showPerf = !ui.showPerf; saveUiSettings(ui, settingsPath(savePath)); return; }
+    if (hit(tx, ty, 164, PANEL_Y + 130, 142, 22)) {
+        ui.mapCache = (ui.mapCache + 1) % 3;
+        saveUiSettings(ui, settingsPath(savePath));
+        return;
+    }
     for (int i = 0; i < 3; i++)
         if (hit(tx, ty, 40, PANEL_Y + 10 + i * 40, 240, 32)) {
             if (i == 1) {
