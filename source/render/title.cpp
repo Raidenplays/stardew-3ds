@@ -89,8 +89,8 @@ void titleInit(TitleUi& t, const GameData& data, bool hasSave) {
 //   5.7-10.0  Ported by ItsRaiden + logo (built into the app)
 //   10.0-11.2 white, then the title scene
 static const char* DEV_TEX = "Minigames_TitleButtons";
-static const int FACE_X = 1, FACE_Y = 307, FACE_W = 83, FACE_H = 67;      // + a second snow frame at x 85
-static const int PLATE_X = 173, PLATE_Y = 313, PLATE_W = 107, PLATE_H = 54;  // + a bright version at 283,305
+static const int FACE_X = 1, FACE_Y = 307, FACE_W = 83, FACE_H = 67;      // + a pressed version at 85,306
+static const int PLATE_X = 173, PLATE_Y = 313, PLATE_W = 107, PLATE_H = 54;  // + a bold version at 283,312
 // When the original's logo clicks (seconds into the credits, measured from the
 // real game). Played through t.sound once the engine has audio.
 static const float LOGO_CLICKS[] = {1.83f, 1.99f, 2.89f, 3.03f, 3.41f, 3.56f, 3.74f, 4.45f, 5.22f, 5.44f};
@@ -132,18 +132,32 @@ static void drawSplash(Canvas& c, TitleUi& t) {
     float s = t.splashT;
     float a = fadeWindow(s, 0, DEV_END, 0.3f, 0.7f);
     if (a > 0) {
+        // The logo "hops" into its pressed look (bigger face, bold plate) for
+        // a tenth of a second about five times a second: a short burst at
+        // the start, a pause, then steadily until it fades (timed from the
+        // original).
+        auto hopping = [](float s) {
+            float start = s >= 1.8f && s < 4.95f ? 1.8f : (s >= 0.17f && s < 0.7f ? 0.17f : -1);
+            return start >= 0 && std::fmod(s - start, 0.2167f) < 0.1f;
+        };
+        bool hop = hopping(s);
         if (c.texWidth(DEV_TEX) >= 400 && !t.creditsText) {
             // the face's snow flickers between two frames and the plate between
             // its normal and bright versions, like the original
             float x = std::floor(200 - (FACE_W + 4 + PLATE_W) / 2.0f);
-            bool snow = (int)(s / 0.15f) % 2, bright = (int)(s / 0.3f) % 3 == 1;
-            if (snow) c.image(DEV_TEX, 85, 306, 85, 69, x - 1, 120 - FACE_H / 2 - 1);
-            else c.image(DEV_TEX, FACE_X, FACE_Y, FACE_W, FACE_H, x, 120 - FACE_H / 2);
-            if (bright) c.image(DEV_TEX, 283, 305, 110, 64, x + FACE_W + 4 - 2, 120 - PLATE_H / 2 - 5);
-            else c.image(DEV_TEX, PLATE_X, PLATE_Y, PLATE_W, PLATE_H, x + FACE_W + 4, 120 - PLATE_H / 2);
+            float fy = 120 - FACE_H / 2, py = 120 - PLATE_H / 2, px = x + FACE_W + 4;
+            if (hop) c.image(DEV_TEX, 85, 306, 85, 69, x - 1, fy - 1);
+            else c.image(DEV_TEX, FACE_X, FACE_Y, FACE_W, FACE_H, x, fy);
+            if (hop) c.image(DEV_TEX, 283, 312, 110, 57, px - 1, py - 1);
+            else c.image(DEV_TEX, PLATE_X, PLATE_Y, PLATE_W, PLATE_H, px, py);
         } else {
-            c.text(200, 98, 0.5f, CREDIT_BLUE, "Developed by", ALIGN_CENTER);
-            c.text(200, 118, 0.5f, CREDIT_BLUE, "ConcernedApe", ALIGN_CENTER);
+            // text stand-in (previews): hops on the same beat, bolder when pressed
+            float o = hop ? -1.0f : 0.0f;
+            uint32_t col = hop ? RGBA(0x24, 0x44, 0xB0) : CREDIT_BLUE;
+            for (int b = 0; b < (hop ? 2 : 1); b++) {
+                c.text(200 + o + b, 98 + o, 0.5f, col, "Developed by", ALIGN_CENTER);
+                c.text(200 + o + b, 118 + o, 0.5f, col, "ConcernedApe", ALIGN_CENTER);
+            }
         }
         whiteOver(c, 400, 1 - a);
         return;

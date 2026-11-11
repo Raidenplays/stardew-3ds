@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
     if (introFrames) {
         TitleUi t;
         titleInit(t, data, false);
-        t.creditsText = true;
+        t.creditsText = !getenv("S3DS_REAL_CREDITS");
         int n = 0;
         const float step = 1.0f / (introFps > 0 ? introFps : 10);
         for (float time = 0; time < SPLASH_SECONDS + INTRO_SECONDS + 2.0f; time += step) {
