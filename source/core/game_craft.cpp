@@ -316,6 +316,7 @@ bool Game::placeSelected(int tx, int ty) {
     placed[cur->name].push_back(p);
     if (--sl.count <= 0) sl = Slot();
     Placed& np = placed[cur->name].back();
+    if (grassAt(tx, ty)) cur->grass[(size_t)ty * cur->map.width() + tx] = 0;   // flattened
     if (big) {   // machines that work on their own start now
         for (size_t i = 0; i < data.machineRules.size(); i++)
             if (data.machineRules[i].machine == np.id && data.machineRules[i].autoRun) {

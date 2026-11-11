@@ -84,6 +84,13 @@ struct Location {
     std::vector<uint8_t> debris, debrisVar;
     std::vector<WorldObject> objects;
     std::vector<Tree> trees;
+    // Bushes and grass come from the map's Paths layer markers (24/25/26 =
+    // large/medium/small bush, 22 = grass, 36 = blue grass).
+    struct Bush { int16_t x = 0, y = 0; uint8_t size = 0; float shake = 0; };   // size 0 small, 1 medium, 2 large
+    std::vector<Bush> bushes;
+    std::vector<uint8_t> grass;        // per tile: tufts 0-4 (low bits), bit 3 = blue grass
+    struct Rustle { int cell; float t; };
+    std::vector<Rustle> rustles;       // grass swaying after you walk through it
     int spawnDay = -1;                 // absolute day the objects were spawned
     std::string file;                  // which .smap is loaded (seasonal variants differ)
     void initState();
@@ -435,6 +442,7 @@ public:
         int dir = 1;                          // FALLING_TREE: +1 falls right, -1 left
     };
     std::vector<Effect> effects;
+    int lastGrassCell = -1;
     // n bits of a sprite (each `piece` px square) burst out from world (x, y)
     void burst(const std::string& tex, int sx, int sy, int sw, int sh, float x, float y, int n, int piece = 4);
     void updateEffects(float dt);
@@ -502,6 +510,10 @@ private:
     void startFishing();
     void treesGrow();
     bool chopTree(int tx, int ty, int axeLevel);
+    int bushAt(int tx, int ty) const;        // index into location().bushes, or -1
+    int grassAt(int tx, int ty) const;       // tufts on that tile (0 = none)
+    bool cutGrass(int tx, int ty);           // scythe / hoe; true if there was grass
+    void growGrass();                        // overnight on the farm
     bool plantTree(int tx, int ty);
     void startMachine(Placed& p, int ruleIdx, int input);
     bool blockedPx(float x, float y) const;
