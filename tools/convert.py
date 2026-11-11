@@ -70,6 +70,7 @@ EXTRA_TEXTURES = [
     ("TileSheets/furniture", False),
     ("TileSheets/Craftables", False),
     ("Characters/Farmer/shirts", False),
+    ("Characters/Farmer/hats", False),
     ("Buildings/houses", False),
     ("Buildings/Mailbox", False),
     ("Buildings/Shipping Bin", False),
@@ -843,7 +844,33 @@ def write_data(content, out_dir):
                     -1, "", int(w.get("MinDamage", 1) or 1), int(w.get("MaxDamage", 3) or 3),
                 ]) + "\n")
                 n += 1
-    print(f"  tools.dat: {n} tools and weapons")
+        # boots and hats are worn, not used: Boots_<id> (defense, immunity), Hat_<id>
+        bp = os.path.join(content, "Data", "Boots.json")
+        if os.path.isfile(bp):
+            for bid, b in _load_json(content, "Data/Boots.json").items():
+                p = str(b).split("/")
+                if len(p) < 5:
+                    continue
+                f.write("\t".join(_clean(x) for x in [
+                    "Boots_" + str(bid), "Boots", p[6] if len(p) > 6 and p[6] else p[0], 0,
+                    int(bid) if str(bid).isdigit() else 504, "Maps_springobjects", int(p[2] or 0), "",
+                    int(p[3] or 0), int(p[4] or 0)]) + "\n")
+                n += 1
+        hp = os.path.join(content, "Data", "hats.json")
+        if os.path.isfile(hp):
+            for hid, h in _load_json(content, "Data/hats.json").items():
+                p = str(h).split("/")
+                if not str(hid).isdigit():
+                    continue
+                f.write("\t".join(_clean(x) for x in [
+                    "Hat_" + str(hid), "Hat", p[5] if len(p) > 5 and p[5] else p[0], 0, int(hid),
+                    "Characters_Farmer_hats", -1, "", 0, 0]) + "\n")
+                n += 1
+    with open(os.path.join(out_dir, "rings.dat"), "w", encoding="utf-8") as f:
+        for oid, o in objs.items():
+            if (o or {}).get("Type") == "Ring" and ITEM_IDS.get(oid) is not None:
+                f.write(f"{ITEM_IDS.get(oid)}\t{_clean(o.get('Name', ''))}\n")
+    print(f"  tools.dat: {n} tools, weapons, boots and hats")
     # monsters: name, health, damage, drops (id chance ...), speed, experience
     mp = os.path.join(content, "Data", "Monsters.json")
     if os.path.isfile(mp):

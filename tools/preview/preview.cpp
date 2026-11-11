@@ -691,6 +691,19 @@ int main(int argc, char** argv) {
             for (auto& n : g.npcs)
                 if (n.anim) printf("  %s in %s at %d,%d: animating (frame %d)\n", n.def->name.c_str(), n.loc.c_str(), n.tileX(), n.tileY(), n.animFrame());
         }
+        if (const char* wear = getenv("WEAR")) {   // WEAR=Hat_2,Boots_506: put them on (plus two rings)
+            std::string list = wear;
+            size_t i = 0;
+            while (i < list.size()) {
+                size_t j = list.find(',', i);
+                if (j == std::string::npos) j = list.size();
+                if (g.giveTool(list.substr(i, j - i)))
+                    for (int k = 0; k < INV_SIZE; k++) if (g.equipKind(g.inv[k]) >= 0) g.wearSlot(k);
+                i = j + 1;
+            }
+            g.addItem(534, 1); g.addItem(529, 1); g.addItem(527, 1);
+            for (int k = 0; k < INV_SIZE; k++) if (g.equipKind(g.inv[k]) == Game::EQ_RING1 && g.equip[1].empty()) g.wearSlot(k);
+        }
         const TileMap& mm = g.map();
         step(g, ui, none, 5);
         if (weatherArg == "rain" || weatherArg == "storm") { g.raining = true; g.stormy = weatherArg == "storm"; }

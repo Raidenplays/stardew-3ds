@@ -300,6 +300,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     furniture = data.layout.furniture;
     museumDonated.clear();
     museumOpen = false;
+    for (auto& e : equip) e = Slot();
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -641,6 +642,59 @@ bool Game::trashSlot(int i) {
     return true;
 }
 
+int Game::equipKind(const Slot& s) const {
+    if (s.type == SLOT_OBJECT) return data.rings.count(s.id) ? EQ_RING1 : -1;
+    if (s.type != SLOT_TOOL) return -1;
+    const ToolDef* t = data.tool(s.id);
+    return !t ? -1 : t->kind == TOOL_BOOTS ? EQ_BOOTS : t->kind == TOOL_HAT ? EQ_HAT : -1;
+}
+
+bool Game::wearSlot(int i) {
+    if (i < 0 || i >= INV_SIZE) return false;
+    int e = equipKind(inv[i]);
+    if (e < 0) return false;
+    if (e == EQ_RING1 && !equip[EQ_RING1].empty() && equip[EQ_RING2].empty()) e = EQ_RING2;
+    Slot on = inv[i];
+    on.count = 1;
+    Slot old = equip[e];
+    if (inv[i].count > 1) {            // one ring off a stack: the old one needs its own room
+        if (!old.empty() && !addSlot(old)) { say("No room in your bag."); return false; }
+        inv[i].count--;
+    } else {
+        inv[i] = old;
+    }
+    equip[e] = on;
+    sfx("crit");
+    say("Wearing: " + itemName(on));
+    return true;
+}
+
+bool Game::takeOff(int e) {
+    if (e < 0 || e >= EQ_COUNT || equip[e].empty()) return false;
+    if (!addSlot(equip[e])) { say("No room in your bag."); return false; }
+    equip[e] = Slot();
+    sfx("shwip");
+    return true;
+}
+
+bool Game::wearing(const char* ringName) const {
+    for (int e = EQ_RING1; e <= EQ_RING2; e++) {
+        if (equip[e].empty()) continue;
+        auto it = data.rings.find(equip[e].id);
+        if (it != data.rings.end() && it->second == ringName) return true;
+    }
+    return false;
+}
+
+int Game::defense() const {
+    int d = 0;
+    if (!equip[EQ_BOOTS].empty())
+        if (const ToolDef* t = data.tool(equip[EQ_BOOTS].id)) d += t->minDamage;
+    if (wearing("Topaz Ring")) d += 1;
+    if (wearing("Crabshell Ring")) d += 5;
+    return d;
+}
+
 bool Game::eatSlot(int i) {
     if (i < 0 || i >= INV_SIZE) return false;
     Slot& sl = inv[i];
@@ -852,6 +906,7 @@ void Game::useSelected(int tx, int ty) {
     if (sl.type == SLOT_TOOL) {
         const ToolDef* t = data.tool(sl.id);
         if (!t) return;
+        if (t->kind == TOOL_BOOTS || t->kind == TOOL_HAT) { wearSlot(selected); return; }
         if (energy <= 0) {
             say("Too tired...");
             return;
@@ -1195,7 +1250,7 @@ void Game::update(float dt, const Input& in) {
         if (len > 1) { mx /= len; my /= len; }
         if (std::fabs(mx) > std::fabs(my)) facing = mx > 0 ? FACE_RIGHT : FACE_LEFT;
         else facing = my > 0 ? FACE_DOWN : FACE_UP;
-        float sp = (in.walk ? WALK_SPEED : RUN_SPEED) * (riding ? 1.6f : 1.0f) * dt;
+        float sp = (in.walk ? WALK_SPEED : RUN_SPEED) * (riding ? 1.6f : 1.0f) * (speedBoost > 0 ? 1.25f : 1.0f) * dt;
         float nx = px + mx * sp, ny = py + my * sp;
 
         // Map-edge and path warps: stepping onto a warp tile, even off the edge.
@@ -1355,7 +1410,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 23;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 24;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1376,6 +1431,7 @@ static const uint32_t SAVE_VERSION = 23;   // 2: villager friendships, 3: events
                                           // 21: furniture
                                           // 22: museum donations
                                           // 23: fish ponds
+                                          // 24: rings, boots, hat
 
 namespace {
 struct W {
@@ -1561,6 +1617,7 @@ bool Game::save(const std::string& path) const {
     for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
+    for (auto& e : equip) w.slot(e);
     for (auto& b : buildings) { w.i32(b.pondFish); w.i32(b.pondPop); w.i32(b.pondDays); w.i32(b.pondOut); w.i32(b.pondOutN); }
     // item quality: inventory, shipped, then each chest / machine in order
     for (auto& s : inv) w.u8(s.quality);
@@ -1904,6 +1961,7 @@ bool Game::load(const std::string& path, std::string* err) {
     furniture = data.layout.furniture;
     museumDonated.clear();
     museumOpen = false;
+    for (auto& e : equip) e = Slot();
     if (version >= 21 && r.ok) {
         furniture.clear();
         uint32_t nf = r.u32();
@@ -1916,6 +1974,8 @@ bool Game::load(const std::string& path, std::string* err) {
             uint32_t nm = r.u32();
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
+        if (version >= 24 && r.ok)
+            for (auto& e : equip) e = r.slot();
         if (version >= 23 && r.ok)
             for (auto& b : buildings) {
                 b.pondFish = r.i32(); b.pondPop = r.i32(); b.pondDays = r.i32();
