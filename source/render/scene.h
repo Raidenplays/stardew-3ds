@@ -16,6 +16,7 @@ struct Ui {
     int picked = -1;          // inventory slot picked up for moving
     bool showSummary = false;
     bool quit = false;
+    bool showPerf = false;    // performance readout (Options tab, or L + SELECT)
     std::string status;
     float statusTime = 0;
 
