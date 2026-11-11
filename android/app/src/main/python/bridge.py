@@ -45,7 +45,11 @@ def run(content, mods, out, logo, cb, tools_dir=""):
         convert.main()
         return 0
     except SystemExit as e:
-        return e.code if isinstance(e.code, int) else 1
+        if isinstance(e.code, int):
+            return e.code
+        if e.code:
+            print("Error: " + str(e.code))   # sys.exit("message") -> show why
+        return 1
     except Exception:
         traceback.print_exc()
         return 1
