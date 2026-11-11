@@ -7,7 +7,10 @@ namespace sv {
 
 enum class SetupView { NeedFiles, Confirm, Running, Result };
 
-void drawSetupTop(Canvas& c, const setup::Setup& su, SetupView v);
-void drawSetupBottom(Canvas& c, const setup::Setup& su, SetupView v);
+// t = seconds, for the drifting clouds
+void drawSetupTop(Canvas& c, const setup::Setup& su, SetupView v, float t);
+void drawSetupBottom(Canvas& c, const setup::Setup& su, SetupView v, float t);
+// The big button on the bottom screen (touch target).
+inline bool setupButtonHit(int x, int y) { return x >= 50 && x < 270 && y >= 70 && y < 110; }
 
 }  // namespace sv

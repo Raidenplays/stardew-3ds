@@ -25,7 +25,7 @@ static const char* PANORAMA = "LooseSprites_stardewPanorama";
 static const char* CLOUDS = "Minigames_Clouds";
 static const char* TREES = "Minigames_treestrip";
 
-static void titleSky(Canvas& c, float w, float h, float t, bool bottom) {
+void titleSky(Canvas& c, float w, float h, float t, bool bottom) {
     c.rect(0, 0, w, h, RGBA(0x6C, 0xB4, 0xEC));
     c.rect(0, h * 0.45f, w, h * 0.55f, RGBA(0x8C, 0xC8, 0xF2));
     if (!bottom && c.texWidth(PANORAMA) > 0)                   // 640x400 -> fills the top screen

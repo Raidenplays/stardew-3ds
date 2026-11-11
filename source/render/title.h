@@ -39,3 +39,6 @@ void drawTitleBottom(Canvas& c, const sv::Game& g, TitleUi& t);
 enum TitleKey { TK_UP, TK_DOWN, TK_LEFT, TK_RIGHT, TK_A, TK_B, TK_START };
 void titleKey(TitleUi& t, const sv::GameData& data, TitleKey k);
 void titleTouch(TitleUi& t, const sv::GameData& data, int x, int y);
+
+// The title screen's sky (panorama, drifting clouds, treetops on the bottom screen).
+void titleSky(Canvas& c, float w, float h, float t, bool bottom);

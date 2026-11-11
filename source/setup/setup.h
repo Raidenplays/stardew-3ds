@@ -29,6 +29,10 @@ public:
     std::string contentDir() const { return content_; }
 
     State state() const { return state_; }
+    // Converts just what the setup screens need to look like the game (menu
+    // frames, fonts, the title sky). Fast; call before showing the confirm
+    // screen. Returns true if the game's UI art is now available.
+    bool prepareUi();
     void begin();
     // Runs jobs for about budgetMs (at least one). Returns false when finished.
     bool step(int budgetMs, const std::function<unsigned()>& nowMs);
@@ -50,6 +54,7 @@ private:
     State state_ = State::NeedFiles;
     std::string stage_, item_, error_;
     std::vector<std::string> warnings_;
+    std::vector<std::string> uiDone_;
 };
 
 // "Maps/spring_outdoorsTileSheet" -> "Maps_spring_outdoorsTileSheet"
