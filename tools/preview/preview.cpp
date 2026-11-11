@@ -499,6 +499,19 @@ int main(int argc, char** argv) {
                 }
         }
         g.toolTimer = 0;
+        // effects: stone chips and a felled tree, a few moments in
+        g.facing = FACE_RIGHT;
+        g.burst("Maps_springobjects", (343 % 24) * 16, (343 / 24) * 16, 16, 16, g.px + 20, g.py, 7);
+        Game::Effect e;
+        e.kind = Game::Effect::FALLING_TREE;
+        e.tex = "TerrainFeatures_tree1_spring";
+        e.sw = 48; e.sh = 96;
+        e.x = g.px + 60; e.y = g.py - 4; e.dir = 1; e.life = 1.4f;
+        g.effects.push_back(e);
+        for (int k = 0; k < 4; k++) {
+            shot(c, g, ui, "effects_" + std::to_string(k));
+            g.updateEffects(0.3f);
+        }
         printf("  player at %.0f,%.0f\n", g.px, g.py);
         return 0;
     }

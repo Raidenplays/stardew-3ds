@@ -418,6 +418,23 @@ public:
     bool windy = false;      // spring/fall "debris" days: petals and leaves blow across the screen
     // Sound cues (Stardew's names) the frontend plays then clears.
     std::vector<std::string> sounds;
+
+    // Little visual effects (they don't change the game): bits flying off
+    // what a tool hits, leaves dropping from a shaken tree, a felled tree
+    // toppling over. Positions are world pixels.
+    struct Effect {
+        enum Kind { BIT, FALLING_TREE } kind = BIT;
+        std::string tex;
+        int sx = 0, sy = 0, sw = 0, sh = 0;   // source rect
+        float x = 0, y = 0, vx = 0, vy = 0;   // BIT: centre; FALLING_TREE: trunk base
+        float groundY = 0;                    // BIT: lands here
+        float rot = 0, vrot = 0, t = 0, life = 1;
+        int dir = 1;                          // FALLING_TREE: +1 falls right, -1 left
+    };
+    std::vector<Effect> effects;
+    // n bits of a sprite (each `piece` px square) burst out from world (x, y)
+    void burst(const std::string& tex, int sx, int sy, int sw, int sh, float x, float y, int n, int piece = 4);
+    void updateEffects(float dt);
     void sfx(const char* cue) { sounds.emplace_back(cue); }
     int selected = 0;
     Slot inv[INV_SIZE];
