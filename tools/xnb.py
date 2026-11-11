@@ -20,7 +20,8 @@ def _str(d, i):
 
 
 def read_dict(path):
-    d = open(path, "rb").read()
+    with open(path, "rb") as fh:
+        d = fh.read()
     if d[:3] != b"XNB":
         raise ValueError("not an XNB file")
     if d[5] & 0xC0:
