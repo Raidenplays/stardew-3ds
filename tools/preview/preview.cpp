@@ -543,8 +543,9 @@ int main(int argc, char** argv) {
         g.teleport("Farm", 60, 20);
         for (auto& d : const_cast<Location&>(g.location()).debris) d = DEB_NONE;   // a cleared farm
         Input a; a.action = true;
-        const char* want[3] = {"Coop", "Barn", "Silo"};
-        for (int k = 0; k < 3; k++) {
+        const char* want[4] = {"Coop", "Barn", "Silo", "Stable"};
+        g.addItem(709, 200); g.addItem(335, 10); g.addItem(330, 20); g.addItem(334, 10);
+        for (int k = 0; k < 4; k++) {
             g.startBuilding(want[k]);
             int tries = 0;
             g.placeX = 50 + k * 9; g.placeY = 22;
@@ -574,6 +575,19 @@ int main(int argc, char** argv) {
             step(g, ui, none, 90);
             printf("  inside %s: %zu things on the floor\n", g.location().name.c_str(), g.location().objects.size());
             shot(c, g, ui, std::string("inside_") + b.type);
+        }
+        g.horseMorning();
+        printf("  horse: '%s' %.0f,%.0f\n", g.horseLoc.c_str(), g.horseX / 16, g.horseY / 16);
+        if (!g.horseLoc.empty()) {
+            g.teleport("Farm", (int)(g.horseX / 16), (int)(g.horseY / 16) + 2);
+            g.facing = FACE_UP;
+            step(g, ui, none, 20);
+            shot(c, g, ui, "horse");
+            g.horseInteract((int)(g.horseX / 16), (int)(g.horseY / 16));
+            Input right; right.mx = 1;
+            step(g, ui, right, 20);
+            printf("  riding %d at %.0f,%.0f\n", g.riding, g.px / 16, g.py / 16);
+            shot(c, g, ui, "riding");
         }
         ui.shop = "AnimalShop"; ui.shopUpgrade = true;
         shot(c, g, ui, "marnie_animals");

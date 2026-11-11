@@ -468,6 +468,30 @@ bool Game::startHouseUpgrade() {
     return true;
 }
 
+// The horse appears by a finished stable each morning.
+void Game::horseMorning() {
+    horseLoc.clear();
+    for (auto& b : buildings)
+        if (b.type == "Stable" && b.daysLeft <= 0) {
+            horseLoc = "Farm";
+            horseX = (b.x + 1) * TILE + 8.0f;
+            horseY = (b.y + 2) * TILE + 14.0f;
+            horseFacing = FACE_DOWN;
+            return;
+        }
+}
+
+bool Game::horseInteract(int tx, int ty) {
+    if (horseLoc != cur->name || riding) return false;
+    float cx = tx * TILE + 8.0f, cy = ty * TILE + 8.0f;
+    if (std::fabs(horseX - cx) > 20 || std::fabs(horseY - 8 - cy) > 16) return false;
+    riding = true;
+    px = horseX;
+    py = horseY;
+    sfx("dwop");
+    return true;
+}
+
 // Every farm has a greenhouse: in ruins until the Community Center pantry is
 // done. The standard farm keeps it at 25,10 (an imported farm brings its own).
 void Game::ensureGreenhouse() {

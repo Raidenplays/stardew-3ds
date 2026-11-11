@@ -597,6 +597,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     }
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
     if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
+    if (!g.riding && g.horseLoc == here.name) items.push_back({g.horseY, 19, 0, 0});
     if (here.isFarm)
         for (size_t i = 0; i < g.buildings.size(); i++) {
             const BuildingType* bt = g.typeOf(g.buildings[i]);
@@ -692,6 +693,14 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 break;
             }
             case 3: {
+                if (g.riding) {   // on horseback: the horse, then you a little higher
+                    int f = g.moving ? 1 + ((int)(g.walkTime * 9) % 6) : 0;
+                    int row = g.facing == FACE_DOWN ? 0 : g.facing == FACE_RIGHT ? 1 : g.facing == FACE_UP ? 2 : 1;
+                    c.image("Animals_horse", f * 32, row * 32, 32, 32, std::floor(g.px - camX - 16), std::floor(g.py - camY - 30),
+                            g.facing == FACE_LEFT);
+                    drawPlayerWithTool(c, g, g.px - camX, g.py - camY - 10);
+                    break;
+                }
                 drawPlayerWithTool(c, g, g.px - camX, g.py - camY);
                 const ToolDef* td = nullptr;
                 const ToolDef* wd = g.inv[g.selected].type == SLOT_TOOL ? g.data.tool(g.inv[g.selected].id) : nullptr;
@@ -896,6 +905,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     const ObjectDef* fo = g.data.object(d->fruit);
                     for (int k = 0; k < t.fruit && k < 3; k++) itemIcon(c, fo, tx + fx[k], ty + fy[k]);
                 }
+                break;
+            }
+            case 19: {   // your horse, waiting
+                int row = g.horseFacing == FACE_DOWN ? 0 : g.horseFacing == FACE_UP ? 2 : 1;
+                c.rect(std::floor(g.horseX - camX - 10), std::floor(g.horseY - camY - 2), 20, 3, RGBA(0, 0, 0, 0x40));
+                c.image("Animals_horse", 0, row * 32, 32, 32, std::floor(g.horseX - camX - 16), std::floor(g.horseY - camY - 30),
+                        g.horseFacing == FACE_LEFT);
                 break;
             }
             case 18:   // a mine treasure chest

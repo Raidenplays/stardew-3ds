@@ -91,6 +91,7 @@ EXTRA_TEXTURES = [
     ("Characters/Monsters/Green Slime", False),
     ("Characters/Monsters/Bug", False),
     ("Characters/Monsters/Bat", False),
+    ("Animals/horse", False),
     ("Characters/Monsters/Frost Bat", False),
     ("Characters/Monsters/Lava Bat", False),
     ("Characters/Monsters/Dust Spirit", False),
@@ -578,7 +579,7 @@ TEXTURES_FROM_DATA = set()
 
 # Robin's buildings that the engine handles: animal houses, sheds, silos, wells.
 BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed",
-             "Greenhouse"}
+             "Greenhouse", "Stable"}
 
 
 def write_buildings_animals(content, out_dir):

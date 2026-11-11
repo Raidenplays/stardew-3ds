@@ -153,6 +153,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
                 n.pathIdx = 0;
             }
     if (door && prev && prev != dest) sfx("doorClose");
+    if (riding && !dest->map.outdoors) riding = false;   // the horse waits outside
     cur = dest;
     // Only the farm and where you are stay in memory.
     if (prev && prev != farm && prev != cur && prev->name.find('@') == std::string::npos) {   // farm buildings stay too
@@ -1148,7 +1149,7 @@ void Game::update(float dt, const Input& in) {
         if (len > 1) { mx /= len; my /= len; }
         if (std::fabs(mx) > std::fabs(my)) facing = mx > 0 ? FACE_RIGHT : FACE_LEFT;
         else facing = my > 0 ? FACE_DOWN : FACE_UP;
-        float sp = (in.walk ? WALK_SPEED : RUN_SPEED) * dt;
+        float sp = (in.walk ? WALK_SPEED : RUN_SPEED) * (riding ? 1.6f : 1.0f) * dt;
         float nx = px + mx * sp, ny = py + my * sp;
 
         // Map-edge and path warps: stepping onto a warp tile, even off the edge.
@@ -1210,9 +1211,20 @@ void Game::update(float dt, const Input& in) {
         walkTime = 0;
     }
 
+    if (riding) {   // the horse goes where you go
+        horseLoc = cur->name;
+        horseX = px;
+        horseY = py;
+        horseFacing = facing;
+    }
     if (in.action) {
         int tx, ty;
         targetTile(tx, ty);
+        if (riding) {   // A on horseback: get off (or talk / open things in front)
+            if (!tryInteract(tx, ty)) { riding = false; sfx("dwop"); }
+            return;
+        }
+        if (horseInteract(tx, ty)) return;
         if (!tryInteract(tx, ty)) useSelected(tx, ty);
     }
 }
@@ -1253,6 +1265,8 @@ bool Game::goToBed() {
         say(houseLevel == 1 ? "Robin finished your house: you have a kitchen now!" : "Robin finished your house upgrade!");
     }
     growSoils(*farm, newSeason, false);
+    riding = false;
+    horseMorning();
     fruitTreesNight(*farm, false);
     for (auto& b : buildings)   // the greenhouse grows anything, any time of year
         if (b.type == "Greenhouse" && b.daysLeft <= 0)
@@ -1855,6 +1869,8 @@ bool Game::load(const std::string& path, std::string* err) {
     // saves from before events could hand out items: Willy's rod was never given
     if (eventsSeen.count("739330") && toolLevel(TOOL_ROD) < 0) awardPrize("rod");
     ensureGreenhouse();
+    riding = false;
+    horseMorning();
     // conversions before build 64 had no scythe (1.6 keeps it with the weapons): hand one over once
     if (!eventsSeen.count("s3d_scythe") && data.toolByKind(TOOL_SCYTHE)) {
         bool have = false;
