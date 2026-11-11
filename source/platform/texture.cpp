@@ -2,6 +2,9 @@
 
 #include <cstdio>
 #include <cstring>
+#include <vector>
+
+extern "C" int s3d_inflate(char* out, int outLen, const char* in, int inLen);
 
 Texture::~Texture() {
     for (auto& p : pages) C3D_TexDelete(&p.tex);
@@ -12,12 +15,13 @@ bool Texture::load(const std::string& path) {
     if (!f) return false;
     char magic[4];
     u16 hdr[4];
-    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) != 0 && memcmp(magic, "S3T2", 4) != 0) ||
+    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) != 0 && memcmp(magic, "S3T2", 4) != 0 && memcmp(magic, "S3T3", 4) != 0) ||
         fread(hdr, 2, 4, f) != 4) {
         fclose(f);
         return false;
     }
-    bool v2 = magic[3] == '2';
+    bool v2 = magic[3] >= '2', packed = magic[3] == '3';   // S3T3: each page deflated
+    std::vector<char> comp;
     width = hdr[0];
     height = hdr[1];
     int count = hdr[2];
@@ -36,7 +40,16 @@ bool Texture::load(const std::string& path) {
             return false;   // out of linear memory
         }
         size_t bytes = (size_t)p.pw * p.ph * 4;
-        if (fread(p.tex.data, 1, bytes, f) != bytes) {
+        bool ok;
+        if (packed) {
+            u32 n = 0;
+            ok = fread(&n, 4, 1, f) == 1 && n < (64u << 20);
+            if (ok) { comp.resize(n); ok = fread(comp.data(), 1, n, f) == n; }
+            if (ok) ok = s3d_inflate((char*)p.tex.data, (int)bytes, comp.data(), (int)n) == (int)bytes;
+        } else {
+            ok = fread(p.tex.data, 1, bytes, f) == bytes;
+        }
+        if (!ok) {
             C3D_TexDelete(&p.tex);
             fclose(f);
             return false;

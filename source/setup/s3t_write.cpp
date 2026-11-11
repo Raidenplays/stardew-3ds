@@ -1,5 +1,9 @@
 #include "setup/s3t_write.h"
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+extern "C" unsigned char* s3d_deflate(const unsigned char* data, int len, int* outLen);
 
 namespace s3t {
 namespace {
@@ -22,7 +26,7 @@ bool encode(int w, int h, const std::vector<uint8_t>& rgba, std::vector<uint8_t>
     if (w <= 0 || h <= 0 || rgba.size() < (size_t)w * h * 4) return false;
     int pages = ((h + MAX_PAGE - 1) / MAX_PAGE) * ((w + MAX_PAGE - 1) / MAX_PAGE);
     out.clear();
-    out.insert(out.end(), {'S', '3', 'T', '2'});
+    out.insert(out.end(), {'S', '3', 'T', '3'});   // pages deflated (see tools/convert.py)
     put16(out, w); put16(out, h); put16(out, pages); put16(out, 0);
     for (int y0 = 0; y0 < h; y0 += MAX_PAGE) {
         for (int x0 = 0; x0 < w; x0 += MAX_PAGE) {
@@ -30,9 +34,8 @@ bool encode(int w, int h, const std::vector<uint8_t>& rgba, std::vector<uint8_t>
             int rh = h - y0 < MAX_PAGE ? h - y0 : MAX_PAGE;
             int pw = nextPow2(rw), ph = nextPow2(rh);
             put16(out, x0); put16(out, y0); put16(out, rw); put16(out, rh); put16(out, pw); put16(out, ph);
-            size_t base = out.size();
-            out.resize(base + (size_t)pw * ph * 4, 0);
-            uint8_t* d = &out[base];
+            std::vector<uint8_t> raw((size_t)pw * ph * 4, 0);
+            uint8_t* d = raw.data();
             for (int y = 0; y < rh; y++) {
                 int gy = ph - 1 - y;                       // GPU row 0 = bottom of the padded page
                 const uint8_t* src = &rgba[((size_t)(y0 + y) * w + x0) * 4];
@@ -41,6 +44,13 @@ bool encode(int w, int h, const std::vector<uint8_t>& rgba, std::vector<uint8_t>
                     p[0] = src[3]; p[1] = src[2]; p[2] = src[1]; p[3] = src[0];
                 }
             }
+            int n = 0;
+            unsigned char* z = s3d_deflate(raw.data(), (int)raw.size(), &n);
+            if (!z) return false;
+            uint8_t len[4] = {(uint8_t)n, (uint8_t)(n >> 8), (uint8_t)(n >> 16), (uint8_t)(n >> 24)};
+            out.insert(out.end(), len, len + 4);
+            out.insert(out.end(), z, z + n);
+            free(z);
         }
     }
     return true;

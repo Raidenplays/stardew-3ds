@@ -158,11 +158,15 @@ def convert_texture(src_png, dst_s3t):
             pages.append((x, y, pw_real, ph_real, pw, ph, swizzle(page)))
     os.makedirs(os.path.dirname(dst_s3t), exist_ok=True)
     with open(dst_s3t, "wb") as f:
-        f.write(b"S3T2")
+        # S3T3: like S3T2 but each page is deflated (zlib); the padding to
+        # power-of-two sizes is mostly empty, so files shrink to ~6%
+        f.write(b"S3T3")
         f.write(struct.pack("<HHHH", w, h, len(pages), 0))
         for (x0, y0, ww, hh, pw, ph, data) in pages:
             f.write(struct.pack("<HHHHHH", x0, y0, ww, hh, pw, ph))
-            f.write(data)
+            packed = zlib.compress(data, 6)
+            f.write(struct.pack("<I", len(packed)))
+            f.write(packed)
     return w, h
 
 
