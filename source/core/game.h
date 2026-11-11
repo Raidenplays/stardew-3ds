@@ -687,6 +687,29 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- children (game_kids.cpp) ----
+    struct Child {
+        std::string name;
+        bool girl = false, dark = false;
+        int daysOld = 0, friendship = 0;
+        bool talked = false;
+        float x = 0, y = 0, tx = 0, ty = 0;
+        int facing = 0, state = 0;   // 0 still, 1 moving, 2 asleep
+        float timer = 0, anim = 0, heart = 0;
+    };
+    std::vector<Child> kids;
+    int babyDue = -1;                // nights until the baby arrives
+    bool babyAsk = false;            // your spouse wants to talk this morning
+    int kidStage(const Child& k) const;
+    void kidPlace(Child& k, int idx);
+    bool canHaveBaby() const;
+    void kidsNight();
+    void kidsMorning();
+    void kidsAsk();
+    bool kidsChoice(const std::string& what, const std::string& key);
+    void kidsUpdate(float dt);
+    bool kidInteract(int tx, int ty);
+    NpcState* npcByNameMut(const std::string& name) { return const_cast<NpcState*>(npcByName(name)); }
     // ---- your pet (game_pet.cpp) ----
     struct Pet {
         int type = 0;              // 1 cat, 2 dog, 3 turtle

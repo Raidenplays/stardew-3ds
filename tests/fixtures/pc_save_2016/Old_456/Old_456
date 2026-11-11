@@ -44,7 +44,7 @@
     </GameLocation>
     <GameLocation xsi:type="FarmHouse">
       <name>FarmHouse</name>
-      <characters><NPC xsi:type="Dog"><name>Rex</name><friendshipTowardFarmer>640</friendshipTowardFarmer></NPC></characters>
+      <characters><NPC xsi:type="Child"><name>Juniper</name><gender>1</gender><darkSkinned>false</darkSkinned><daysOld>60</daysOld></NPC><NPC xsi:type="Dog"><name>Rex</name><friendshipTowardFarmer>640</friendshipTowardFarmer></NPC></characters>
     </GameLocation>
     <GameLocation xsi:type="CommunityCenter">
       <name>CommunityCenter</name>

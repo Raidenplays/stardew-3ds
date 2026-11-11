@@ -95,6 +95,8 @@ EXTRA_TEXTURES = [
     ("Animals/horse", False),
     ("Animals/cat", False), ("Animals/cat1", False), ("Animals/cat2", False), ("Animals/cat3", False), ("Animals/cat4", False),
     ("Animals/turtle", False), ("Animals/turtle1", False),
+    ("Characters/Baby", False), ("Characters/Baby_dark", False), ("Characters/Toddler", False),
+    ("Characters/Toddler_dark", False), ("Characters/Toddler_girl", False), ("Characters/Toddler_girl_dark", False),
     ("Animals/dog", False), ("Animals/dog1", False), ("Animals/dog2", False), ("Animals/dog3", False), ("Animals/dog4", False),
     ("Characters/Monsters/Frost Bat", False),
     ("Characters/Monsters/Lava Bat", False),

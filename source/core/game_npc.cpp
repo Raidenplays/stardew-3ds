@@ -438,6 +438,7 @@ void Game::dialogueChoose(int i) {
         if (what == "festival" && ch.responseKey == "festival:go") { festivalMain(); return; }
         if (worldChoice(what, ch.responseKey)) return;
         if (petChoice(what, ch.responseKey)) return;
+        if (kidsChoice(what, ch.responseKey)) return;
         if (what == "elevator" && ch.responseKey.rfind("mine:", 0) == 0) {
             int lv = atoi(ch.responseKey.c_str() + 5);
             if (lv <= 0) { sfx("stairsdown"); warpTo("Mine", 17, 4, false); }

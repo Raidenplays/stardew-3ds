@@ -337,6 +337,9 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     binOpen = false;
     pets.clear();
     bowlFull = false;
+    kids.clear();
+    babyDue = -1;
+    babyAsk = false;
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -491,6 +494,7 @@ void Game::startDay() {
     festivalDone = false;
     worldMorning();
     petMorning();
+    kidsMorning();
     if (const Festival* fe = festivalToday())
         if (morningNote.empty()) {
             int h = fe->start / 100;
@@ -870,6 +874,7 @@ bool Game::tryInteract(int tx, int ty) {
     if (mineInteract(tx, ty)) return true;
     if (farmBuildingInteract(tx, ty) || hopperInteract(tx, ty) || animalInteract(tx, ty)) return true;
     if (petInteract(tx, ty)) return true;
+    if (kidInteract(tx, ty)) return true;
     if (!cur->fruitTrees.empty() && shakeFruitTree(tx, ty)) return true;
     if (NpcState* n = npcAt(tx, ty)) {
         if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
@@ -1199,6 +1204,7 @@ void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
     if (packAsk > 0) packAsk -= dt;
     petUpdate(dt);
+    kidsUpdate(dt);
     if (!morningNote.empty() && !cutscene.active && timeOfDay >= DAY_START + 10) { say(morningNote); morningNote.clear(); }
     {   // the shipping bin's lid swings open as you come near
         bool near = binOpen;
@@ -1497,6 +1503,7 @@ bool Game::goToBed() {
     animalsNight();
     morningNote.clear();
     nightEvents();
+    kidsNight();
 
     uint32_t r = rand32();
     spawnDebris(6, r);
@@ -1513,7 +1520,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 28;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 29;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1539,6 +1546,7 @@ static const uint32_t SAVE_VERSION = 28;   // 2: villager friendships, 3: events
                                           // 26: what the mill and junimo huts hold
                                           // 27: your pet
                                           // 28: several pets, their gifts
+                                          // 29: children
 
 namespace {
 struct W {
@@ -1725,6 +1733,9 @@ bool Game::save(const std::string& path) const {
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
     w.i32(me.petKind); w.i32(me.petBreed);
+    w.i32(babyDue); w.u8(babyAsk);
+    w.u32((uint32_t)kids.size());
+    for (auto& k : kids) { w.str(k.name); w.u8(k.girl); w.u8(k.dark); w.i32(k.daysOld); w.i32(k.friendship); w.u8(k.talked); }
     w.u8(bowlFull);
     w.u32((uint32_t)pets.size());
     for (auto& p : pets) { w.i32(p.type); w.i32(p.breed); w.str(p.name); w.i32(p.friendship); w.u8(p.petted); w.i32(p.gift); }
@@ -2082,6 +2093,9 @@ bool Game::load(const std::string& path, std::string* err) {
     invSlots = INV_SIZE;   // saves from before backpacks keep all their room
     pets.clear();
     bowlFull = false;
+    kids.clear();
+    babyDue = -1;
+    babyAsk = false;
     if (version >= 21 && r.ok) {
         furniture.clear();
         uint32_t nf = r.u32();
@@ -2096,6 +2110,15 @@ bool Game::load(const std::string& path, std::string* err) {
         }
         if (version >= 27 && r.ok) {
             { int pk = r.i32(); me.petKind = pk >= 1 && pk <= 3 ? pk : 1; } me.petBreed = std::max(0, std::min(4, (int)r.i32()));
+            if (version >= 29) {
+                babyDue = r.i32(); babyAsk = r.u8() != 0;
+                uint32_t nk = r.u32();
+                for (uint32_t k = 0; k < nk && r.ok && k < 4; k++) {
+                    Child c;
+                    c.name = r.str(); c.girl = r.u8() != 0; c.dark = r.u8() != 0; c.daysOld = r.i32(); c.friendship = r.i32(); c.talked = r.u8() != 0;
+                    kids.push_back(c);
+                }
+            }
             if (version >= 28) {
                 bowlFull = r.u8() != 0;
                 uint32_t np = r.u32();

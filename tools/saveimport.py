@@ -308,6 +308,13 @@ def import_save(save_path, root):
             out.append([key, clean(k.text or "")])
     out.append(["house", num(p, "houseUpgradeLevel")])
     # a pet anywhere in the save
+    kid_points = {(k.text or ""): num(v, "Points") for k, v in dict_items(p.find("friendshipData"))}
+    for el in sg.iter("NPC"):   # children: name, girl, dark hair and skin, days old
+        if xtype(el) == "Child":
+            g = (txt(el, "Gender") or txt(el, "gender") or "").lower()
+            girl = g in ("female", "1")
+            out.append(["kid", clean(txt(el, "name", "")), 1 if girl else 0, 1 if truthy(el, "darkSkinned") else 0,
+                        num(el, "daysOld"), kid_points.get(txt(el, "name", ""), 0)])
     for el in sg.iter("NPC"):   # every pet in the save (1.6 lets you have several)
         if xtype(el) in ("Pet", "Cat", "Dog"):
             kind = txt(el, "petType") or xtype(el)

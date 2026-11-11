@@ -759,6 +759,18 @@ int main(int argc, char** argv) {
             shot(c, g, ui, "marnie_pets");
             ui.shop.clear();
         }
+        if (const char* age = getenv("KIDS")) {   // KIDS=<days old>: two children that age (and 30 older) in the nursery
+            Game::Child a; a.name = "Hazel"; a.girl = true; a.daysOld = atoi(age) + 30;
+            Game::Child b; b.name = "Finn"; b.daysOld = atoi(age);
+            g.kids.push_back(a); g.kids.push_back(b);
+            g.teleport("FarmHouse", 31, 17);
+            g.kidsMorning();
+            step(g, ui, none, getenv("KIDTIME") ? atoi(getenv("KIDTIME")) : 200);
+            for (auto& k : g.kids) printf("  %s stage %d at %.1f,%.1f state %d\n", k.name.c_str(), g.kidStage(k), k.x / 16, k.y / 16, k.state);
+            g.kidInteract(31, 14);
+            step(g, ui, none, 2);
+            shot(c, g, ui, "kids");
+        }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");
             auto b = g.data.layout.bins.empty() ? std::make_pair(71, 14) : g.data.layout.bins[0];

@@ -45,6 +45,7 @@ jobs:
           grep -q "^friend	Abigail	1250" /tmp/fakeout/3ds/stardew3ds/import.txt
           grep -q "^equip	3	T	Hat_2" /tmp/fakeout/3ds/stardew3ds/import.txt
           grep -q "^pet	Dog	1	Rex	640" /tmp/fakeout/3ds/stardew3ds/import.txt
+          grep -q "^kid	Juniper	1	0	60" /tmp/fakeout/3ds/stardew3ds/import.txt
   build-3dsx:
     needs: host-tests
     runs-on: ubuntu-latest

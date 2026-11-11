@@ -149,6 +149,15 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             pets.push_back(pet);
             mailReceived.insert("hasPet");
         }
+        else if (k == "kid" && f.size() > 4 && kids.size() < 2) {
+            Child c;
+            c.name = f[1].empty() ? "Kid" : f[1];
+            c.girl = f[2] == "1"; c.dark = f[3] == "1";
+            c.daysOld = std::max(0, I(f, 4));
+            c.friendship = f.size() > 5 ? std::max(0, std::min(2500, I(f, 5))) : 0;
+            kids.push_back(c);
+        }
+        else if (k == "babydue") babyDue = I(f, 1) > 0 ? I(f, 1) : -1;
         else if (k == "earned") totalEarned = std::max(totalEarned, (long long)I(f, 1));
         else if (k == "backpack") invSlots = I(f, 1) >= 36 ? 36 : I(f, 1) >= 24 ? 24 : 12;
         else if (k == "house") { houseLevel = std::max(0, std::min(2, I(f, 1))); locations.erase("FarmHouse"); }

@@ -609,6 +609,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
     if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
     if (!g.riding && g.horseLoc == here.name) items.push_back({g.horseY, 19, 0, 0});
+    if (here.name == "FarmHouse")
+        for (size_t i = 0; i < g.kids.size(); i++) items.push_back({g.kids[i].y + (g.kidStage(g.kids[i]) <= 1 ? 40.0f : 0.0f), 21, (int)i, 0});
     for (size_t i = 0; i < g.pets.size(); i++)
         if (g.pets[i].loc == here.name) items.push_back({g.pets[i].y, 20, (int)i, 0});
     if (here.isFarm)
@@ -948,6 +950,31 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     const ObjectDef* fo = g.data.object(d->fruit);
                     for (int k = 0; k < t.fruit && k < 3; k++) itemIcon(c, fo, tx + fx[k], ty + fy[k]);
                 }
+                break;
+            }
+            case 21: {   // a child: Baby sheet (22px frames: asleep, sitting up in the crib, crawling), then Toddler (16x32)
+                const Game::Child& k = g.kids[it.a];
+                int st = g.kidStage(k);
+                float ax = std::floor(k.x - camX), ay = std::floor(k.y - camY);
+                if (st <= 2) {
+                    const char* tex = k.dark && c.texWidth("Characters_Baby_dark") > 0 ? "Characters_Baby_dark" : "Characters_Baby";
+                    if (st == 0) c.image(tex, ((int)(k.anim * 0.7f) & 1) * 22, 0, 22, 16, ax - 11, ay - 14);
+                    else if (st == 1) c.image(tex, ((int)(k.anim * 2) & 3) * 22, 32, 22, 32, ax - 11, ay - 28);
+                    else if (k.state == 2) c.image(tex, 0, 16, 22, 16, ax - 11, ay - 14);
+                    else {
+                        int row = k.facing == FACE_DOWN ? 96 : k.facing == FACE_RIGHT ? 112 : k.facing == FACE_UP ? 128 : 144;
+                        if (k.state != 1) row = 160;                 // sitting with its toy
+                        c.image(tex, ((int)(k.anim * (k.state == 1 ? 5 : 2)) & 3) * 22, row, 22, 16, ax - 11, ay - 14);
+                    }
+                } else {
+                    std::string tex = std::string(k.girl ? "Characters_Toddler_girl" : "Characters_Toddler") + (k.dark ? "_dark" : "");
+                    if (c.texWidth(tex) <= 0) tex = k.girl ? "Characters_Toddler_girl" : "Characters_Toddler";
+                    int row = k.facing == FACE_DOWN ? 0 : k.facing == FACE_RIGHT ? 1 : k.facing == FACE_UP ? 2 : 3;
+                    int f = k.state == 1 ? ((int)(k.anim * 7) & 3) : 0;
+                    c.rect(ax - 5, ay - 2, 10, 3, RGBA(0, 0, 0, 0x40));
+                    c.image(tex, f * 16, row * 32, 16, 32, ax - 8, ay - 30);
+                }
+                if (k.heart > 0) c.text(ax, ay - 36 - (1.5f - k.heart) * 6, 0.5f, RGBA(0xE8, 0x40, 0x50), "<", ALIGN_CENTER);
                 break;
             }
             case 20: {   // your pet: walk rows down/right/up/left, sitting on row 4, curled up asleep on row 7
