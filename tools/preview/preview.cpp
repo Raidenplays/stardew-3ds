@@ -92,6 +92,7 @@ int main(int argc, char** argv) {
     int dayArg = -1;
     int mapCacheArg = 0;
     bool panArg = false;
+    bool animalsArg = false;
     int mineArg = 0;   // HHMM: run the villagers' day up to then
     bool storyDemo = false;   // the new-game story, frames at 10 fps   // first-launch setup screens (runs the real converter on <sd root>)
     bool introFrames = false;
@@ -117,6 +118,7 @@ int main(int argc, char** argv) {
         else if (a.rfind("--time=", 0) == 0) timeArg = atoi(a.c_str() + 7);
         else if (a == "--mapcache") mapCacheArg = 1;
         else if (a == "--pan") panArg = true;
+        else if (a == "--animals") animalsArg = true;
         else if (a.rfind("--mine=", 0) == 0) mineArg = atoi(a.c_str() + 7);
         else if (a.rfind("--day=", 0) == 0) dayArg = atoi(a.c_str() + 6);   // season*28 + day, e.g. 16 or 64
         else font = a;
@@ -503,6 +505,50 @@ int main(int argc, char** argv) {
     if (!walkUntilWarp(g, ui, 0, 1)) printf("  ! couldn't leave the farmhouse\n");
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
+    if (animalsArg) {   // Robin builds a coop and a barn, Marnie sells animals, a look inside
+        g.money = 100000;
+        g.addItem(388, 999); g.addItem(390, 999);
+        g.teleport("Farm", 60, 20);
+        for (auto& d : const_cast<Location&>(g.location()).debris) d = DEB_NONE;   // a cleared farm
+        Input a; a.action = true;
+        const char* want[3] = {"Coop", "Barn", "Silo"};
+        for (int k = 0; k < 3; k++) {
+            g.startBuilding(want[k]);
+            int tries = 0;
+            g.placeX = 50 + k * 9; g.placeY = 22;
+            while (!g.placeOk(g.placeX, g.placeY) && tries++ < 600) { g.placeX = 44 + tries % 30; g.placeY = 20 + tries / 30; }
+            if (k == 0) { step(g, ui, none, 5); shot(c, g, ui, "placing"); }
+            g.updatePlacing(a, 0.016f);
+            if (k == 0) { step(g, ui, none, 5); shot(c, g, ui, "construction"); }
+            for (int n = 0; n < 4; n++) g.animalsNight();
+        }
+        printf("  %zu buildings built\n", g.buildings.size());
+        for (auto& b : g.buildings) printf("    %s at %d,%d (%d days)\n", b.type.c_str(), b.x, b.y, b.daysLeft);
+        const char* buy[5] = {"White Chicken", "White Chicken", "Duck", "White Cow", "White Cow"};
+        for (auto b : buy) g.buyAnimal(b);
+        g.hay = 100;
+        for (int n = 0; n < 6; n++) g.animalsNight();
+        FarmBuilding& cb = g.buildings[0];
+        g.teleport("Farm", cb.x + 3, cb.y + 5);
+        step(g, ui, none, 5);
+        shot(c, g, ui, "farm_buildings");
+        for (int k = 0; k < 2 && k < (int)g.buildings.size(); k++) {
+            FarmBuilding& b = g.buildings[k];
+            const BuildingType* bt = g.typeOf(b);
+            g.teleport("Farm", b.x + bt->doorX, b.y + bt->doorY + 1);
+            g.facing = FACE_UP;
+            g.farmBuildingInteract(b.x + bt->doorX, b.y + bt->doorY);
+            g.hopperInteract(bt->hopperX, bt->hopperY);
+            step(g, ui, none, 90);
+            printf("  inside %s: %zu things on the floor\n", g.location().name.c_str(), g.location().objects.size());
+            shot(c, g, ui, std::string("inside_") + b.type);
+        }
+        ui.shop = "AnimalShop"; ui.shopUpgrade = true;
+        shot(c, g, ui, "marnie_animals");
+        ui.shop = "Carpenter";
+        shot(c, g, ui, "robin_build");
+        return 0;
+    }
     if (mineArg > 0) {   // a mine floor: as you arrive, then after breaking rocks until the ladder shows
         g.enterMine(mineArg);
         step(g, ui, none, 30);

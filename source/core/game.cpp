@@ -98,6 +98,8 @@ std::string Game::mapFileFor(const std::string& name) const {
         if (!data.vfs.exists(p)) p = "maps/Mines_" + std::to_string(n % 10 == 0 ? 10 : 1) + ".smap";
         return data.vfs.path(p);
     }
+    size_t at = name.find('@');      // a farm building's inside: "Coop@3" uses maps/Coop
+    if (at != std::string::npos) return mapFileFor(name.substr(0, at));
     std::string variant = "maps/" + name + "@" + seasonName(season) + ".smap";
     if (data.vfs.exists(variant)) return data.vfs.path(variant);
     return data.vfs.path("maps/" + name + ".smap");
@@ -124,6 +126,13 @@ bool Game::hasMap(const std::string& name) const {
 }
 
 bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
+    if (name == "Farm" && cur)   // leaving a farm building: out its own door
+        if (FarmBuilding* fb = buildingForInterior(cur->name))
+            if (const BuildingType* bt = typeOf(*fb)) {
+                tx = fb->x + bt->doorX;
+                ty = fb->y + bt->doorY + 1;
+                facing = FACE_DOWN;
+            }
     Location* dest = loadLocation(name);
     if (!dest) {
         say("Can't go there yet (" + name + " not converted)");
@@ -142,7 +151,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     if (door && prev && prev != dest) sfx("doorClose");
     cur = dest;
     // Only the farm and where you are stay in memory.
-    if (prev && prev != farm && prev != cur) {
+    if (prev && prev != farm && prev != cur && prev->name.find('@') == std::string::npos) {   // farm buildings stay too
         std::string old = prev->name;   // copy: erase destroys the key's owner
         locations.erase(old);
     }
@@ -277,6 +286,11 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    buildings.clear();
+    animals.clear();
+    hay = 0;
+    nextBuildingId = 1;
+    placing.clear();
     quests.clear();
     questsFinished.clear();
     levelUps.clear();
@@ -422,6 +436,7 @@ bool Game::buildingAt(int x, int y) const {
         if (x >= fp.x && x < fp.x + bw && y >= fp.y && y < fp.y + bh) return true;
     }
     if (!cur->isFarm) return false;
+    if (const_cast<Game*>(this)->buildingAtTile(x, y)) return true;
     for (auto& b : data.layout.buildings)
         if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY && y < b.tileY + b.footH)
             return true;
@@ -637,6 +652,7 @@ bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap;
 
 bool Game::tryInteract(int tx, int ty) {
     if (mineInteract(tx, ty)) return true;
+    if (farmBuildingInteract(tx, ty) || hopperInteract(tx, ty) || animalInteract(tx, ty)) return true;
     if (NpcState* n = npcAt(tx, ty)) {
         if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
         else talkTo(*n);
@@ -967,6 +983,11 @@ void Game::update(float dt, const Input& in) {
         moving = false;   // the UI advances pages (it knows about long-page scrolling)
         return;
     }
+    if (!placing.empty()) {          // choosing where Robin builds
+        moving = false;
+        updatePlacing(in, dt);
+        return;
+    }
 
     clockAcc += dt;
     while (clockAcc >= SECONDS_PER_10MIN) {
@@ -981,6 +1002,7 @@ void Game::update(float dt, const Input& in) {
 
     npcsUpdate(dt);
     monstersUpdate(dt);
+    animalsUpdate(dt);
     if (!cur) return;   // knocked out mid-update can't leave us nowhere, but be safe
 
     if (in.prev) selected = (selected + HOTBAR - 1) % HOTBAR;
@@ -1104,6 +1126,14 @@ void Game::update(float dt, const Input& in) {
                 tryInteract(tx, ty);
                 return;
             }
+            if (cur->isFarm)   // a farm building's door
+                if (FarmBuilding* fb = buildingAtTile(tx, ty))
+                    if (const BuildingType* bt = typeOf(*fb))
+                        if (!bt->interior.empty() && tx == fb->x + bt->doorX && ty == fb->y + bt->doorY &&
+                            (fb->daysLeft <= 0 || !fb->upgradingTo.empty())) {
+                            farmBuildingInteract(tx, ty);
+                            return;
+                        }
             if (runMapAction(cur->map.action(tx, ty), true)) return;
         }
     } else {
@@ -1179,6 +1209,7 @@ bool Game::goToBed() {
     machinesDayStart();
     treesGrow();
     growGrass();
+    animalsNight();
 
     uint32_t r = rand32();
     spawnDebris(6, r);
@@ -1195,7 +1226,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 14;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 15;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1207,6 +1238,7 @@ static const uint32_t SAVE_VERSION = 14;   // 2: villager friendships, 3: events
                                           // 12: farm grass
                                           // 13: big stumps, logs and boulders
                                           // 14: deepest mine floor
+                                          // 15: farm buildings and animals
 
 namespace {
 struct W {
@@ -1338,6 +1370,25 @@ bool Game::save(const std::string& path) const {
     w.u32((uint32_t)farm->clumps.size());
     for (auto& c : farm->clumps) { w.i32(c.x); w.i32(c.y); w.u8(c.kind); w.u8((uint8_t)c.health); }
     w.i32(mineDeepest);
+    w.i32(hay);
+    w.i32(nextBuildingId);
+    w.u32((uint32_t)buildings.size());
+    for (auto& b : buildings) {
+        w.i32(b.id); w.str(b.type); w.i32(b.x); w.i32(b.y); w.i32(b.daysLeft); w.str(b.upgradingTo);
+        w.u32((uint32_t)b.troughs.size());
+        for (uint8_t t : b.troughs) w.u8(t);
+        // what's lying inside (eggs...)
+        auto it = locations.find(interiorName(b));
+        std::vector<WorldObject> none;
+        const std::vector<WorldObject>& objs = it != locations.end() ? it->second->objects : none;
+        w.u32((uint32_t)objs.size());
+        for (auto& o : objs) { w.i32(o.x); w.i32(o.y); w.i32(o.itemId); }
+    }
+    w.u32((uint32_t)animals.size());
+    for (auto& a : animals) {
+        w.str(a.type); w.str(a.name); w.i32(a.home); w.i32(a.age); w.i32(a.friendship);
+        w.i32(a.daysSinceProduce); w.i32(a.ready); w.u8(a.fed ? 1 : 0);
+    }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -1572,6 +1623,39 @@ bool Game::load(const std::string& path, std::string* err) {
         }
     }
     mineDeepest = version >= 14 && r.ok ? r.i32() : 0;
+    buildings.clear();
+    animals.clear();
+    hay = 0;
+    nextBuildingId = 1;
+    if (version >= 15 && r.ok) {
+        hay = r.i32();
+        nextBuildingId = r.i32();
+        uint32_t nb = r.u32();
+        for (uint32_t i = 0; i < nb && r.ok && i < 500; i++) {
+            FarmBuilding b;
+            b.id = r.i32(); b.type = r.str(); b.x = r.i32(); b.y = r.i32(); b.daysLeft = r.i32(); b.upgradingTo = r.str();
+            uint32_t nt = r.u32();
+            for (uint32_t k = 0; k < nt && r.ok && k < 64; k++) b.troughs.push_back(r.u8());
+            uint32_t no = r.u32();
+            std::vector<WorldObject> objs;
+            for (uint32_t k = 0; k < no && r.ok && k < 500; k++) {
+                WorldObject o;
+                o.x = r.i32(); o.y = r.i32(); o.itemId = r.i32();
+                objs.push_back(o);
+            }
+            buildings.push_back(b);
+            if (!objs.empty())
+                if (Location* in = loadLocation(interiorName(b))) in->objects = objs;
+        }
+        uint32_t na = r.u32();
+        for (uint32_t i = 0; i < na && r.ok && i < 2000; i++) {
+            FarmAnimal a;
+            a.type = r.str(); a.name = r.str(); a.home = r.i32(); a.age = r.i32(); a.friendship = r.i32();
+            a.daysSinceProduce = r.i32(); a.ready = r.i32(); a.fed = r.u8() != 0;
+            a.x = -1;
+            animals.push_back(a);
+        }
+    }
     for (auto& c : farm->clumps)     // nothing grows under them
         for (int dy = 0; dy < 2; dy++)
             for (int dx = 0; dx < 2; dx++)

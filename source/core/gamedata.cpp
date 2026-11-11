@@ -408,6 +408,74 @@ bool GameData::load(const std::string& root, std::string* err) {
             npcs.push_back(std::move(n));
         }
     }
+    auto ints = [](const std::string& s) {
+        std::vector<int> v;
+        const char* p = s.c_str();
+        while (*p) {
+            char* end;
+            long x = strtol(p, &end, 10);
+            if (end == p) break;
+            v.push_back((int)x);
+            p = end;
+        }
+        return v;
+    };
+    lines.clear();
+    if (readLines(root + "data/buildings.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 15) continue;
+            BuildingType b;
+            b.name = f[0];
+            b.texture = f[1];
+            auto r = ints(f[2]);
+            if (r.size() == 4) { b.srcX = r[0]; b.srcY = r[1]; b.srcW = r[2]; b.srcH = r[3]; }
+            r = ints(f[3]);
+            if (r.size() == 2) { b.w = r[0]; b.h = r[1]; }
+            b.cost = atoi(f[4].c_str());
+            r = ints(f[5]);
+            for (size_t i = 0; i + 1 < r.size(); i += 2) if (r[i] >= 0) b.mats.push_back({r[i], r[i + 1]});
+            b.interior = f[6];
+            r = ints(f[7]);
+            if (r.size() == 2) { b.doorX = r[0]; b.doorY = r[1]; }
+            r = ints(f[8]);
+            if (r.size() == 4) { b.adX = r[0]; b.adY = r[1]; b.adW = r[2]; b.adH = r[3]; }
+            b.maxOcc = atoi(f[9].c_str());
+            b.occupants = f[10];
+            b.upgradeFrom = f[11];
+            b.days = atoi(f[12].c_str());
+            b.hay = atoi(f[13].c_str());
+            r = ints(f[14]);
+            if (r.size() == 2) { b.hopperX = r[0]; b.hopperY = r[1]; }
+            buildingTypes.push_back(b);
+        }
+    lines.clear();
+    if (readLines(root + "data/animals.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 18) continue;
+            AnimalType a;
+            a.name = f[0];
+            a.house = f[1];
+            a.price = atoi(f[2].c_str());
+            a.tex = f[3];
+            a.babyTex = f[4];
+            a.harvestedTex = f[5];
+            a.w = std::max(1, atoi(f[6].c_str()));
+            a.h = std::max(1, atoi(f[7].c_str()));
+            for (int v : ints(f[8])) if (v > 0) a.produce.push_back(v);
+            for (int v : ints(f[9])) if (v > 0) a.deluxe.push_back(v);
+            a.daysToProduce = std::max(1, atoi(f[10].c_str()));
+            a.daysToMature = atoi(f[11].c_str());
+            a.harvestType = f[12];
+            a.harvestTool = f[13];
+            a.sound = f[14];
+            a.requires = f[15];
+            a.shopTex = f[16];
+            auto r = ints(f[17]);
+            if (r.size() == 4) { a.shopX = r[0]; a.shopY = r[1]; a.shopW = r[2]; a.shopH = r[3]; }
+            animalTypes.push_back(a);
+        }
     lines.clear();
     if (readLines(root + "data/geodes.dat", lines))
         for (auto& l : lines) {

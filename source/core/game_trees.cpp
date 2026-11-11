@@ -183,6 +183,10 @@ bool Game::cutGrass(int tx, int ty) {
     int row = (gr & 8) ? 160 : (season == SUMMER ? 20 : season == FALL ? 40 : season == WINTER ? 80 : 0);
     burst("TerrainFeatures_grass", 0, row, 15, 20, tx * TILE + 8.0f, ty * TILE + 10.0f, 5, 4);
     gr = 0;
+    if (hay < hayCapacity() && rand32() % 2) {   // with a silo, cut grass becomes hay
+        hay++;
+        notices.push_back(Notice{178, 1, 0});
+    }
     return true;
 }
 
@@ -211,7 +215,7 @@ void Game::growGrass() {
         }
     for (int i : spread) {
         int x = i % w, y = i / w;
-        bool under = false;
+        bool under = buildingAtTile(x, y) != nullptr;
         for (auto& c : farm->clumps)
             if (x >= c.x && x < c.x + 2 && y >= c.y && y < c.y + 2) under = true;
         if (!under) farm->grass[i] = 1;

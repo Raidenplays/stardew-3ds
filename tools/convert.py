@@ -571,6 +571,68 @@ BASE_CONTENT = [None]
 TEXTURES_FROM_DATA = set()
 
 
+# Robin's buildings that the engine handles: animal houses, sheds, silos, wells.
+BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed"}
+
+
+def write_buildings_animals(content, out_dir):
+    def oid(s):
+        v = ITEM_IDS.get(str(s).replace("(O)", ""))
+        return v if v is not None else -1
+    bp = os.path.join(content, "Data", "Buildings.json")
+    if os.path.isfile(bp):
+        with open(os.path.join(out_dir, "buildings.dat"), "w", encoding="utf-8") as f:
+            for name, b in _load_json(content, "Data/Buildings.json").items():
+                if name not in BUILDABLE or b.get("Builder") != "Robin":
+                    continue
+                tex = str(b.get("Texture") or ("Buildings/" + name)).replace("\\", "/")
+                TEXTURES_FROM_DATA.add(tex)
+                sr = b.get("SourceRect") or {}
+                sz = b.get("Size") or {}
+                hd = b.get("HumanDoor") or {}
+                ad = b.get("AnimalDoor") or {}
+                mats = " ".join(f"{oid(m.get('ItemId'))} {int(m.get('Amount', 1))}" for m in (b.get("BuildMaterials") or []))
+                hopper = "-1 -1"
+                for it in b.get("IndoorItems") or []:
+                    if str(it.get("ItemId")) == "(BC)99":
+                        hopper = f"{it['Tile']['X']} {it['Tile']['Y']}"
+                f.write("\t".join(_clean(x) for x in [
+                    name, tex_name(tex),
+                    f"{sr.get('X', 0)} {sr.get('Y', 0)} {sr.get('Width', 0)} {sr.get('Height', 0)}",
+                    f"{sz.get('X', 1)} {sz.get('Y', 1)}", int(b.get("BuildCost", 0) or 0), mats,
+                    b.get("IndoorMap") or "", f"{hd.get('X', -1)} {hd.get('Y', -1)}",
+                    f"{ad.get('X', -1)} {ad.get('Y', -1)} {ad.get('Width', 0)} {ad.get('Height', 0)}",
+                    int(b.get("MaxOccupants", 0) or 0), ",".join(b.get("ValidOccupantTypes") or []),
+                    b.get("BuildingToUpgrade") or "", int(b.get("BuildDays", 0) or 0), int(b.get("HayCapacity", 0) or 0), hopper,
+                ]) + "\n")
+    ap = os.path.join(content, "Data", "FarmAnimals.json")
+    if os.path.isfile(ap):
+        with open(os.path.join(out_dir, "animals.dat"), "w", encoding="utf-8") as f:
+            for name, a in _load_json(content, "Data/FarmAnimals.json").items():
+                def t(k):
+                    v = a.get(k)
+                    if not v:
+                        return ""
+                    v = str(v).replace("\\", "/")
+                    TEXTURES_FROM_DATA.add(v)
+                    return tex_name(v)
+                prod = " ".join(str(oid(p.get("ItemId"))) for p in (a.get("ProduceItemIds") or []) if not p.get("Condition"))
+                dlx = " ".join(str(oid(p.get("ItemId"))) for p in (a.get("DeluxeProduceItemIds") or []) if not p.get("Condition"))
+                ss = a.get("ShopSourceRect") or {}
+                stex = a.get("ShopTexture")
+                f.write("\t".join(_clean(x) for x in [
+                    name, a.get("House") or "", int(a.get("PurchasePrice", -1) if a.get("PurchasePrice") is not None else -1),
+                    t("Texture") or tex_name("Animals/" + name), t("BabyTexture"), t("HarvestedTexture"),
+                    int(a.get("SpriteWidth", 16) or 16), int(a.get("SpriteHeight", 16) or 16), prod, dlx,
+                    int(a.get("DaysToProduce", 1) or 1), int(a.get("DaysToMature", 1) or 1),
+                    a.get("HarvestType") or "DropOvernight", a.get("HarvestTool") or "", a.get("Sound") or "",
+                    a.get("RequiredBuilding") or "", t("ShopTexture"),
+                    f"{ss.get('X', 0)} {ss.get('Y', 0)} {ss.get('Width', 0)} {ss.get('Height', 0)}",
+                ]) + "\n")
+                if not a.get("Texture"):
+                    TEXTURES_FROM_DATA.add("Animals/" + name)
+
+
 def write_data(content, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     season_bits = {"spring": 1, "summer": 2, "fall": 4, "winter": 8}
@@ -625,6 +687,7 @@ def write_data(content, out_dir):
             ]) + "\n")
             n += 1
     print(f"  objects.dat: {n} objects")
+    write_buildings_animals(content, out_dir)
     # what's inside each geode (Clint cracks them): geode id, then possible item ids
     with open(os.path.join(out_dir, "geodes.dat"), "w", encoding="utf-8") as f:
         for oid, o in objs.items():
