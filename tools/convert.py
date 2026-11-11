@@ -742,9 +742,21 @@ def write_data(content, out_dir):
         if os.path.isfile(wp):
             for wid, w in _load_json(content, "Data/Weapons.json").items():
                 name = str(w.get("Name", wid))
-                if "Scythe" in name or int(w.get("Type", 3) or 0) not in (0, 1, 2, 3):
-                    continue
                 texp = str(w.get("Texture") or "TileSheets/weapons").replace("\\", "/")
+                if "Scythe" in name:
+                    # 1.6 keeps the scythes with the weapons; the 3DS game wants them as tools
+                    if any("scythe" in str(k).lower() for k in tools):
+                        continue
+                    lvl = 2 if "Iridium" in name else 1 if "Golden" in name else 0
+                    f.write("\t".join(_clean(x) for x in [
+                        "Scythe" if lvl == 0 else name.replace(" ", ""), "MeleeWeapon", name, lvl,
+                        int(w.get("SpriteIndex", 0) or 0), tex_name(texp), -1, "",
+                        int(w.get("MinDamage", 1) or 1), int(w.get("MaxDamage", 3) or 3),
+                    ]) + "\n")
+                    n += 1
+                    continue
+                if int(w.get("Type", 3) or 0) not in (0, 1, 2, 3):
+                    continue
                 f.write("\t".join(_clean(x) for x in [
                     "Weapon_" + str(wid), "MeleeWeapon", name, 0, int(w.get("SpriteIndex", 0) or 0), tex_name(texp),
                     -1, "", int(w.get("MinDamage", 1) or 1), int(w.get("MaxDamage", 3) or 3),

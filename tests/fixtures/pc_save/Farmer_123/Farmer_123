@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SaveGame xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <player>
+    <name>Farmer</name><farmName>Test</farmName><money>123456</money><gender>Male</gender>
+    <deepestMineLevel>62</deepestMineLevel><houseUpgradeLevel>1</houseUpgradeLevel><spouse>Sebastian</spouse>
+    <maxStamina>298</maxStamina><maxHealth>130</maxHealth>
+    <items>
+      <Item xsi:type="Axe"><name>Steel Axe</name><UpgradeLevel>2</UpgradeLevel></Item>
+      <Item xsi:type="Hoe"><UpgradeLevel>1</UpgradeLevel></Item>
+      <Item xsi:type="WateringCan"><UpgradeLevel>2</UpgradeLevel></Item>
+      <Item xsi:type="Pickaxe"><UpgradeLevel>3</UpgradeLevel></Item>
+      <Item xsi:type="MeleeWeapon"><itemId>47</itemId><name>Scythe</name></Item>
+      <Item xsi:type="FishingRod"><UpgradeLevel>2</UpgradeLevel></Item>
+      <Item xsi:type="MeleeWeapon"><itemId>11</itemId><name>Steel Smallsword</name></Item>
+      <Item xsi:type="Object"><itemId>388</itemId><name>Wood</name><Stack>450</Stack><quality>0</quality><bigCraftable>false</bigCraftable></Item>
+      <Item xsi:nil="true" />
+      <Item xsi:type="Object"><itemId>176</itemId><name>Egg</name><Stack>5</Stack><quality>1</quality><bigCraftable>false</bigCraftable></Item>
+      <Item xsi:type="Hat"><itemId>1</itemId></Item>
+      <Item xsi:type="Object"><itemId>130</itemId><name>Keg</name><Stack>2</Stack><bigCraftable>true</bigCraftable></Item>
+    </items>
+    <experiencePoints><int>5000</int><int>1200</int><int>2500</int><int>9000</int><int>800</int><int>0</int></experiencePoints>
+    <friendshipData>
+      <item><key><string>Abigail</string></key><value><Friendship><Points>1500</Points></Friendship></value></item>
+      <item><key><string>Sebastian</string></key><value><Friendship><Points>2500</Points></Friendship></value></item>
+    </friendshipData>
+    <mailReceived><string>ccDoorUnlock</string><string>guildMember</string></mailReceived>
+    <eventsSeen><string>60367</string><string>739330</string></eventsSeen>
+    <craftingRecipes><item><key><string>Chest</string></key><value><int>3</int></value></item></craftingRecipes>
+  </player>
+  <locations>
+    <GameLocation xsi:type="Farm">
+      <name>Farm</name>
+      <objects>
+        <item><key><Vector2><X>60</X><Y>20</Y></Vector2></key><value><Object><itemId>0</itemId><name>Weeds</name><bigCraftable>false</bigCraftable></Object></value></item>
+        <item><key><Vector2><X>61</X><Y>20</Y></Vector2></key><value><Object><itemId>450</itemId><name>Stone</name><bigCraftable>false</bigCraftable></Object></value></item>
+        <item><key><Vector2><X>66</X><Y>16</Y></Vector2></key><value><Object xsi:type="Chest"><itemId>130</itemId><name>Chest</name><bigCraftable>true</bigCraftable>
+          <items><Item xsi:type="Object"><itemId>390</itemId><Stack>300</Stack><bigCraftable>false</bigCraftable></Item><Item xsi:type="Object"><itemId>24</itemId><Stack>12</Stack><bigCraftable>false</bigCraftable></Item></items></Object></value></item>
+        <item><key><Vector2><X>67</X><Y>16</Y></Vector2></key><value><Object><itemId>12</itemId><name>Keg</name><bigCraftable>true</bigCraftable><minutesUntilReady>1200</minutesUntilReady>
+          <heldObject><itemId>348</itemId><name>Wine</name><Stack>1</Stack><bigCraftable>false</bigCraftable></heldObject></Object></value></item>
+        <item><key><Vector2><X>58</X><Y>25</Y></Vector2></key><value><Object><itemId>599</itemId><name>Sprinkler</name><bigCraftable>false</bigCraftable></Object></value></item>
+      </objects>
+      <terrainFeatures>
+        <item><key><Vector2><X>57</X><Y>24</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>1</state><crop><netSeedIndex>472</netSeedIndex><indexOfHarvest>24</indexOfHarvest><currentPhase>2</currentPhase><dayOfCurrentPhase>1</dayOfCurrentPhase><fullyGrown>false</fullyGrown><dead>false</dead></crop></TerrainFeature></value></item>
+        <item><key><Vector2><X>58</X><Y>24</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>0</state><crop><indexOfHarvest>24</indexOfHarvest><currentPhase>4</currentPhase><dayOfCurrentPhase>0</dayOfCurrentPhase><fullyGrown>true</fullyGrown><dead>false</dead></crop></TerrainFeature></value></item>
+        <item><key><Vector2><X>59</X><Y>24</Y></Vector2></key><value><TerrainFeature xsi:type="HoeDirt"><state>0</state><crop xsi:nil="true"/></TerrainFeature></value></item>
+        <item><key><Vector2><X>70</X><Y>30</Y></Vector2></key><value><TerrainFeature xsi:type="Tree"><treeType>1</treeType><growthStage>5</growthStage><stump>false</stump></TerrainFeature></value></item>
+        <item><key><Vector2><X>72</X><Y>30</Y></Vector2></key><value><TerrainFeature xsi:type="Grass"><grassType>1</grassType><numberOfWeeds>3</numberOfWeeds></TerrainFeature></value></item>
+      </terrainFeatures>
+      <buildings>
+        <Building><buildingType>Coop</buildingType><tileX>50</tileX><tileY>22</tileY><daysOfConstructionLeft>0</daysOfConstructionLeft><daysUntilUpgrade>0</daysUntilUpgrade>
+          <indoors xsi:type="AnimalHouse"><name>Coop</name>
+            <objects><item><key><Vector2><X>5</X><Y>5</Y></Vector2></key><value><Object><itemId>176</itemId><name>Egg</name><bigCraftable>false</bigCraftable></Object></value></item></objects>
+            <animals><item><key><long>1</long></key><value><FarmAnimal><name>Clucky</name><type>White Chicken</type><age>40</age><friendshipTowardFarmer>800</friendshipTowardFarmer></FarmAnimal></value></item></animals>
+          </indoors></Building>
+        <Building xsi:type="ShippingBin"><buildingType>Shipping Bin</buildingType><tileX>71</tileX><tileY>14</tileY></Building>
+      </buildings>
+      <animals />
+    </GameLocation>
+    <GameLocation xsi:type="FarmHouse"><name>FarmHouse</name><objects /><terrainFeatures /></GameLocation>
+  </locations>
+  <currentSeason>fall</currentSeason><dayOfMonth>12</dayOfMonth><year>2</year><whichFarm>0</whichFarm>
+</SaveGame>

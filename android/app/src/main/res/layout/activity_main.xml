@@ -26,6 +26,7 @@
     <!-- 2. convert -->
     <TextView style="@style/Label" android:text="2. Convert" />
     <Button android:id="@+id/convert" style="@style/Big" android:text="Convert" />
+    <Button android:id="@+id/importSave" style="@style/Big" android:text="Bring my PC save (optional)" />
 
     <!-- 3. get it onto the 3DS -->
     <TextView style="@style/Label" android:text="3. Put it on your 3DS" />

@@ -565,6 +565,8 @@ public:
     bool farmBuildingInteract(int tx, int ty);
     std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
     int countItem(int id) const;
+    bool applyImport(const std::string& path, std::string* summary);   // a PC save via tools/saveimport.py
+    void notify(const std::string& s) { say(s); }
     void takeItem(int id, int n);
     // The Mines
     int mineDeepest = 0;                     // deepest floor reached
