@@ -593,7 +593,8 @@ TEXTURES_FROM_DATA = set()
 
 # Robin's buildings that the engine handles: animal houses, sheds, silos, wells.
 BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed",
-             "Greenhouse", "Stable", "Fish Pond"}
+             "Greenhouse", "Stable", "Fish Pond", "Mill", "Slime Hutch", "Pet Bowl", "Junimo Hut", "Earth Obelisk",
+             "Water Obelisk", "Desert Obelisk", "Island Obelisk", "Gold Clock"}
 
 
 def write_buildings_animals(content, out_dir):
@@ -604,7 +605,7 @@ def write_buildings_animals(content, out_dir):
     if os.path.isfile(bp):
         with open(os.path.join(out_dir, "buildings.dat"), "w", encoding="utf-8") as f:
             for name, b in _load_json(content, "Data/Buildings.json").items():
-                if name not in BUILDABLE or (b.get("Builder") != "Robin" and name != "Greenhouse"):
+                if name not in BUILDABLE or (b.get("Builder") not in ("Robin", "Wizard") and name != "Greenhouse"):
                     continue
                 tex = str(b.get("Texture") or ("Buildings/" + name)).replace("\\", "/")
                 TEXTURES_FROM_DATA.add(tex)
@@ -625,6 +626,7 @@ def write_buildings_animals(content, out_dir):
                     f"{ad.get('X', -1)} {ad.get('Y', -1)} {ad.get('Width', 0)} {ad.get('Height', 0)}",
                     int(b.get("MaxOccupants", 0) or 0), ",".join(b.get("ValidOccupantTypes") or []),
                     b.get("BuildingToUpgrade") or "", int(b.get("BuildDays", 0) or 0), int(b.get("HayCapacity", 0) or 0), hopper,
+                    b.get("Builder") or "",
                 ]) + "\n")
     ap = os.path.join(content, "Data", "FarmAnimals.json")
     if os.path.isfile(ap):

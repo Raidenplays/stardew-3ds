@@ -296,6 +296,8 @@ struct FarmBuilding {
     // fish ponds
     int pondFish = -1, pondPop = 0, pondDays = 0;
     int pondOut = -1, pondOutN = 0;   // produce waiting in the bucket
+    // mill (flour ready tomorrow) and junimo hut (what they harvested)
+    std::vector<Slot> items, pending;
 };
 
 struct FarmAnimal {
@@ -641,6 +643,9 @@ public:
     bool farmBuildingInteract(int tx, int ty);
     bool pondInteract(FarmBuilding& b);
     void pondsNight();
+    bool millInteract(FarmBuilding& b);
+    bool collectBuilding(FarmBuilding& b, const char* empty);
+    void junimosHarvest();
     void nightEvents();
     bool hasEvent(const std::string& loc, const std::string& id) const;
     bool farmSpotFree(int x, int y, int w, int h) const;

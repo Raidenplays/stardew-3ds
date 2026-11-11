@@ -178,6 +178,7 @@ std::string shopTitle(const std::string& id) {
     if (id == "SeedShop") return "Pierre's General Store";
     if (id == "Blacksmith") return "Blacksmith";
     if (id == "Carpenter") return "Carpenter's Shop";
+    if (id == "Wizard") return "The Wizard's Book";
     if (id == "AnimalShop") return "Marnie's Ranch";
     if (id == "Saloon") return "The Stardrop Saloon";
     if (id == "FishShop") return "Fish Shop";
@@ -1982,10 +1983,11 @@ static std::vector<int> sellableSlots(Game& g) {
 }
 
 // Robin: buildings you can order now (new ones, and upgrades of ones you have).
-static std::vector<const BuildingType*> buildOffers(const Game& g) {
+static std::vector<const BuildingType*> buildOffers(const Game& g, bool wizard = false) {
     std::vector<const BuildingType*> out;
     for (auto& t : g.data.buildingTypes) {
         if (t.cost <= 0) continue;   // the greenhouse isn't for sale
+        if ((t.builder == "Wizard") != wizard) continue;
         if (t.upgradeFrom.empty()) { out.push_back(&t); continue; }
         for (auto& b : g.buildings)
             if (b.type == t.upgradeFrom && b.daysLeft <= 0) { out.push_back(&t); break; }
@@ -2008,9 +2010,9 @@ static const int OFFER_ROWS = 5, OFFER_H = 30;
 
 static void drawShopExtra(Canvas& c, Game& g, Ui& ui) {
     char buf[96];
-    if (ui.shop == "Carpenter") {
-        auto offers = buildOffers(g);
-        bool house = g.houseLevel < 2;   // the house upgrade sits on top of the list
+    if (ui.shop == "Carpenter" || ui.shop == "Wizard") {
+        auto offers = buildOffers(g, ui.shop == "Wizard");
+        bool house = g.houseLevel < 2 && ui.shop == "Carpenter";   // the house upgrade sits on top of the list
         int total = (int)offers.size() + (house ? 1 : 0);
         ui.shopScroll = std::max(0, std::min(ui.shopScroll, total - OFFER_ROWS));
         for (int r = 0; r < OFFER_ROWS; r++) {
@@ -2082,9 +2084,9 @@ static bool touchShopExtra(Game& g, Ui& ui, int tx, int ty) {
     for (int r = 0; r < OFFER_ROWS; r++) {
         if (!hit(tx, ty, 252, LIST_Y + r * OFFER_H + 4, 58, 20)) continue;
         int i = ui.shopScroll + r;
-        if (ui.shop == "Carpenter") {
-            auto offers = buildOffers(g);
-            if (g.houseLevel < 2) {
+        if (ui.shop == "Carpenter" || ui.shop == "Wizard") {
+            auto offers = buildOffers(g, ui.shop == "Wizard");
+            if (g.houseLevel < 2 && ui.shop == "Carpenter") {
                 if (i == 0) { g.startHouseUpgrade(); return true; }
                 i--;
             }
@@ -2116,9 +2118,9 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
 
     // Buy / Sell (/ Upgrade at the blacksmith) toggle
     bool smith = ui.shop == "Blacksmith";
-    bool extra = ui.shop == "Carpenter" || ui.shop == "AnimalShop";
+    bool extra = ui.shop == "Carpenter" || ui.shop == "AnimalShop" || ui.shop == "Wizard";
     bool third = smith || extra;
-    const char* thirdName = smith ? "Upgrade" : ui.shop == "Carpenter" ? "Build" : "Animals";
+    const char* thirdName = smith ? "Upgrade" : ui.shop != "AnimalShop" ? "Build" : "Animals";
     for (int i = 0; i < (third ? 3 : 2); i++) {
         bool on = i == 2 ? ui.shopUpgrade : (!ui.shopUpgrade && (i == 1) == ui.shopSell);
         box(c, 4 + i * 60, 38, 58, 18, on ? COL_PANEL : COL_TAB_OFF, COL_BORDER, 1);
@@ -2228,7 +2230,7 @@ static void touchShop(Game& g, Ui& ui, int tx, int ty) {
         return;
     }
     bool smith = ui.shop == "Blacksmith";
-    bool extra = ui.shop == "Carpenter" || ui.shop == "AnimalShop";
+    bool extra = ui.shop == "Carpenter" || ui.shop == "AnimalShop" || ui.shop == "Wizard";
     float scrollX = smith || extra ? 190 : 128;
     if (hit(tx, ty, 4, 38, 58, 18)) { ui.shopSell = false; ui.shopUpgrade = false; ui.shopScroll = 0; return; }
     if (hit(tx, ty, 64, 38, 58, 18)) { ui.shopSell = true; ui.shopUpgrade = false; ui.shopScroll = 0; return; }
@@ -2868,7 +2870,7 @@ bool sceneAfterUpdate(Game& g, Ui& ui, const std::string& savePath) {
     if (!g.openShop.empty()) {
         ui.shop = g.openShop;
         ui.shopSell = false;
-        ui.shopUpgrade = false;
+        ui.shopUpgrade = ui.shop == "Wizard";   // his book only builds
         ui.shopScroll = 0;
         ui.cart.clear();
         g.openShop.clear();

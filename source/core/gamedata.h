@@ -54,7 +54,7 @@ struct ToolDef {
 
 // Data/Buildings: something Robin builds on the farm.
 struct BuildingType {
-    std::string name, texture, interior, occupants, upgradeFrom;
+    std::string name, texture, interior, occupants, upgradeFrom, builder = "Robin";
     int srcX = 0, srcY = 0, srcW = 0, srcH = 0;   // srcW 0: the whole texture
     int w = 1, h = 1, cost = 0, days = 0, hay = 0, maxOcc = 0;
     std::vector<std::pair<int, int>> mats;         // item id, amount

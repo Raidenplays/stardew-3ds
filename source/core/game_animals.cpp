@@ -1,6 +1,7 @@
 // Farm buildings (Robin) and farm animals (Marnie): coops, barns, silos, sheds,
 // wells; chickens, cows and the rest living inside, fed with hay, giving
 // eggs overnight or milk / wool to the pail and shears.
+#include <algorithm>
 #include "game.h"
 
 #include <cmath>
@@ -85,7 +86,7 @@ bool Game::startBuilding(const std::string& type) {
     const BuildingType* t = data.buildingType(type);
     if (!t) return false;
     for (auto& b : buildings)
-        if (b.daysLeft > 0 || !b.upgradingTo.empty()) { say("Robin is already busy with a building."); return false; }
+        if (t->builder != "Wizard" && (b.daysLeft > 0 || !b.upgradingTo.empty())) { say("Robin is already busy with a building."); return false; }
     std::string why;
     if (!canAfford(*t, &why)) { say(why); return false; }
     if (!t->upgradeFrom.empty()) {   // an upgrade: the old building gets it
@@ -157,7 +158,7 @@ void Game::updatePlacing(const Input& in, float dt) {
     b.type = placing;
     b.x = placeX;
     b.y = placeY;
-    b.daysLeft = std::max(1, t->days);
+    b.daysLeft = t->builder == "Wizard" ? 0 : std::max(1, t->days);   // the Wizard's magic is instant
     // clear the grass under it
     for (int dy = 0; dy < t->h; dy++)
         for (int dx = 0; dx < t->w; dx++) farm->grass[(size_t)(placeY + dy) * farm->map.width() + placeX + dx] = 0;
@@ -315,8 +316,81 @@ bool Game::pondInteract(FarmBuilding& b) {
     return true;
 }
 
+// Take everything a building is holding (flour from the mill, the junimos' harvest).
+bool Game::collectBuilding(FarmBuilding& b, const char* empty) {
+    bool any = false;
+    for (auto& s : b.items) {
+        if (s.empty()) continue;
+        if (!addSlot(s)) break;
+        itemFlies(s.id, (b.x + 1) * TILE + 8.0f, (b.y + 1) * TILE + 8.0f, s.count);
+        s = Slot();
+        any = true;
+    }
+    b.items.erase(std::remove_if(b.items.begin(), b.items.end(), [](const Slot& s) { return s.empty(); }), b.items.end());
+    if (any) sfx("coin");
+    else if (empty) say(empty);
+    return true;
+}
+
+// The mill: wheat -> flour, beets -> 3 sugar, unmilled rice -> rice, ready the next morning.
+bool Game::millInteract(FarmBuilding& b) {
+    Slot& s = inv[selected];
+    int out = -1, per = 1;
+    if (s.type == SLOT_OBJECT) {
+        if (s.id == 262) out = 246;
+        else if (s.id == 284) { out = 245; per = 3; }
+        else if (s.id == 271) out = 423;
+    }
+    if (out >= 0 && data.object(out)) {
+        Slot o;
+        o.type = SLOT_OBJECT; o.id = out; o.count = s.count * per;
+        b.pending.push_back(o);
+        say("Milling " + std::to_string(s.count) + " " + itemName(s) + ". It'll be ready tomorrow.");
+        s = Slot();
+        sfx("Ship");
+        return true;
+    }
+    return collectBuilding(b, b.pending.empty() ? "The mill is empty. Bring wheat, beets or unmilled rice." : "The mill is still grinding. Come back tomorrow.");
+}
+
+// Junimos from each hut bring in the ripe crops around it (not in winter, not in the rain).
+void Game::junimosHarvest() {
+    if (!farm || season == WINTER || raining) return;
+    int fw = farm->map.width(), fh = farm->map.height();
+    for (auto& b : buildings) {
+        if (b.type != "Junimo Hut" || b.daysLeft > 0) continue;
+        for (int y = std::max(0, b.y - 7); y <= std::min(fh - 1, b.y + 9); y++)
+            for (int x = std::max(0, b.x - 7); x <= std::min(fw - 1, b.x + 9); x++) {
+                Soil& s = farm->soils[(size_t)y * fw + x];
+                const CropDef* c = s.seed >= 0 ? data.cropForSeed(s.seed) : nullptr;
+                if (!c || s.dead || s.phase < c->phaseDays.size() || (s.regrown && s.regrowWait > 0)) continue;
+                Slot got;
+                got.type = SLOT_OBJECT; got.id = c->harvestId; got.count = std::max(1, c->harvestMin);
+                bool stacked = false;
+                for (auto& it : b.items)
+                    if (it.stacksWith(got) && it.count < 999) { it.count += got.count; stacked = true; break; }
+                if (!stacked) {
+                    if (b.items.size() >= 36) continue;   // the hut is full
+                    b.items.push_back(got);
+                }
+                if (c->regrowDays > 0) { s.regrowWait = (int8_t)c->regrowDays; s.regrown = true; }
+                else { s.seed = -1; s.phase = 0; s.dayInPhase = 0; }
+            }
+    }
+}
+
 void Game::animalsNight() {
     pondsNight();
+    junimosHarvest();
+    for (auto& b : buildings) {   // the mill finishes overnight
+        for (auto& p : b.pending) {
+            bool stacked = false;
+            for (auto& it : b.items)
+                if (it.stacksWith(p) && it.count + p.count <= 999) { it.count += p.count; stacked = true; break; }
+            if (!stacked) b.items.push_back(p);
+        }
+        b.pending.clear();
+    }
     for (auto& b : buildings) {
         if (b.daysLeft <= 0) continue;
         if (--b.daysLeft > 0) continue;
@@ -499,6 +573,23 @@ bool Game::farmBuildingInteract(int tx, int ty) {
         return true;
     }
     if (t && b->type == "Fish Pond") return pondInteract(*b);
+    if (t && b->type == "Mill") return millInteract(*b);
+    if (t && b->type == "Junimo Hut") return collectBuilding(*b, "The junimos haven't gathered anything yet.");
+    if (t && b->type == "Gold Clock") { say("The Gold Clock. Time leaves your farm alone."); return true; }
+    if (t && b->type == "Pet Bowl") { say("The pet's water bowl."); return true; }
+    if (t && b->type.size() > 8 && b->type.compare(b->type.size() - 7, 7, "Obelisk") == 0) {
+        struct { const char* type; const char* map; int x, y; } to[] = {
+            {"Earth Obelisk", "Mountain", 31, 20}, {"Water Obelisk", "Beach", 20, 4},
+            {"Desert Obelisk", "Desert", 35, 43}, {"Island Obelisk", "IslandSouth", 11, 11}};
+        for (auto& o : to)
+            if (b->type == o.type) {
+                if (!hasMap(o.map)) { say("The obelisk hums, but that place wasn't converted."); return true; }
+                sfx("wand");
+                warpTo(o.map, o.x, o.y);
+                return true;
+            }
+        return true;
+    }
     if (t && b->type == "Silo") {
         say("Hay in your silos: " + std::to_string(hay) + "/" + std::to_string(hayCapacity()));
         return true;

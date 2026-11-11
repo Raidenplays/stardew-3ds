@@ -454,6 +454,7 @@ bool GameData::load(const std::string& root, std::string* err) {
             b.hay = atoi(f[13].c_str());
             r = ints(f[14]);
             if (r.size() == 2) { b.hopperX = r[0]; b.hopperY = r[1]; }
+            if (f.size() > 15 && !f[15].empty()) b.builder = f[15];
             buildingTypes.push_back(b);
         }
     lines.clear();

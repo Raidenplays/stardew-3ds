@@ -258,6 +258,10 @@ bool Game::runMapAction(const std::string& action, bool bumped) {
         if (openShop == "Blacksmith") collectUpgrade();
         return true;
     }
+    if (verb == "WizardBook") {   // the Wizard's book of buildings
+        openShop = "Wizard";
+        return true;
+    }
     if (verb == "BuyBackpack") {
         if (invSlots >= INV_SIZE) { say("You already have the biggest backpack."); return true; }
         int cost = invSlots < 24 ? 2000 : 10000;
@@ -1484,7 +1488,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 25;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 26;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1507,6 +1511,7 @@ static const uint32_t SAVE_VERSION = 25;   // 2: villager friendships, 3: events
                                           // 23: fish ponds
                                           // 24: rings, boots, hat
                                           // 25: backpack size
+                                          // 26: what the mill and junimo huts hold
 
 namespace {
 struct W {
@@ -1692,6 +1697,11 @@ bool Game::save(const std::string& path) const {
     for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
+    for (auto& b : buildings)
+        for (auto* v : {&b.items, &b.pending}) {
+            w.u32((uint32_t)v->size());
+            for (auto& s : *v) w.slot(s);
+        }
     w.i32(invSlots);
     for (auto& e : equip) w.slot(e);
     for (auto& b : buildings) { w.i32(b.pondFish); w.i32(b.pondPop); w.i32(b.pondDays); w.i32(b.pondOut); w.i32(b.pondOutN); }
@@ -2051,6 +2061,12 @@ bool Game::load(const std::string& path, std::string* err) {
             uint32_t nm = r.u32();
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
         }
+        if (version >= 26 && r.ok)
+            for (auto& b : buildings)
+                for (auto* v : {&b.items, &b.pending}) {
+                    uint32_t n = r.u32();
+                    for (uint32_t k = 0; k < n && r.ok && k < 100; k++) v->push_back(r.slot());
+                }
         if (version >= 25 && r.ok) invSlots = std::max(12, std::min((int)INV_SIZE, (int)r.i32()));
         if (version >= 24 && r.ok)
             for (auto& e : equip) e = r.slot();
