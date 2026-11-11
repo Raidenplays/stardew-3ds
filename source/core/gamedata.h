@@ -38,7 +38,7 @@ struct ObjectDef {
     std::string stringId;            // the game's own id ("24", "Rafseazz.RSVCP_Ridge_Cherry")
 };
 
-enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER, TOOL_ROD };
+enum ToolKind : int { TOOL_NONE = 0, TOOL_HOE, TOOL_CAN, TOOL_AXE, TOOL_PICKAXE, TOOL_SCYTHE, TOOL_OTHER, TOOL_ROD, TOOL_WEAPON };
 
 struct ToolDef {
     std::string key, className, name, texture;
@@ -47,6 +47,14 @@ struct ToolDef {
     int price = -1;                  // Clint's upgrade price (gold) for this level
     std::string upgradeFrom;         // key of the tool this one upgrades
     ToolKind kind = TOOL_OTHER;
+    int minDamage = 0, maxDamage = 0;   // weapons
+};
+
+// Data/Monsters: what a monster is like.
+struct MonsterDef {
+    std::string name;
+    int health = 10, damage = 2, speed = 2, xp = 1;
+    std::vector<std::pair<int, float>> drops;   // item id, chance
 };
 
 // Big craftables (machines, chests, scarecrows...): 16x32 sprites.
@@ -244,6 +252,15 @@ public:
     std::unordered_map<std::string, std::vector<ShopItem>> shops;
     std::vector<NpcDef> npcs;
     std::unordered_map<std::string, NpcAnim> npcAnims;
+    std::unordered_map<std::string, MonsterDef> monsters;
+    const MonsterDef* monster(const std::string& name) const {
+        auto it = monsters.find(name);
+        return it == monsters.end() ? nullptr : &it->second;
+    }
+    int toolByKey(const std::string& key) const {
+        for (size_t i = 0; i < tools.size(); i++) if (tools[i].key == key) return (int)i;
+        return -1;
+    }
     const NpcAnim* npcAnim(const std::string& name) const {
         auto it = npcAnims.find(name);
         return it == npcAnims.end() ? nullptr : &it->second;

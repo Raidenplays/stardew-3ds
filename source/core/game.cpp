@@ -377,6 +377,8 @@ void Game::startDay() {
     timeOfDay = DAY_START;
     clockAcc = 0;
     energy = MAX_ENERGY;
+    health = maxHealth;
+    invuln = 0;
     toolTimer = 0;
     char buf[64];
     snprintf(buf, sizeof buf, "%s %d, Year %d%s", seasonName(season), day, year,
@@ -729,7 +731,8 @@ void Game::useSelected(int tx, int ty) {
         }
         toolTimer = TOOL_TIME;
         toolKindAnim = t->kind;
-        if (t->kind != TOOL_SCYTHE) energy = std::max(0, energy - ENERGY_PER_SWING);
+        if (t->kind != TOOL_SCYTHE && t->kind != TOOL_WEAPON) energy = std::max(0, energy - ENERGY_PER_SWING);
+        if (t->kind == TOOL_WEAPON) { swingWeapon(*t); return; }
         if (!inMap) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE) && pickUpPlaced(tx, ty)) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE || t->kind == TOOL_HOE) && !cur->clumps.empty() &&
@@ -976,6 +979,8 @@ void Game::update(float dt, const Input& in) {
     }
 
     npcsUpdate(dt);
+    monstersUpdate(dt);
+    if (!cur) return;   // knocked out mid-update can't leave us nowhere, but be safe
 
     if (in.prev) selected = (selected + HOTBAR - 1) % HOTBAR;
     if (in.next) selected = (selected + 1) % HOTBAR;

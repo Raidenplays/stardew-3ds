@@ -48,6 +48,7 @@ static ToolKind classify(const std::string& cls, const std::string& key) {
     if (c == "axe") return TOOL_AXE;
     if (c == "pickaxe") return TOOL_PICKAXE;
     if (c == "meleeweapon" && k.find("scythe") != std::string::npos) return TOOL_SCYTHE;
+    if (c == "meleeweapon" && k.rfind("weapon_", 0) == 0) return TOOL_WEAPON;
     if (k.find("scythe") != std::string::npos) return TOOL_SCYTHE;
     if (c == "fishingrod" || k.find("rod") != std::string::npos || k.find("pole") != std::string::npos) return TOOL_ROD;
     return TOOL_OTHER;
@@ -342,6 +343,7 @@ bool GameData::load(const std::string& root, std::string* err) {
         t.texture = f[5];
         if (f.size() > 6) t.price = atoi(f[6].c_str());
         if (f.size() > 7) t.upgradeFrom = f[7];
+        if (f.size() > 9) { t.minDamage = atoi(f[8].c_str()); t.maxDamage = atoi(f[9].c_str()); }
         t.kind = classify(t.className, t.key);
         tools.push_back(t);
     }
@@ -406,6 +408,30 @@ bool GameData::load(const std::string& root, std::string* err) {
             npcs.push_back(std::move(n));
         }
     }
+    lines.clear();
+    if (readLines(root + "data/monsters.dat", lines))
+        for (auto& l : lines) {
+            auto f = splitTabs(l);
+            if (f.size() < 6) continue;
+            MonsterDef d;
+            d.name = f[0];
+            d.health = atoi(f[1].c_str());
+            d.damage = atoi(f[2].c_str());
+            const char* p = f[3].c_str();
+            while (*p) {
+                char* end;
+                long id = strtol(p, &end, 10);
+                if (end == p) break;
+                p = end;
+                double ch = strtod(p, &end);
+                if (end == p) break;
+                p = end;
+                if (id > 0) d.drops.push_back({(int)id, (float)ch});
+            }
+            d.speed = atoi(f[4].c_str());
+            d.xp = atoi(f[5].c_str());
+            monsters[d.name] = d;
+        }
     lines.clear();
     if (readLines(root + "data/animations.dat", lines))
         for (auto& l : lines) {

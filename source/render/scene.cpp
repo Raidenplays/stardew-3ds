@@ -584,6 +584,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         const Location::Bush& b = here.bushes[i];
         if (b.x >= x0 - 3 && b.x <= x1 && b.y >= y0 && b.y <= y1 + 3) items.push_back({(float)((b.y + 1) * TILE - 2), 11, (int)i, 0});
     }
+    for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
     for (size_t i = 0; i < here.clumps.size(); i++) {
         const Location::Clump& b = here.clumps[i];
         if (b.x >= x0 - 2 && b.x <= x1 && b.y >= y0 - 2 && b.y <= y1) items.push_back({(float)((b.y + 2) * TILE - 2), 12, (int)i, 0});
@@ -665,7 +666,19 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             case 3: {
                 drawPlayerWithTool(c, g, g.px - camX, g.py - camY);
                 const ToolDef* td = nullptr;
-                if (g.toolTimer > 0 && g.inv[g.selected].type == SLOT_TOOL && !swingTool(g, td)) {
+                const ToolDef* wd = g.inv[g.selected].type == SLOT_TOOL ? g.data.tool(g.inv[g.selected].id) : nullptr;
+                if (g.toolTimer > 0 && wd && wd->kind == TOOL_WEAPON) {
+                    // the blade sweeps a quarter circle across the way you face
+                    float k = 1.0f - g.toolTimer / TOOL_SWING;
+                    static const float base[4] = {1.5708f, 0.0f, -1.5708f, 3.14159f};
+                    int f = g.facing & 3;
+                    float a = base[f] + (f == FACE_LEFT ? 1.2f : -1.2f) + (f == FACE_LEFT ? -2.4f : 2.4f) * k;
+                    float hx = g.px - camX + (f == FACE_RIGHT ? 4 : f == FACE_LEFT ? -4 : 0), hy = g.py - camY - 12;
+                    int cols = std::max(1, c.texWidth(wd->texture) / 16);
+                    // the sprite points up-right (45 deg): turn it so it points along a
+                    c.imageRotated(wd->texture, (wd->spriteIndex % cols) * 16, (wd->spriteIndex / cols) * 16, 16, 16, 2, 14,
+                                   hx, hy, a + 0.785f);
+                } else if (g.toolTimer > 0 && g.inv[g.selected].type == SLOT_TOOL && !swingTool(g, td)) {
                     int tx, ty;   // tools without a swing yet (scythe, rod...): icon at the target
                     g.targetTile(tx, ty);
                     slotIcon(c, g, g.inv[g.selected], tx * TILE - camX, ty * TILE - camY - 6);
@@ -796,6 +809,26 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     float ox = (k & 1) * 7 - 3 + (float)((h >> 5) % 3), oy = (k >> 1) * 6 - 12;
                     float s = k & 1 ? sway : -sway;
                     c.imageTex(grassTex, "TerrainFeatures_grass", variant * 15, row, 15, 20, std::floor(tx + ox + s), ty + oy);
+                }
+                break;
+            }
+            case 13: {   // a monster
+                const Location::Monster& mo = here.monsters[it.a];
+                float mx = std::floor(mo.x - camX), my = std::floor(mo.y - camY);
+                bool flash = mo.hurt > 0 && ((int)(mo.hurt * 30) & 1);
+                c.rect(mx - 6, my - 2, 12, 3, RGBA(0, 0, 0, 0x50));   // shadow
+                if (mo.bug) {
+                    int row = std::fabs(mo.vx) > std::fabs(mo.vy) ? (mo.vx > 0 ? 1 : 3) : (mo.vy > 0 ? 0 : 2);
+                    int f = (int)(mo.anim * 10) & 3;
+                    c.image("Characters_Monsters_Bug", f * 16, row * 16, 16, 16, mx - 8, my - 22, false,
+                            flash ? RGBA(0xFF, 0x60, 0x60) : 0);
+                } else {
+                    // a slime bounces while it hops; grey on the sheet, tinted per kind
+                    int f = mo.think > 0.4f && (std::fabs(mo.vx) + std::fabs(mo.vy) > 5) ? ((int)(mo.anim * 8) & 3) : ((int)(mo.anim * 3) & 1);
+                    c.image("Characters_Monsters_Green_Slime", f * 16, 0, 16, 24, mx - 8, my - 22, false,
+                            flash ? RGBA(0xFF, 0xFF, 0xFF) : mo.tint);
+                    c.rect(mx - 3, my - 9, 2, 2, RGBA(0x20, 0x20, 0x20));   // eyes
+                    c.rect(mx + 1, my - 9, 2, 2, RGBA(0x20, 0x20, 0x20));
                 }
                 break;
             }
@@ -1098,12 +1131,23 @@ static void drawHud(Canvas& c, Game& g) {
     uint32_t ec = k > 0.5f ? COL_ENERGY : (k > 0.2f ? RGBA(0xF0, 0xC0, 0x20) : RGBA(0xE0, 0x30, 0x20));
     c.rect(ex + 1, ey + 1 + 66 * (1 - k), 8, 66 * k, ec);
     c.text(ex + 5, ey + 66, 0.4f, COL_TEXT, "E", ALIGN_CENTER);
+    // health: in the mines, or while hurt
+    bool showHealth = g.location().mineLevel > 0 || g.health < g.maxHealth;
+    if (showHealth) {
+        float hx = TOP_W - 34 + hs, hy = TOP_H - 74;
+        box(c, hx - 2, hy - 2, 14, 72, COL_PANEL, COL_BORDER);
+        c.rect(hx + 1, hy + 1, 8, 66, COL_ENERGY_BG);
+        float hk = std::max(0.0f, (float)g.health / g.maxHealth);
+        bool flash = g.invuln > 0.9f && ((int)(g.invuln * 20) & 1);
+        c.rect(hx + 1, hy + 1 + 66 * (1 - hk), 8, 66 * hk, flash ? RGBA(0xFF, 0xFF, 0xFF) : RGBA(0xE0, 0x30, 0x30));
+        c.text(hx + 5, hy + 66, 0.4f, COL_TEXT, "H", ALIGN_CENTER);
+    }
 
     const Slot& sel = g.inv[g.selected];
     if (sel.type == SLOT_TOOL) {
         const ToolDef* td = g.data.tool(sel.id);
         if (td && td->kind == TOOL_CAN) {
-            float wx = TOP_W - 34 + hs, wy = TOP_H - 74;
+            float wx = TOP_W - (showHealth ? 52 : 34) + hs, wy = TOP_H - 74;
             box(c, wx - 2, wy - 2, 14, 72, COL_PANEL, COL_BORDER);
             float wk = (float)g.water / g.canCapacity();
             c.rect(wx + 1, wy + 1 + 66 * (1 - wk), 8, 66 * wk, COL_WATER);

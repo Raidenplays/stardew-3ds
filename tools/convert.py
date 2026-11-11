@@ -87,6 +87,9 @@ EXTRA_TEXTURES = [
     ("LooseSprites/Lighting/lantern", False),
     ("LooseSprites/Lighting/windowLight", False),
     ("Maps/Mines/mine_frost", False),
+    ("TileSheets/weapons", False),
+    ("Characters/Monsters/Green Slime", False),
+    ("Characters/Monsters/Bug", False),
     ("Maps/Mines/mine_lava", False),
     ("LooseSprites/font_bold", False),
     ("LooseSprites/letterBG", False),
@@ -653,7 +656,29 @@ def write_data(content, out_dir):
                 str(t.get("ConventionalUpgradeFrom") or "").replace("(T)", ""),
             ]) + "\n")
             n += 1
-    print(f"  tools.dat: {n} tools")
+        # swords, daggers and clubs ride along as tools: key Weapon_<id>, damage at the end
+        wp = os.path.join(content, "Data", "Weapons.json")
+        if os.path.isfile(wp):
+            for wid, w in _load_json(content, "Data/Weapons.json").items():
+                name = str(w.get("Name", wid))
+                if "Scythe" in name or int(w.get("Type", 3) or 0) not in (0, 1, 2, 3):
+                    continue
+                texp = str(w.get("Texture") or "TileSheets/weapons").replace("\\", "/")
+                f.write("\t".join(_clean(x) for x in [
+                    "Weapon_" + str(wid), "MeleeWeapon", name, 0, int(w.get("SpriteIndex", 0) or 0), tex_name(texp),
+                    -1, "", int(w.get("MinDamage", 1) or 1), int(w.get("MaxDamage", 3) or 3),
+                ]) + "\n")
+                n += 1
+    print(f"  tools.dat: {n} tools and weapons")
+    # monsters: name, health, damage, drops (id chance ...), speed, experience
+    mp = os.path.join(content, "Data", "Monsters.json")
+    if os.path.isfile(mp):
+        with open(os.path.join(out_dir, "monsters.dat"), "w", encoding="utf-8") as f:
+            for name, v in _load_json(content, "Data/Monsters.json").items():
+                p = str(v).split("/")
+                if len(p) < 14:
+                    continue
+                f.write("\t".join(_clean(x) for x in [name, p[0], p[1], p[6], p[10], p[13]]) + "\n")
 
 
 def _parse_condition(cond, season_bits):
