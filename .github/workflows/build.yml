@@ -44,9 +44,38 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: make -j"$(nproc)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stardew3ds
+          path: |
+            stardew3ds.3dsx
+            stardew3ds.elf
+            stardew3ds.smdh
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: stardew3ds build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: false
+          body: |
+            Engine build from ${{ github.sha }}. Copy stardew3ds.3dsx to sdmc:/3ds/ and your
+            converted files to sdmc:/3ds/stardew3ds/ (see the README).
+          files: stardew3ds.3dsx
+
+
+  # makerom's Linux build needs a newer glibc than devkitPro's image, so the
+  # .cia is packed on the plain runner from the .elf the 3dsx job built.
+  cia:
+    needs: build-3dsx
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: stardew3ds
       - name: Build the .cia (HOME Menu install, e.g. FBI's QR install)
         run: |
-          (command -v curl && command -v unzip) || (apt-get update && apt-get install -y curl unzip)
           # bannertool moved from Steveice10 to diasurgical: find the current release
           BT=$(curl -sSf https://api.github.com/repos/diasurgical/bannertool/releases/latest | grep -o 'https://[^"]*\.zip' | head -1)
           echo "bannertool: $BT"
@@ -63,26 +92,14 @@ jobs:
           bannertool makesmdh -s "stardew3ds" -l "stardew3ds - Ported by ItsRaiden" -p "ItsRaiden" -i icon.png -o icon.icn
           makerom -f cia -o stardew3ds.cia -elf stardew3ds.elf -rsf meta/cia.rsf -icon icon.icn -banner banner.bnr -target t -DAPP_VERSION_MAJOR=1
           ls -la stardew3ds.cia
-      - uses: actions/upload-artifact@v4
-        with:
-          name: stardew3ds
-          path: |
-            stardew3ds.3dsx
-            stardew3ds.cia
-            stardew3ds.smdh
-      - name: Publish release
+      - name: Publish with the build
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: stardew3ds build ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           prerelease: false
-          body: |
-            Engine build from ${{ github.sha }}. Copy stardew3ds.3dsx to sdmc:/3ds/ and your
-            converted files to sdmc:/3ds/stardew3ds/ (see the README).
-          files: |
-            stardew3ds.3dsx
-            stardew3ds.cia
+          files: stardew3ds.cia
 
   converter-apk:
     runs-on: ubuntu-latest
