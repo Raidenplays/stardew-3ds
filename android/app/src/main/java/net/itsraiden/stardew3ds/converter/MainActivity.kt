@@ -30,7 +30,7 @@ import kotlin.concurrent.thread
 
 /**
  * The stardew3ds converter on a phone:
- *  1. pick your "Content (unpacked)" folder, your mods folder (optional) and your logo (optional)
+ *  1. pick your game's Content folder (normal or unpacked), your mods folder (optional) and your logo (optional)
  *  2. Convert - runs the same tools/convert.py as on the PC
  *  3. Save to a folder / SD card, or Send to your 3DS over Wi-Fi (ftpd)
  *
@@ -93,6 +93,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        // xnbfile.py opens the bundled XNB decompressor by this path (set before Python starts)
+        android.system.Os.setenv("S3D_XNB_LIB", File(applicationInfo.nativeLibraryDir, "libs3dxnb.so").absolutePath, true)
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
         log = findViewById(R.id.log)
         scroll = findViewById(R.id.scroll)
@@ -146,7 +148,7 @@ class MainActivity : AppCompatActivity() {
         status.text = when {
             busy -> "Working..."
             ready -> "Converted files are ready to save or send."
-            else -> "Pick your Content (unpacked) folder, then Convert."
+            else -> "Pick your game's Content folder (or a zip of it), then Convert."
         }
     }
 
@@ -188,7 +190,7 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- convert
 
     private fun convert() {
-        if (contentUri == null && contentZip == null) return say("Pick your Content (unpacked) folder or zip first")
+        if (contentUri == null && contentZip == null) return say("Pick your Content folder or zip first")
         if (busy) return
         setBusy(true)
         log.text = ""
@@ -221,7 +223,7 @@ class MainActivity : AppCompatActivity() {
                 outDir.mkdirs()
                 // the folder you pick may be the one *containing* Content (unpacked)
                 val root = findContentRoot(contentDir) ?: run {
-                    say("! Couldn't find a Maps folder in what you picked - pick the 'Content (unpacked)' folder")
+                    say("! Couldn't find a Maps folder in what you picked - pick your game's Content folder (normal or unpacked)")
                     return@thread
                 }
                 say("Converting (this takes a while with SVE and Ridgeside)...")
@@ -247,7 +249,8 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- updates from the repo
     private val repo = "Raidenplays/stardew-3ds"
-    private val converterFiles = listOf("convert.py", "cp.py", "sjson.py", "tbin.py", "tmxmap.py", "xnb.py", "layer.py")
+    private val converterFiles = listOf("convert.py", "cp.py", "sjson.py", "tbin.py", "tmxmap.py", "xnb.py", "layer.py",
+        "xnbfile.py", "xnbunpack.py", "netschema.py")
 
     private fun fetch(url: String, to: File? = null, onBytes: ((Long, Long) -> Unit)? = null): String? {
         val c = URL(url).openConnection() as HttpURLConnection

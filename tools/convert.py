@@ -543,6 +543,7 @@ class _ItemIds:
 
 ITEM_IDS = _ItemIds()
 MODS_DIR = [None]
+ORIG_CONTENT = [None]   # the folder given on the command line (maybe packed)
 BASE_CONTENT = [None]
 TEXTURES_FROM_DATA = set()
 
@@ -1758,6 +1759,21 @@ def main():
     print(f"Using {jobs} process{'es' if jobs != 1 else ''}")
     content = args[0]
     out_root = os.path.join(args[1], "3ds", "stardew3ds")
+    ORIG_CONTENT[0] = content
+    import xnbunpack
+    if xnbunpack.is_packed(content):
+        # a normal game folder: unpack the .xnb files first (same result as StardewXnbHack)
+        mods = opts.get("--mods") if isinstance(opts.get("--mods"), str) else None
+        dll = xnbunpack.find_dll(content, [mods] if mods else [])
+        print("Unpacking your game files (the first time takes a while)...")
+        if not dll:
+            print(f"  ! {xnbunpack.DLL} not found next to or inside your Content folder")
+        unpacked = os.path.join(args[1], "_unpacked")
+        if not xnbunpack.unpack(content, unpacked, dll):
+            sys.exit(f"Your game's {xnbunpack.DLL} is needed to read its Data files. Copy it from your "
+                     "Stardew Valley folder (it's next to Content) into the Content folder or zip, then convert again.")
+        content = unpacked
+        took("unpacked")
     season_merges = []
     if opts.get("--mods") and opts["--mods"] is not True:
         import cp
@@ -1848,7 +1864,9 @@ def main():
     write_events(content, os.path.join(out_root, "data"))
     print("Sound...")
     base = BASE_CONTENT[0] or content
-    copy_xact([os.path.join(base, "XACT"), base, MODS_DIR[0], os.path.dirname(base)], out_root)
+    orig = ORIG_CONTENT[0] or base
+    copy_xact([os.path.join(orig, "XACT"), orig, os.path.join(base, "XACT"), base, MODS_DIR[0],
+               os.path.dirname(orig)], out_root)
     write_mod_audio(content, out_root, MODS_DIR[0])
     print("Fonts...")
     write_fonts(content, out_root)

@@ -28,6 +28,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    // the XNB decompressor (same C++ as the 3DS setup) for reading normal game files
+    externalNativeBuild {
+        cmake { path = file("../../tools/native/CMakeLists.txt") }
+    }
+    packaging { jniLibs { useLegacyPackaging = true } }   // a real file Python's ctypes can open
 }
 
 chaquopy {
@@ -36,6 +41,7 @@ chaquopy {
         pip {
             install("pillow")
             install("numpy")
+            install("dnfile")    // reads the game's StardewValley.GameData.dll layouts
         }
     }
     sourceSets {

@@ -40,7 +40,7 @@ class _R:
             k = self.string()
             t = self.u8()
             if t == 0:
-                v = "T" if self.u8() else "F"
+                v = "True" if self.u8() else "False"   # as xTile writes bools
             elif t == 1:
                 v = str(self.i32())
             elif t == 2:
@@ -55,7 +55,11 @@ class _R:
 
 def read_tbin(path):
     with open(path, "rb") as f:
-        r = _R(f.read())
+        return read_tbin_bytes(f.read())
+
+
+def read_tbin_bytes(data):
+    r = _R(data)
     if r.take(6) != b"tBIN10":
         raise ValueError("not a tBIN10 file")
     m = Map()
