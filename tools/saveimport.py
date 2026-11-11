@@ -310,7 +310,12 @@ def import_save(save_path, root):
     # a pet anywhere in the save
     for el in sg.iter("NPC"):
         if xtype(el) in ("Pet", "Cat", "Dog"):
-            out.append(["mail", "hasPet"])
+            kind = txt(el, "petType") or xtype(el)
+            if kind not in ("Cat", "Dog"):
+                kind = "Cat" if truthy(p, "catPerson") else "Dog" if kind == "Pet" and p.find("catPerson") is not None else "Cat"
+            breed = txt(el, "whichBreed") or txt(p, "whichPetBreed") or "0"
+            out.append(["pet", kind, int(breed) if breed.isdigit() else 0, clean(txt(el, "name", "")),
+                        num(el, "friendshipTowardFarmer")])
             break
 
     # museum donations (ArchaeologyHouse museumPieces)

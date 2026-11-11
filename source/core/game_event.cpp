@@ -171,7 +171,7 @@ bool Game::eventConditionsMet(const std::string& key) const {
         } else if (code == "m") {          // total earnings
             ok = w.size() > 1 && totalEarned >= atoll(w[1].c_str());
         } else if (code == "h") {          // pet preference: the cat's event is the one that plays
-            ok = w.size() > 1 && w[1] == "cat" && !mailReceived.count("hasPet") && !mailReceived.count("s3d_noPet");
+            ok = w.size() > 1 && (w[1] == "dog") == (me.petKind == 2) && !pet.type && !mailReceived.count("hasPet") && !mailReceived.count("s3d_noPet");
         } else if (code == "Skill") {
             static const char* names[SK_COUNT] = {"Farming", "Fishing", "Foraging", "Mining", "Combat"};
             ok = false;
@@ -661,7 +661,7 @@ bool Game::eventStep(const std::string& raw) {
             ch.label = "Mushrooms"; p.choices.push_back(ch);
             ch.label = "Fruit bats"; p.choices.push_back(ch);
         } else {
-            p.text = "Adopt it? It looks like it needs a home.";
+            p.text = me.petKind == 2 ? "Adopt the dog? It looks like it needs a home." : "Adopt the cat? It looks like it needs a home.";
             ch.label = "Yes"; p.choices.push_back(ch);
             ch.label = "No"; p.choices.push_back(ch);
         }

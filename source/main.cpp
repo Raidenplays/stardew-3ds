@@ -331,6 +331,16 @@ int main() {
 
     Ui ui;
     loadUiSettings(ui, root + "settings.txt");
+    game.keyboard = [](const std::string& hint, const std::string& cur, int maxLen) {   // naming your pet
+        SwkbdState kb;
+        char buf[64] = {0};
+        swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, std::min(maxLen, 63));
+        swkbdSetHintText(&kb, hint.c_str());
+        swkbdSetInitialText(&kb, cur.c_str());
+        swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+        SwkbdButton b = swkbdInputText(&kb, buf, sizeof buf);
+        return b == SWKBD_BUTTON_RIGHT ? std::string(buf) : cur;
+    };
     u64 last = osGetTime();
     float holdA = 0;
     while (aptMainLoop() && !ui.quit) {

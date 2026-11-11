@@ -335,6 +335,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     for (auto& e : equip) e = Slot();
     invSlots = 12;
     binOpen = false;
+    pet = Pet();
     spouse.clear();
     engagedTo.clear();
     dating.clear();
@@ -478,16 +479,17 @@ void Game::startDay() {
     setDialogueToken("%farm%", me.farm);
     setDialogueToken("%farm", me.farm);         // the game's own form ("This is %farm farm.")
     setDialogueToken("%spouse", spouse.empty() ? "your spouse" : spouse);
-    setDialogueToken("%pet", "your pet");
+    setDialogueToken("%pet", pet.type ? pet.name : "your pet");
     setDialogueToken("%name%", me.name);
     setDialogueToken("%spouse%", spouse.empty() ? "your spouse" : spouse);
-    setDialogueToken("%pet%", "your pet");
+    setDialogueToken("%pet%", pet.type ? pet.name : "your pet");
     setDialogueToken("%year%", std::to_string(year));
     setDialogueToken("%season%", seasonName(season));
     npcsStartDay();
     festivalActive = -1;
     festivalDone = false;
     worldMorning();
+    petMorning();
     if (const Festival* fe = festivalToday())
         if (morningNote.empty()) {
             int h = fe->start / 100;
@@ -866,12 +868,7 @@ bool Game::canSleepHere() const { return cur && cur->name == data.layout.bedMap;
 bool Game::tryInteract(int tx, int ty) {
     if (mineInteract(tx, ty)) return true;
     if (farmBuildingInteract(tx, ty) || hopperInteract(tx, ty) || animalInteract(tx, ty)) return true;
-    if (cur->isFarm && hasPet() && tx == petX() && (ty == petY() || ty == petY() - 1)) {
-        petHeart = 1.5f;
-        sfx("cat");
-        if (!garbageToday.count("_pet")) { garbageToday.insert("_pet"); say("Your pet purrs. It loves you a little more."); }
-        return true;
-    }
+    if (petInteract(tx, ty)) return true;
     if (!cur->fruitTrees.empty() && shakeFruitTree(tx, ty)) return true;
     if (NpcState* n = npcAt(tx, ty)) {
         if (inv[selected].type == SLOT_OBJECT) giveGift(*n, selected);
@@ -1200,7 +1197,7 @@ void Game::updateEffects(float dt) {
 void Game::update(float dt, const Input& in) {
     if (toastTime > 0) toastTime -= dt;
     if (packAsk > 0) packAsk -= dt;
-    if (petHeart > 0) petHeart -= dt;
+    petUpdate(dt);
     if (!morningNote.empty() && !cutscene.active && timeOfDay >= DAY_START + 10) { say(morningNote); morningNote.clear(); }
     {   // the shipping bin's lid swings open as you come near
         bool near = binOpen;
@@ -1515,7 +1512,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 26;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 27;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1539,6 +1536,7 @@ static const uint32_t SAVE_VERSION = 26;   // 2: villager friendships, 3: events
                                           // 24: rings, boots, hat
                                           // 25: backpack size
                                           // 26: what the mill and junimo huts hold
+                                          // 27: your pet
 
 namespace {
 struct W {
@@ -1724,6 +1722,8 @@ bool Game::save(const std::string& path) const {
     for (auto& fp : furniture) { w.str(fp.map); w.i32(fp.id); w.i32(fp.x); w.i32(fp.y); }
     w.u32((uint32_t)museumDonated.size());
     for (int id : museumDonated) w.i32(id);
+    w.i32(me.petKind); w.i32(me.petBreed);
+    w.i32(pet.type); w.i32(pet.breed); w.str(pet.name); w.i32(pet.friendship); w.u8(pet.petted); w.u8(pet.watered);
     for (auto& b : buildings)
         for (auto* v : {&b.items, &b.pending}) {
             w.u32((uint32_t)v->size());
@@ -2076,6 +2076,7 @@ bool Game::load(const std::string& path, std::string* err) {
     museumOpen = false;
     for (auto& e : equip) e = Slot();
     invSlots = INV_SIZE;   // saves from before backpacks keep all their room
+    pet = Pet();
     if (version >= 21 && r.ok) {
         furniture.clear();
         uint32_t nf = r.u32();
@@ -2087,6 +2088,11 @@ bool Game::load(const std::string& path, std::string* err) {
         if (version >= 22 && r.ok) {
             uint32_t nm = r.u32();
             for (uint32_t k = 0; k < nm && r.ok && k < 1000; k++) museumDonated.insert(r.i32());
+        }
+        if (version >= 27 && r.ok) {
+            me.petKind = r.i32() == 2 ? 2 : 1; me.petBreed = std::max(0, std::min(4, (int)r.i32()));
+            pet.type = r.i32(); pet.breed = r.i32(); pet.name = r.str(); pet.friendship = r.i32();
+            pet.petted = r.u8() != 0; pet.watered = r.u8() != 0;
         }
         if (version >= 26 && r.ok)
             for (auto& b : buildings)

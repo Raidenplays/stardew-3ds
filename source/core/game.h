@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -344,6 +345,7 @@ public:
         std::string name = "Farmer", farm = "Stardew", favorite = "";
         Outfit outfit;
         int farmType = 0;          // index into GameData::farmTypes
+        int petKind = 1, petBreed = 0;   // the pet you'd like: 1 cat, 2 dog; which coat
     };
     Character me;
     const std::string& farmerName() const { return me.name; }
@@ -685,11 +687,26 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
-    // the pet Marnie brings by (the cat): sits by the farmhouse door
-    bool hasPet() const { return mailReceived.count("hasPet") != 0; }
-    int petX() const { return data.layout.doorX + 2; }
-    int petY() const { return data.layout.doorY + 2; }
-    float petHeart = 0;
+    // ---- your pet (game_pet.cpp) ----
+    struct Pet {
+        int type = 0;              // 0 none, 1 cat, 2 dog
+        int breed = 0;             // which of the five coats
+        std::string name;
+        int friendship = 0;        // 0..1000
+        bool petted = false, watered = false;
+        std::string loc = "Farm";
+        float x = 0, y = 0, tx = 0, ty = 0;
+        int facing = 0, state = 0; // 0 sitting, 1 walking, 2 asleep
+        float timer = 0, anim = 0, heart = 0;
+    } pet;
+    std::function<std::string(const std::string& hint, const std::string& current, int maxLen)> keyboard;   // the system keyboard
+    void adoptPet(int type);
+    void petHome();
+    void ensurePetBowl();
+    void petMorning();
+    void petUpdate(float dt);
+    bool petInteract(int tx, int ty);
+    bool petBowlInteract();
     bool visitFestival();                    // (previews, tests) start today and walk into its festival
     bool hasEvent(const std::string& loc, const std::string& id) const;
     bool farmSpotFree(int x, int y, int w, int h) const;

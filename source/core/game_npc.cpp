@@ -448,7 +448,10 @@ void Game::dialogueChoose(int i) {
         cutscene.forkFlag = (i == cutscene.forkWant);
         cutscene.questionPending = false;
         if (cutscene.special == "cave") mailReceived.insert(i == 0 ? "caveMushrooms" : "caveBats");
-        if (cutscene.special == "catQuestion") mailReceived.insert(i == 0 ? "hasPet" : "s3d_noPet");
+        if (cutscene.special == "catQuestion") {
+            if (i == 0) adoptPet(me.petKind);
+            else mailReceived.insert("s3d_noPet");
+        }
         cutscene.special.clear();
     }
     std::vector<DialoguePage> reply;

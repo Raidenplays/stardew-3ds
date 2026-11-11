@@ -576,7 +576,7 @@ bool Game::farmBuildingInteract(int tx, int ty) {
     if (t && b->type == "Mill") return millInteract(*b);
     if (t && b->type == "Junimo Hut") return collectBuilding(*b, "The junimos haven't gathered anything yet.");
     if (t && b->type == "Gold Clock") { say("The Gold Clock. Time leaves your farm alone."); return true; }
-    if (t && b->type == "Pet Bowl") { say("The pet's water bowl."); return true; }
+    if (t && b->type == "Pet Bowl") return petBowlInteract();
     if (t && b->type.size() > 8 && b->type.compare(b->type.size() - 7, 7, "Obelisk") == 0) {
         struct { const char* type; const char* map; int x, y; } to[] = {
             {"Earth Obelisk", "Mountain", 31, 20}, {"Water Obelisk", "Beach", 20, 4},

@@ -6,6 +6,8 @@
     <money>4321</money>
     <totalMoneyEarned>90000</totalMoneyEarned>
     <isMale>true</isMale>
+    <catPerson>false</catPerson>
+    <whichPetBreed>1</whichPetBreed>
     <maxItems>24</maxItems>
     <houseUpgradeLevel>1</houseUpgradeLevel>
     <deepestMineLevel>40</deepestMineLevel>
@@ -39,6 +41,10 @@
           <indoors><name>Coop</name><objects /></indoors>
         </Building>
       </buildings>
+    </GameLocation>
+    <GameLocation xsi:type="FarmHouse">
+      <name>FarmHouse</name>
+      <characters><NPC xsi:type="Dog"><name>Rex</name><friendshipTowardFarmer>640</friendshipTowardFarmer></NPC></characters>
     </GameLocation>
     <GameLocation xsi:type="CommunityCenter">
       <name>CommunityCenter</name>

@@ -334,12 +334,15 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     if (!t.draft.farm.empty()) c.text(200, 222, 0.4f, CREAM, t.draft.farm + " Farm", ALIGN_CENTER);
 }
 
-static const float ROW_X = 8, ROW_W = 304, ROW_H = 22, ROW_Y0 = 6;
+static const float ROW_X = 8, ROW_W = 304, ROW_H = 20, ROW_Y0 = 4;
 
 static float rowY(int f) { return ROW_Y0 + f * (ROW_H + 2); }
 
 static void arrows(Canvas& c, float y, bool on) {
-    c.text(150, y + 3, 0.5f, on ? SEL : SOFT, "<", ALIGN_CENTER);
+    uint32_t ac = on ? SEL : SOFT;   // drawn, since the font's "<" is a heart
+    c.line(153, y + 5, 147, y + 10, ac, 1);
+    c.line(147, y + 10, 153, y + 15, ac, 1);
+    c.line(153, y + 15, 153, y + 5, ac, 1);
     c.text(298, y + 3, 0.5f, on ? SEL : SOFT, ">", ALIGN_CENTER);
 }
 
@@ -381,7 +384,7 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
         return;
     }
     static const char* names[CF_COUNT] = {"Name", "Farm name", "Favourite thing", "Hair", "Hair colour",
-                                          "Shirt", "Pants colour", "Farm type", ""};
+                                          "Shirt", "Pants colour", "Farm type", "Pet", ""};
     char buf[64];
     for (int f = 0; f < CF_COUNT; f++) {
         float y = rowY(f);
@@ -418,6 +421,16 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
                 val = t.draft.farmType < (int)g.data.farmTypes.size() ? g.data.farmTypes[t.draft.farmType].name : "?";
                 arrows(c, y, on);
                 break;
+            case CF_PET: {   // the stray Marnie brings by: cat or dog, five coats each
+                snprintf(buf, sizeof buf, "%s %d", t.draft.petKind == 2 ? "Dog" : "Cat", t.draft.petBreed + 1);
+                val = buf;
+                std::string tex = std::string(t.draft.petKind == 2 ? "Animals_dog" : "Animals_cat") +
+                                  (t.draft.petBreed ? std::to_string(t.draft.petBreed) : "");
+                int fr = t.draft.petKind == 2 ? 16 : 18;
+                if (c.texWidth(tex) > 0) c.image(tex, (fr % 4) * 32 + 8, (fr / 4) * 32 + 12, 16, 18, 168, y + 1);
+                arrows(c, y, on);
+                break;
+            }
             default: break;
         }
         if (!val.empty()) {
@@ -446,6 +459,12 @@ static void change(TitleUi& t, const GameData& data, int dir) {
         case CF_SHIRT: o.shirt = wrap(o.shirt + dir, N_SHIRTS); break;
         case CF_HAIR_COLOR: t.hairColor = wrap(t.hairColor + dir, N_HAIR_COLORS); break;
         case CF_PANTS_COLOR: t.pantsColor = wrap(t.pantsColor + dir, N_PANTS_COLORS); break;
+        case CF_PET: {
+            int k = wrap((t.draft.petKind == 2 ? 5 : 0) + t.draft.petBreed + dir, 10);
+            t.draft.petKind = k >= 5 ? 2 : 1;
+            t.draft.petBreed = k % 5;
+            break;
+        }
         case CF_FARM_TYPE: t.draft.farmType = wrap(t.draft.farmType + dir, (int)std::max<size_t>(1, data.farmTypes.size())); break;
         default: break;
     }

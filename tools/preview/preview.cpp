@@ -737,11 +737,20 @@ int main(int argc, char** argv) {
                 shot(c, g, ui, "festival");
             }
         }
-        if (getenv("PET")) {   // PET=1: the cat by the door
-            g.mailReceived.insert("hasPet");
-            g.teleport("Farm", g.petX() - 1, g.petY() + 1);
-            step(g, ui, none, 10);
-            shot(c, g, ui, "pet");
+        if (const char* kind = getenv("PET")) {   // PET=cat|dog: adopt one and watch it for a bit
+            g.me.petKind = kind[0] == 'd' ? 2 : 1;
+            g.me.petBreed = getenv("BREED") ? atoi(getenv("BREED")) : 0;
+            g.adoptPet(g.me.petKind);
+            g.teleport("Farm", (int)(g.pet.x / 16) - 2, (int)(g.pet.y / 16) + 1);
+            step(g, ui, none, 30);
+            shot(c, g, ui, "pet_sitting");
+            step(g, ui, none, 400);
+            printf("  pet %s at %.0f,%.0f state %d\n", g.pet.name.c_str(), g.pet.x / 16, g.pet.y / 16, g.pet.state);
+            g.teleport("Farm", (int)(g.pet.x / 16) - 1, (int)(g.pet.y / 16) + 1);
+            g.petInteract((int)(g.pet.x / 16), (int)((g.pet.y - 4) / 16));
+            step(g, ui, none, 3);
+            shot(c, g, ui, "pet_petted");
+            for (auto& b : g.buildings) if (b.type == "Pet Bowl") printf("  bowl at %d,%d\n", b.x, b.y);
         }
         if (getenv("BIN")) {   // BIN=1: mail waiting, walk up to the bin and open it
             g.mailbox.push_back("Robin");

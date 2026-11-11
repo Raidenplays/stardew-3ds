@@ -609,7 +609,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     for (size_t i = 0; i < here.monsters.size(); i++) items.push_back({here.monsters[i].y, 13, (int)i, 0});
     if (here.mineLevel && here.chestX >= 0) items.push_back({(float)(here.chestY * TILE + 15), 18, here.chestX, here.chestY});
     if (!g.riding && g.horseLoc == here.name) items.push_back({g.horseY, 19, 0, 0});
-    if (here.isFarm && g.hasPet()) items.push_back({(float)(g.petY() * TILE + 14), 20, 0, 0});
+    if (g.pet.type && g.pet.loc == here.name) items.push_back({g.pet.y, 20, 0, 0});
     if (here.isFarm)
         for (size_t i = 0; i < g.buildings.size(); i++) {
             const BuildingType* bt = g.typeOf(g.buildings[i]);
@@ -949,13 +949,18 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 }
                 break;
             }
-            case 20: {   // your pet, by the door (it curls up at night)
-                float ax = g.petX() * TILE + 8 - camX, ay = g.petY() * TILE + 14 - camY;
-                bool sleepy = g.timeOfDay >= 20 * 60;
-                int f = sleepy ? 28 : ((timeMs / 700) % 6 == 0 ? 19 : 18);   // curled up / sitting, now and then a blink
-                if (c.texWidth("Animals_cat") > 0) c.image("Animals_cat", (f % 4) * 32, (f / 4) * 32, 32, 32, std::floor(ax - 16), std::floor(ay - 28));
+            case 20: {   // your pet: walk rows down/right/up/left, sitting on row 4, curled up asleep on row 7
+                const Game::Pet& p = g.pet;
+                std::string tex = std::string(p.type == 2 ? "Animals_dog" : "Animals_cat") + (p.breed > 0 ? std::to_string(p.breed) : "");
+                if (c.texWidth(tex) <= 0) tex = p.type == 2 ? "Animals_dog" : "Animals_cat";
+                float ax = std::floor(p.x - camX), ay = std::floor(p.y - camY);
+                int f;
+                if (p.state == 2) f = 28 + ((int)(p.anim * 0.8f) & 1);
+                else if (p.state == 1) f = (p.facing == FACE_DOWN ? 0 : p.facing == FACE_RIGHT ? 4 : p.facing == FACE_UP ? 8 : 12) + ((int)(p.anim * 7) & 3);
+                else f = p.type == 2 ? 16 + ((int)(p.anim * 1.5f) % 6 == 0 ? 1 : 0) : 18 + ((int)(p.anim * 1.5f) % 6 == 0 ? 1 : 0);
+                if (c.texWidth(tex) > 0) c.image(tex, (f % 4) * 32, (f / 4) * 32, 32, 32, ax - 16, ay - 28);
                 else c.rect(ax - 5, ay - 9, 10, 9, RGBA(0xD8, 0x90, 0x40));
-                if (g.petHeart > 0) c.text(ax, ay - 34, 0.5f, RGBA(0xE8, 0x40, 0x50), "<", ALIGN_CENTER);
+                if (p.heart > 0) c.text(ax, ay - 36 - (1.5f - p.heart) * 6, 0.5f, RGBA(0xE8, 0x40, 0x50), "<", ALIGN_CENTER);
                 break;
             }
             case 19: {   // your horse, waiting
