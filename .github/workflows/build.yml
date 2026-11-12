@@ -150,3 +150,49 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: false
           files: stardew3ds-converter.apk
+
+  # The converter as a web page (web/): the same Python tools run inside the browser, so
+  # there is nothing to install. It is tested in a real Chrome against the PC converter's
+  # output, then published to the gh-pages branch (GitHub Pages).
+  web-converter:
+    needs: build-3dsx
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: stardew3ds
+          path: /tmp/game
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq emscripten > /dev/null
+          pip install pillow numpy
+          mkdir -p /tmp/e2e && cd /tmp/e2e && npm init -y > /dev/null && npm install --silent puppeteer-core
+      - name: Build the site
+        run: sh web/build.sh /tmp/site /tmp/game/stardew3ds.3dsx "build-${{ github.run_number }}"
+      - name: Same files as the PC converter (made-up test content, in headless Chrome)
+        run: |
+          python3 tests/make_xnb_samples.py /tmp/xfx/xnbs
+          python3 tests/make_fake_content.py /tmp/fake
+          cp -r tests/fixtures/pc_save/Farmer_123 /tmp/fake/Farmer_123
+          # made-up sound banks: big enough to take the "read straight from the picked folder" path
+          mkdir -p "/tmp/fake/Content (unpacked)/XACT"
+          python3 -c "import os; d='/tmp/fake/Content (unpacked)/XACT/'; open(d+'Wave Bank.xwb','wb').write(os.urandom(1500000)); open(d+'Sound Bank.xsb','wb').write(os.urandom(2000))"
+          python3 tools/convert.py "/tmp/fake/Content (unpacked)" /tmp/want --mods=/tmp/fake/mods --jobs=1 > /dev/null
+          python3 tools/saveimport.py /tmp/fake/Farmer_123/Farmer_123 /tmp/want/3ds/stardew3ds > /dev/null
+          cp web/test/e2e.mjs /tmp/e2e/
+          cd /tmp/e2e
+          node e2e.mjs /tmp/site /tmp/xfx - --game=xnbs --script=$GITHUB_WORKSPACE/tests/xnbpy_test.py
+          node e2e.mjs /tmp/site /tmp/fake /tmp/want/3ds "--game=Content (unpacked)" --mods=mods --save=Farmer_123
+      - name: Publish the page
+        run: |
+          cd /tmp/site
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name=Raidenplays -c user.email=69190946+Raidenplays@users.noreply.github.com commit -q -m "web converter, build ${{ github.run_number }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" gh-pages
+

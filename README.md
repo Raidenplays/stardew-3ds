@@ -195,6 +195,17 @@ Fixed after that run:
 
 ## Setup
 
+### The easy way: a converter, no command line
+- **In your browser (PC):** open **https://raidenplays.github.io/stardew-3ds/**, pick your
+  Stardew Valley folder (plus your Mods folder and PC save if you want them), press
+  Convert, and unzip the result onto your SD card. Nothing is installed and nothing is
+  uploaded: the page does the work on your own computer. Its code is in `web/`.
+- **On Android:** install `stardew3ds-converter.apk` from the latest release. It can also
+  send the files to your 3DS over Wi-Fi.
+
+Both read a normal game folder, so StardewXnbHack isn't needed. The steps below are the
+by-hand route.
+
 ### 1. Unpack your game content (PC, once)
 1. Download **StardewXnbHack** (Pathoschild) for your OS from its GitHub
    releases.

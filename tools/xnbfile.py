@@ -147,6 +147,21 @@ class Reader:
         return self.readers[n - 1]
 
 
+# The web converter has no native helper to load: it plugs in its own
+# decompressor here (same code, built for the browser).
+DECOMPRESS = None
+
+
+def _decompress(body, mode, out_size):
+    """mode 0 = LZX, 1 = LZ4. Returns the bytes, or None when the data is bad."""
+    if DECOMPRESS is not None:
+        return DECOMPRESS(body, mode, out_size)
+    out = ctypes.create_string_buffer(out_size)
+    if not _load_lib().s3d_xnb_decompress(body, len(body), mode, out, out_size):
+        return None
+    return out.raw
+
+
 def load(path):
     """Decompresses an .xnb; returns a Reader positioned at the root object."""
     with open(path, "rb") as f:
@@ -162,10 +177,9 @@ def load_bytes(buf):
     if flags & 0xC0:
         out_size = struct.unpack_from("<I", buf, 10)[0]
         body = buf[14:size]
-        out = ctypes.create_string_buffer(out_size)
-        if not _load_lib().s3d_xnb_decompress(body, len(body), 0 if flags & 0x80 else 1, out, out_size):
+        data = _decompress(body, 0 if flags & 0x80 else 1, out_size)
+        if data is None:
             raise XnbError("compressed data is damaged")
-        data = out.raw
     else:
         data = buf[10:size]
     r = Reader(data)
