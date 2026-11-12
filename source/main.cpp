@@ -465,10 +465,20 @@ int main() {
         // A screen that isn't drawn keeps showing its last picture.
         // (things that move down there by themselves keep the faster rate)
         bool botLive = game.dialogue.active || game.cutscene.active || game.fishing.state != sv::FS_NONE || game.arcade.game ||
-                       !ui.shop.empty() || ui.statusTime > 0 || game.toastTime > 0;
+                       !ui.shop.empty() || ui.statusTime > 0 || game.toastTime > 0 || (kHeld & (KEY_L | KEY_R | KEY_X | KEY_Y | KEY_DUP | KEY_DDOWN | KEY_DLEFT | KEY_DRIGHT)) != 0;
         static unsigned botTick = 0;
         static u32 lastHeld = 0;
-        bool botDirty = (kDown | (kHeld ^ lastHeld)) != 0 || (kHeld & KEY_TOUCH) || (++botTick % (botLive ? 5 : 12)) == 0;
+        bool botDirty = (kDown | (kHeld ^ lastHeld)) != 0 || (kHeld & KEY_TOUCH) || (++botTick % (botLive ? 3 : 30)) == 0;
+        {   // ...or when something it shows has changed (money, energy, the bag, the tab, a new perf reading)
+            static uint32_t lastSig = 0;
+            uint32_t sig = (uint32_t)game.money * 31u + (uint32_t)game.energy * 131u + (uint32_t)game.health * 17u + (uint32_t)game.selected * 7u +
+                           (uint32_t)ui.tab * 1009u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf;
+            for (int k = 0; k < game.invSlots; k++) sig = sig * 16777619u ^ (uint32_t)(game.inv[k].id * 64 + game.inv[k].count + game.inv[k].type * 7919);
+            for (char ch : ui.status) sig = sig * 16777619u ^ (uint8_t)ch;
+            if (ui.showPerf) for (const char* p = perfLine1; *p; p++) sig = sig * 16777619u ^ (uint8_t)*p;
+            if (sig != lastSig) botDirty = true;
+            lastSig = sig;
+        }
         lastHeld = kHeld;
         {   // a performance log on the SD card (perf.txt): one line every 20 seconds and whenever you change
             // place, so slow spots can be found without watching the readout
