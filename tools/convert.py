@@ -1835,6 +1835,8 @@ def write_world_text(content, out_dir):
             if not isinstance(od, dict) or od.get("OrderType") not in (None, "", "Qi"):
                 continue   # the desert festival's have their own board
             is_qi = od.get("OrderType") == "Qi"
+            if key in ("QiChallenge", "QiChallenge11"):
+                continue   # left in the data but never offered by the real game
             variants = [(-1, {})]
             for el in od.get("RandomizedElements") or []:
                 if el.get("Name") == "Text":
@@ -1878,7 +1880,7 @@ def write_world_text(content, out_dir):
                     kind = {"Collect": "collect", "Donate": "donate", "Fish": "fish", "Deliver": "deliver", "Ship": "ship",
                             "Slay": "slay", "ReachMineFloor": "floor", "Gift": "gift", "JKScore": "jk"}.get(t)
                     if data.get("UseShipmentValue"):
-                        kind = None
+                        kind = "shipvalue"
                     if kind == "floor" and str(data.get("SkullCave", "")).lower() == "true":
                         target = "skull"
                     if not kind or (kind in ("collect", "donate", "fish", "deliver", "ship") and not ids):

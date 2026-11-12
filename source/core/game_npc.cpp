@@ -448,6 +448,7 @@ void Game::dialogueChoose(int i) {
         if ((what == "festival" || what == "fair") && ch.responseKey.rfind("fair:", 0) == 0) { fairChoice(ch.responseKey); return; }
         if (worldChoice(what, ch.responseKey)) return;
         if (islandChoice(what, ch.responseKey)) return;
+        if (extraChoice(what, ch.responseKey)) return;
         if (petChoice(what, ch.responseKey)) return;
         if (kidsChoice(what, ch.responseKey)) return;
         if (ordersChoice(what, ch.responseKey)) return;

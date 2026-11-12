@@ -189,6 +189,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     toolTimer = 0;
     spawnObjects(*cur);
     islandWalnuts();
+    islandFossils();
     npcsEnterLocation();
     questEntered(name);
     checkEvents();
@@ -945,7 +946,7 @@ bool Game::gameQuery(const std::string& cond) const {
                 for (size_t i = 4; i < a.size(); i++) ok |= atoi(a[i].c_str()) == pick;
             }
         } else if (q == "ANY") { for (auto& sub : a) ok |= gameQuery(sub); }
-        else if (q == "PLAYER_STAT") ok = false;         // prize-ticket and similar counters start at zero here
+        else if (q == "PLAYER_STAT") { auto st = a.empty() ? stats.end() : stats.find(a[0]); ok = (st != stats.end() ? st->second : 0) >= num(a, 1); }
         else ok = false;                                 // multiplayer, conversation topics: never true on a 3DS
         if (ok == neg) return false;
     }
@@ -1217,6 +1218,7 @@ void Game::useSelected(int tx, int ty) {
                         if (addItem(drop, n)) itemFlies(drop, tx * TILE + 8.0f, ty * TILE + 10.0f, n);
                         gainXp(SK_MINING, 5);
                         if (cur->mineLevel > 300) walnutChance(2, 25);
+                        qiBeanChance(20);
                         questItem(drop, n);
                         mineRockBroken(tx, ty, node);
                         const ObjectDef* od = data.object(drop);
@@ -1607,7 +1609,11 @@ bool Game::goToBed() {
     int earned = 0;
     for (auto& s : shipped) {
         earned += itemPrice(s) * s.count;
-        if (s.type == SLOT_OBJECT) { shippedEver[s.id] += s.count; orderEvent("ship", s.id, s.count, ""); }
+        if (s.type == SLOT_OBJECT) {
+            shippedEver[s.id] += s.count;
+            orderEvent("ship", s.id, s.count, "");
+            orderEvent("shipvalue", s.id, itemPrice(s) * s.count, "");
+        }
     }
     shipped.clear();
     money += earned;
@@ -1694,7 +1700,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 33;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 34;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1929,6 +1935,8 @@ bool Game::save(const std::string& path) const {
     for (int k = 0; k < 4; k++) w.i32(walnutPools[k]);
     w.u32((uint32_t)walnutsGot.size());
     for (auto& k : walnutsGot) w.str(k);
+    w.u32((uint32_t)stats.size());                            // v34
+    for (auto& kv : stats) { w.str(kv.first); w.i32(kv.second); }
     w.str(orderKey); w.i32(orderDays);
     w.u32((uint32_t)orderProgress.size());
     for (int v : orderProgress) w.i32(v);
@@ -2338,6 +2346,11 @@ bool Game::load(const std::string& path, std::string* err) {
                 for (int k = 0; k < 4; k++) walnutPools[k] = r.i32();
                 uint32_t nw = r.u32();
                 for (uint32_t k = 0; k < nw && r.ok && k < 1000; k++) walnutsGot.insert(r.str());
+            }
+            stats.clear();
+            if (version >= 34) {
+                uint32_t ns2 = r.u32();
+                for (uint32_t k = 0; k < ns2 && r.ok && k < 500; k++) { std::string key = r.str(); stats[key] = r.i32(); }
             }
             if (version >= 31) {
                 orderKey = r.str(); orderDays = r.i32();

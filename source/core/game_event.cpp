@@ -165,6 +165,10 @@ bool Game::eventConditionsMet(const std::string& key) const {
         } else if (code == "J") {          // Joja's warehouse finished
             ok = mailReceived.count("JojaMember") && mailReceived.count("ccPantry") && mailReceived.count("ccCraftsRoom") &&
                  mailReceived.count("ccFishTank") && mailReceived.count("ccBoilerRoom") && mailReceived.count("ccVault");
+        } else if (code == "G" || code == "GameStateQuery") {   // the game's own condition strings
+            std::string q;
+            for (size_t k = 1; k < w.size(); k++) q += (k > 1 ? " " : "") + w[k];
+            ok = gameQuery(q);
         } else if (code == "N") {          // golden walnuts found
             ok = w.size() > 1 && walnutsFound >= atoi(w[1].c_str());
         } else if (code == "g") {

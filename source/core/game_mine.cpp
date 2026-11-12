@@ -285,6 +285,8 @@ void Game::swingWeapon(const ToolDef& w) {
         }
         orderEvent("slay", 0, 1, mo.kind);
         if (cur->mineLevel > 300) walnutChance(3, 10);
+        stats["monstersKilled"]++;
+        qiBeanChance(8);
         if (FarmBuilding* hutch = buildingForInterior(cur->name))   // a hutch slime: one fewer lives there now
             if (hutch->type == "Slime Hutch" && !hutch->pending.empty()) hutch->pending.pop_back();
         if (wearing("Vampire Ring")) health = std::min(maxHealth, health + 2);

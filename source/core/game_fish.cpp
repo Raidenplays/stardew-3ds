@@ -23,6 +23,11 @@ int Game::pickFish() {
     }
     std::stable_sort(spots.begin(), spots.end(),
                      [](const FishSpot* a, const FishSpot* b) { return a->precedence < b->precedence; });
+    if (orderKey.rfind("QiChallenge8#", 0) == 0) {       // Qi's "Extended Family": the legends' relatives are biting
+        static const struct { const char* map; int id; } FAMILY[] = {{"Beach", 898}, {"Town", 899}, {"Mountain", 900}, {"Sewer", 901}, {"Forest", 902}};
+        for (auto& fm : FAMILY)
+            if (cur->name == fm.map && data.object(fm.id) && rand32() % 100 < 15) return fm.id;
+    }
     int level = skillLevel(SK_FISHING);
     int hhmm = (timeOfDay / 60) * 100 + timeOfDay % 60;
     for (const FishSpot* s : spots) {
@@ -121,6 +126,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                 fishCaught[f.fish]++;
                 orderEvent("fish", f.fish, 1, "");
                 if (cur->name.rfind("Island", 0) == 0) walnutChance(1, 6);
+                qiBeanChance(5);
                     questItem(f.fish, 1);
                     const ObjectDef* o = data.object(f.fish);
                     say("Caught " + (o ? o->name : std::string("something")));

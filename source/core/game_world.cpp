@@ -213,6 +213,7 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
         return true;
     }
     if (islandAction(verb, rest)) return true;
+    if (extraAction(verb, rest)) return true;
     if (verb == "FarmObelisk" && cur->name == "IslandWest") {
         sfx("wand");
         warpTo("Farm", data.layout.doorX, data.layout.doorY + 1, false);

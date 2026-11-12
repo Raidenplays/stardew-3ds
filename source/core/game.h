@@ -627,7 +627,7 @@ public:
     // The farmhouse: 0 one room, 1 kitchen, 2 nursery (maps FarmHouse, FarmHouse1, FarmHouse2)
     int houseLevel = 0;
     int houseUpgradeDays = 0;               // Robin's working on the next level
-    bool canCookHere() const { return cur && cur->name == "FarmHouse" && houseLevel >= 1; }
+    bool canCookHere() const { return cur && ((cur->name == "FarmHouse" && houseLevel >= 1) || cur->name == "IslandFarmHouse"); }
     std::vector<FurniturePlacement> furniture;   // in your house (and anywhere else): starts from the layout
     const FurniturePlacement* bedIn(const std::string& map) const;
     bool houseDoor(int level, int& x, int& y) const;   // the farmhouse map's door for that upgrade level
@@ -707,6 +707,17 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- the odd corners (game_extras.cpp) ----
+    std::map<std::string, int> stats;        // the game's own counters: monstersKilled, ticketPrizesClaimed...
+    std::vector<int> crystalSeq;             // the crystal cave's tune, while you're playing it back
+    size_t crystalAt = 0;
+    int objectByName(const std::string& name) const;
+    bool enterMap(const std::string& name);
+    void stepThroughDoor();
+    void qiBeanChance(int oneIn);
+    void islandFossils();
+    bool extraAction(const std::string& verb, const std::string& rest);
+    bool extraChoice(const std::string& what, const std::string& key);
     // ---- Ginger Island and the casino (game_island.cpp) ----
     int walnuts = 0, walnutsFound = 0;
     int walnutPools[4] = {0, 0, 0, 0};       // crops, fishing, volcano rocks, volcano monsters: five each

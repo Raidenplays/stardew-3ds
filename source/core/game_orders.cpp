@@ -163,6 +163,11 @@ void Game::orderEvent(const std::string& kind, int item, int count, const std::s
             orderProgress[i] = std::max(orderProgress[i], std::min(lv, o.count));
             continue;
         }
+        if (kind == "shipvalue") {                       // Qi's Cuisine: the value of cooked dishes shipped
+            const ObjectDef* od = data.object(item);
+            if (od && od->category == -7) orderProgress[i] = std::min(o.count, orderProgress[i] + count);
+            continue;
+        }
         if (kind == "gift" || kind == "jk") { orderProgress[i] = kind == "jk" ? std::max(orderProgress[i], std::min(count, o.count)) : std::min(o.count, orderProgress[i] + count); continue; }
         if (kind == "slay") {
             if (!o.target.empty() && target.find(o.target) == std::string::npos) continue;

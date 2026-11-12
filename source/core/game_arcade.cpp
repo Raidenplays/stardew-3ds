@@ -209,7 +209,7 @@ void Game::arcadeUpdate(float dt, const Input& in) {
         }
         a.score = (int)(a.dist / 4.0f);
         if (a.cartY < -30.0f) { arcadeEnd(false); return; }               // down the hole
-        a.score = a.lives * 0 + (a.stage - 1) * 1500 + (int)(a.dist / 4.0f);
+        a.score = (a.stage - 1) * 15000 + (int)(a.dist * 3.0f);
         if (cell >= (int)a.track.size() - 6) {
             if (a.stage >= 3) { a.score += 500; arcadeEnd(true); return; }
             a.stage++;                                      // on to the next track

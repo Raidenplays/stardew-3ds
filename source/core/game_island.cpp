@@ -27,6 +27,8 @@ const Unlock UNLOCKS[] = {
     {"Island_UpgradeHouse", "Restore the farmhouse", 20, "IslandWest", "Island_House_Restored", 74, 33},
     {"Island_W_Obelisk", "Raise the farm obelisk", 20, "IslandWest", "Island_W_Obelisk", 82, 33},
     {"Island_Resort", "Build the beach resort", 20, "IslandSouth", "Island_Resort", -1, -1},
+    {"Island_UpgradeHouse_Mailbox", "Put a mailbox and shipping bin by the farmhouse", 5, "IslandWest", "Island_House_Bin", 85, 39},
+    {"Island_UpgradeParrotPlatform", "Start the parrot express", 10, "", "", 0, 0},
 };
 // How many walnuts lie about on each map.
 const struct { const char* map; int n; } GROUND[] = {
@@ -130,6 +132,11 @@ void Game::islandStamps() {
         // the counters people serve from aren't in the map data: the trader's front, the bar's back shelf
         if (std::string(u.patch) == "Island_N_Trader")
             for (int k = 2; k <= 6; k++) cur->map.setAction(x + k, y + 7, "IslandTrader");
+        if (std::string(u.patch) == "Island_House_Bin") {
+            cur->map.setAction(x, y + 1, "IslandBin");
+            cur->map.setAction(x + 1, y + 1, "IslandBin");
+            cur->map.setAction(81, 40, "IslandMailbox");
+        }
         if (std::string(u.patch) == "Island_Resort")
             for (int k = 12; k <= 16; k++) cur->map.setAction(x + k, y + 3, "ResortBar");
     }
@@ -167,8 +174,10 @@ void Game::islandOffer(const std::string& flag) {
 // Leo's parrot keeps the list of everything the parrots can still do.
 void Game::islandParrot() {
     std::vector<std::pair<std::string, std::string>> ch;
+    if (mailReceived.count("Island_UpgradeParrotPlatform")) ch.push_back({"Fly me somewhere", "island:fly"});
     for (auto& u : UNLOCKS)
         if (!mailReceived.count(u.flag) && ch.size() < 5) ch.push_back({std::string(u.label) + " (" + std::to_string(u.cost) + ")", std::string("island:") + u.flag});
+    if (ch.size() == 1 && ch[0].second == "island:fly") { islandChoice("island", "island:fly"); return; }
     if (ch.empty()) { showMessage("Squawk! The island is whole again. You found " + std::to_string(walnutsFound) + " of 130 golden walnuts."); return; }
     ch.push_back({"Nothing yet", ""});
     ask(*this, "Squawk! Golden walnuts make parrots work. You have " + std::to_string(walnuts) + " (found " + std::to_string(walnutsFound) + " of 130).", ch, "island");
@@ -177,6 +186,11 @@ void Game::islandParrot() {
 // Some ways across the island are shut until a parrot is paid. True = the way is shut (and the offer's up).
 bool Game::islandGate(const std::string& dest) {
     if (!cur) return false;
+    if (dest == "Club" && cur->name != "Club" && !mailReceived.count("HasClubCard")) {
+        py += TILE * 1.5f;
+        showMessage("The bouncer doesn't budge. \"Members only. Come back when you've got a Club Card.\"");
+        return true;
+    }
     const char* flag = nullptr;
     if (cur->name == "IslandSouth" && dest == "IslandNorth") flag = "Island_FirstParrot";
     else if (cur->name == "IslandSouth" && dest == "IslandWest") flag = "Island_Turtle";
@@ -193,6 +207,11 @@ bool Game::islandGate(const std::string& dest) {
 bool Game::islandChoice(const std::string& what, const std::string& key) {
     if (what == "island") {
         if (key.rfind("island:", 0) != 0) return true;
+        if (key == "island:fly") {
+            ask(*this, "Squawk! Where to?", {{"The docks", "extra:fly:IslandSouth"}, {"The farm", "extra:fly:IslandWest"}, {"The volcano", "extra:fly:IslandNorth"},
+                                              {"The jungle", "extra:fly:IslandEast"}, {"Stay here", ""}}, "extra");
+            return true;
+        }
         for (auto& u : UNLOCKS) {
             if (key.substr(7) != u.flag) continue;
             if (walnuts < u.cost) { say("Squawk! Not enough golden walnuts (" + std::to_string(u.cost) + ")."); return true; }
@@ -275,7 +294,7 @@ bool Game::islandAction(const std::string& verb, const std::string& rest) {
         warpTo("QiNutRoom", 7, 8, false);
         return true;
     }
-    if (verb == "QiChallengeBoard" || verb == "DropBox") { ordersBoard(true); return true; }
+    if (verb == "QiChallengeBoard" || (verb == "DropBox" && rest.find("QiChallengeBox") != std::string::npos)) { ordersBoard(true); return true; }
     if (verb == "QiCat") { showMessage("Meow. (The cat looks like it knows something you don't.)"); return true; }
     if (verb == "BuyQiCoins") {
         ask(*this, "Buy 100 Qi coins for 1,000g? You have " + std::to_string(clubCoins) + ".", {{"Buy", "casino:coins"}, {"No", ""}}, "casino");
