@@ -612,8 +612,9 @@ int main() {
                 snprintf(perfLine1, sizeof perfLine1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
                 snprintf(perfLine2, sizeof perfLine2, "vram %uK  pages +%u -%u !%u  draws %u", (unsigned)(linearSpaceFree() / 1024),
                          st.loads - last.loads, st.evictions - last.evictions, st.failed - last.failed, topDraws);
-                snprintf(perfLine3, sizeof perfLine3, "map %.0f obj %.0f front %.0f wthr %.0f hud %.0f ms", prof[PROF_MAP],
-                         prof[PROF_OBJECTS], prof[PROF_FRONT], prof[PROF_WEATHER], prof[PROF_HUD]);
+                snprintf(perfLine3, sizeof perfLine3, "map %.0f obj %.0f front %.0f wthr %.0f hud %.0f ms rd %d", prof[PROF_MAP],
+                         prof[PROF_OBJECTS], prof[PROF_FRONT], prof[PROF_WEATHER], prof[PROF_HUD], g_mapRedraws);
+                g_mapRedraws = 0;
                 for (float& v : prof) v = 0;
                 last = st;
                 since = nowT;

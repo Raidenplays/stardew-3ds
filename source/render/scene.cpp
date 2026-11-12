@@ -419,6 +419,7 @@ struct DrawItem {
 };
 
 float g_profMs[PROF_COUNT];
+int g_mapRedraws = 0;
 double (*g_profClock)() = nullptr;
 static double profNow() { return g_profClock ? g_profClock() : 0.0; }
 static double g_profMark = 0;
@@ -506,23 +507,41 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
 
     // Map cache: Back + Buildings drawn once into an offscreen picture around the
     // camera; each frame shows it as one image, plus the animated tiles live.
-    static struct { const TileMap* m = nullptr; std::string name; uint32_t rev = 0; int season = -1; int ox = 0, oy = 0; bool ok = false; } mc;
+    // Two pictures: [0] the ground and buildings, [1] the tiles drawn over everything. Each keeps its own window
+    // onto the map, so they are never both redrawn in the same frame while you walk.
+    struct MapCache { const TileMap* m = nullptr; std::string name; uint32_t rev = 0; int season = -1; int ox = 0, oy = 0; bool ok = false; };
+    static MapCache mcs[2];
+    static float lastCamX = 0, lastCamY = 0;
+    MapCache& mc = mcs[0];
     bool cached = g_useMapCache && c.cacheSupported();
-    if (!cached) mc.ok = false;
+    if (!cached) mcs[0].ok = mcs[1].ok = false;
+    bool frontLive = false;            // this frame the front tiles are drawn one by one (their picture is being caught up)
     if (cached) {
         const int CS = Canvas::CACHE_SIZE;
-        if (!mc.ok || mc.m != &m || mc.name != m.name || mc.rev != m.rev || mc.season != g.season || camX < mc.ox ||
-            camY < mc.oy || camX + TOP_W > mc.ox + CS || camY + TOP_H > mc.oy + CS) {
-            mc.m = &m;
-            mc.name = m.name;
-            mc.rev = m.rev;
-            mc.season = g.season;
-            mc.ox = (int)std::floor((camX - (CS - TOP_W) / 2) / TILE) * TILE;
-            mc.oy = (int)std::floor((camY - (CS - TOP_H) / 2) / TILE) * TILE;
-            mc.ok = true;
-            int cx0 = std::max(0, mc.ox / TILE), cy0 = std::max(0, mc.oy / TILE);
-            int cx1 = std::min(m.width() - 1, (mc.ox + CS) / TILE - 1), cy1 = std::min(m.height() - 1, (mc.oy + CS) / TILE - 1);
-            for (int which = 0; which < 2; which++) {     // 0: ground and buildings; 1: what's drawn over everything
+        int dirX = camX > lastCamX ? 1 : camX < lastCamX ? -1 : 0, dirY = camY > lastCamY ? 1 : camY < lastCamY ? -1 : 0;
+        lastCamX = camX; lastCamY = camY;
+        bool redrew = false;
+        for (int which = 0; which < 2; which++) {
+            MapCache& k = mcs[which];
+            bool sameMap = k.ok && k.m == &m && k.name == m.name && k.rev == m.rev && k.season == g.season;
+            bool inside = sameMap && camX >= k.ox && camY >= k.oy && camX + TOP_W <= k.ox + CS && camY + TOP_H <= k.oy + CS;
+            if (inside) continue;
+            if (which == 1 && redrew && sameMap) { frontLive = true; continue; }   // one picture a frame: this one next frame
+            k.m = &m;
+            k.name = m.name;
+            k.rev = m.rev;
+            k.season = g.season;
+            // put the window ahead of the way you're walking, so it lasts as long as it can before the next redraw
+            float wantX = dirX > 0 ? camX - TILE : dirX < 0 ? camX + TOP_W + TILE - CS : camX - (CS - TOP_W) / 2;
+            float wantY = dirY > 0 ? camY - TILE : dirY < 0 ? camY + TOP_H + TILE - CS : camY - (CS - TOP_H) / 2;
+            k.ox = (int)std::floor(wantX / TILE) * TILE;
+            k.oy = (int)std::floor(wantY / TILE) * TILE;
+            k.ok = true;
+            redrew = true;
+            g_mapRedraws++;
+            int cx0 = std::max(0, k.ox / TILE), cy0 = std::max(0, k.oy / TILE);
+            int cx1 = std::min(m.width() - 1, (k.ox + CS) / TILE - 1), cy1 = std::min(m.height() - 1, (k.oy + CS) / TILE - 1);
+            {
                 c.cacheBegin(which);
                 for (int layer : {which ? L_FRONT : L_BACK, which ? L_ALWAYSFRONT : L_BUILDINGS}) {
                     tileDraws.clear();
@@ -545,8 +564,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                             d.sx = (uint16_t)((t % cols) * 16);
                             d.sy = (uint16_t)((t / cols) * 16);
                             d.ts = (uint8_t)ts;
-                            d.dx = (int16_t)(x * TILE - mc.ox);
-                            d.dy = (int16_t)(y * TILE - mc.oy);
+                            d.dx = (int16_t)(x * TILE - k.ox);
+                            d.dy = (int16_t)(y * TILE - k.oy);
                             d.key = ((uint32_t)ts << 24) | ((uint32_t)(d.sy >> 8) << 12) | (uint32_t)(d.sx >> 8);
                             tileDraws.push_back(d);
                         }
@@ -1161,8 +1180,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                            ok ? RGBA(0x40, 0xE0, 0x40, 0x60) : RGBA(0xE0, 0x30, 0x30, 0x60));
         }
     profEnd(PROF_OBJECTS);
-    if (cached) {
-        c.cacheDraw((int)camX - mc.ox, (int)camY - mc.oy, TOP_W, TOP_H, c.shift(0.0f), 0, 1);
+    if (cached && !frontLive) {
+        c.cacheDraw((int)camX - mcs[1].ox, (int)camY - mcs[1].oy, TOP_W, TOP_H, c.shift(0.0f), 0, 1);
         for (int y = y0; y <= y1; y++)                    // the moving ones, and what sits on them
             for (int x = x0; x <= x1; x++) {
                 bool frontMoves = false;

@@ -58,6 +58,7 @@ void drawTop(Canvas& c, sv::Game& g, Ui& ui, uint32_t timeMs);
 // g_profClock is set by the platform; without it nothing is measured.
 enum { PROF_MAP, PROF_OBJECTS, PROF_FRONT, PROF_WEATHER, PROF_HUD, PROF_COUNT };
 extern float g_profMs[PROF_COUNT];
+extern int g_mapRedraws;   // times a map picture was redrawn (perf readout)
 extern double (*g_profClock)();   // milliseconds
 void drawBottom(Canvas& c, sv::Game& g, Ui& ui);
 void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath);
