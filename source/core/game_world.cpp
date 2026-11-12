@@ -213,6 +213,7 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
         return true;
     }
     if (islandAction(verb, rest)) return true;
+    if (lastAction(verb, rest)) return true;
     if (extraAction(verb, rest)) return true;
     if (verb == "FarmObelisk" && cur->name == "IslandWest") {
         sfx("wand");
@@ -312,6 +313,7 @@ bool Game::worldChoice(const std::string& what, const std::string& key) {
 
 // Each morning: the rusty key after 60 museum donations, the skull key at the bottom of the mines.
 void Game::worldMorning() {
+    lastMorning();
     garbageToday.clear();
     if (museumDonated.size() >= 60 && !mailReceived.count("HasRustyKey")) {
         mailReceived.insert("HasRustyKey");
@@ -404,6 +406,7 @@ void Game::cartMorning() {
 void Game::applyMapFixes() {
     if (!cur) return;
     islandStamps();
+    lastMapFixes();
     slimeHutchEnter();
     if (cur->name == "Beach" && mailReceived.count("beachBridgeFixed"))
         for (int x = 58; x <= 61; x++) cur->map.setFlags(x, 13, 0);   // planks over the gap

@@ -134,6 +134,10 @@ bool Game::hasMap(const std::string& name) const {
 bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     if (cur && festivalWarp(name)) return true;
     if (islandGate(name)) return true;
+    {   // the desert during its festival, the beach on night market nights
+        std::string today = mapForToday(name);
+        if (today != name) return warpTo(today, tx, ty, door);
+    }
     if (name == "Farm" && cur)   // leaving a farm building: out its own door
         if (FarmBuilding* fb = buildingForInterior(cur->name))
             if (const BuildingType* bt = typeOf(*fb)) {
@@ -1113,6 +1117,14 @@ bool Game::tryInteract(int tx, int ty) {
         return true;
     }
     if (runMapAction(cur->map.action(tx, ty), false)) return true;
+    {   // some things answer from a few steps away (over a fence)
+        static const int D[4][2] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+        for (int k = 1; k <= 3; k++) {
+            const std::string& far = cur->map.action(tx + D[facing & 3][0] * k, ty + D[facing & 3][1] * k);
+            if (far.rfind("NPCSpeechMessageNoRadius", 0) == 0 && runMapAction(far, false)) return true;
+        }
+    }
+    if (lastInteract(tx, ty)) return true;
     if (cur->name.rfind("CommunityCenter", 0) == 0) {   // the junimos' bundles
         bool can = mailReceived.count("canReadJunimoText") || eventsSeen.count("112");
         for (auto& kv : bundleGiven) can |= !kv.second.empty();   // an older save already working on them

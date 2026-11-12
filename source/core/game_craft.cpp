@@ -30,6 +30,7 @@ void Game::gainXp(int skill, int xp) {
     secretNoteChance(skill);
     if (skill < 0 || skill >= SK_COUNT || xp <= 0) return;
     skillXp[skill] += xp;
+    lastXp(skill, xp);
 }
 
 void Game::applyLevelUps() {

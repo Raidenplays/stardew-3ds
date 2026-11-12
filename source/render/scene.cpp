@@ -1537,6 +1537,36 @@ static void drawArcade(Canvas& c, Game& g) {
         c.text(TOP_W - 8, 8, 0.36f, COL_CREAM, "L: quit", ALIGN_RIGHT);
         c.text(8, TOP_H - 30, 0.32f, COL_CREAM, "Pad: move");
         c.text(8, TOP_H - 18, 0.32f, COL_CREAM, "ABXY: shoot");
+    } else if (a.game == 3 || a.game == 4) {
+        bool sling = a.game == 3;
+        float ox = (TOP_W - 192) / 2.0f, oy = (TOP_H - 192) / 2.0f;
+        c.rect(ox - 4, oy - 4, 200, 200, RGBA(0x6A, 0x3A, 0x18));
+        if (sling) {
+            for (int y = 0; y < 192; y += 16) c.rect(ox, oy + y, 192, 16, RGBA(0x70 + y / 4, 0xB0 + y / 6, 0xE8));
+            c.rect(ox, oy + 172, 192, 20, RGBA(0x58, 0xA0, 0x48));
+        } else {
+            c.rect(ox, oy, 192, 34, RGBA(0x90, 0xC8, 0xF0));
+            for (int y = 34; y < 192; y += 16) c.rect(ox, oy + y, 192, 16, RGBA(0x20, 0x60 - y / 6, 0xB0 - y / 4));
+            c.rect(ox + 96, oy, 1, a.py, RGBA(0xF0, 0xF0, 0xF0));                 // the line
+            c.rect(ox + 93, oy + a.py - 2, 7, 5, RGBA(0xC8, 0xC8, 0xD0));         // the hook
+            c.rect(ox + 80, oy + 26, 32, 8, RGBA(0x8A, 0x5A, 0x30));              // the dock
+        }
+        static const int TARGETS[] = {254, 613, 635, 400}, FISH[] = {145, 137, 142, 136};
+        for (auto& f : a.foes) itemIcon(c, g.data.object(sling ? TARGETS[f.kind & 3] : FISH[f.kind & 3]), ox + f.x - 8, oy + f.y - 8);
+        if (sling) {                                                              // the crosshair
+            c.rect(ox + a.px - 8, oy + a.py, 6, 1, RGBA(0xE0, 0x20, 0x20));
+            c.rect(ox + a.px + 3, oy + a.py, 6, 1, RGBA(0xE0, 0x20, 0x20));
+            c.rect(ox + a.px, oy + a.py - 8, 1, 6, RGBA(0xE0, 0x20, 0x20));
+            c.rect(ox + a.px, oy + a.py + 3, 1, 6, RGBA(0xE0, 0x20, 0x20));
+        }
+        snprintf(buf, sizeof buf, sling ? "Hits %d" : "Fish %d", a.score);
+        c.text(8, 30, 0.45f, COL_CREAM, buf);
+        float full = sling ? 30.0f : 40.0f;
+        c.rect(TOP_W - 22, 30, 10, 160, RGBA(0x40, 0x30, 0x20));
+        c.rect(TOP_W - 22, 30 + 160 * (1 - std::max(0.0f, a.timer) / full), 10, 160 * std::max(0.0f, a.timer) / full, RGBA(0x60, 0xC0, 0x40));
+        c.text(TOP_W - 8, 8, 0.36f, COL_CREAM, "L: stop", ALIGN_RIGHT);
+        c.text(8, TOP_H - 30, 0.32f, COL_CREAM, sling ? "Pad: aim" : "Pad: up/down");
+        c.text(8, TOP_H - 18, 0.32f, COL_CREAM, sling ? "A: shoot" : "A: hook it");
     } else {
         const char* MC = "Minigames_MineCart";
         bool mart = c.texWidth(MC) > 0;

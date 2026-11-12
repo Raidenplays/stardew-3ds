@@ -389,6 +389,14 @@ void Game::giveGift(NpcState& n, int slot) {
         return;
     }
     if (n.def->dialogue.count("fact_0")) { say(n.def->display + " is too busy racing to take that."); return; }
+    if (sl.type == SLOT_OBJECT && sl.id == 809) {        // a movie ticket: they'll come and watch with you
+        for (auto it = mailReceived.begin(); it != mailReceived.end();)
+            if (it->rfind("movieGuest:", 0) == 0) it = mailReceived.erase(it); else ++it;
+        mailReceived.insert("movieGuest:" + n.def->name);
+        if (--sl.count <= 0) sl = Slot();
+        say(n.def->display + ": \"A movie? I'd love to. Meet you at the theater!\"");
+        return;
+    }
     if (romanceGift(n, slot)) return;
     bool bday = isBirthday(*n.def);
     if (n.giftsToday >= 1) {
@@ -449,6 +457,7 @@ void Game::dialogueChoose(int i) {
         if (worldChoice(what, ch.responseKey)) return;
         if (islandChoice(what, ch.responseKey)) return;
         if (extraChoice(what, ch.responseKey)) return;
+        if (lastChoice(what, ch.responseKey)) return;
         if (petChoice(what, ch.responseKey)) return;
         if (kidsChoice(what, ch.responseKey)) return;
         if (ordersChoice(what, ch.responseKey)) return;

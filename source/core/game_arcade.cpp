@@ -16,7 +16,8 @@ void Game::arcadeStart(int which) {
     arcade.lives = 3;
     arcade.px = 96; arcade.py = 96;
     arcade.stage = 1;
-    arcade.timer = which == 1 ? 40.0f : 0.0f;
+    arcade.timer = which == 1 ? 40.0f : which == 3 ? 30.0f : which == 4 ? 40.0f : 0.0f;
+    if (which == 4) arcade.py = 60;
     arcade.cartY = 0;
     if (which == 2) kartTrack();
     sfx("coin");
@@ -42,6 +43,14 @@ void Game::kartTrack() {
 void Game::arcadeEnd(bool won) {
     int which = arcade.game, score = arcade.score;
     arcade = Arcade();
+    if (which == 3 || which == 4) {                      // the fair's booths pay in star tokens
+        int tokens = which == 3 ? score * 6 : score * 10;
+        starTokens += tokens;
+        sfx("reward");
+        showMessage(std::string(which == 3 ? "You hit " : "You caught ") + std::to_string(score) + (which == 3 ? " targets" : " fish") + ": " +
+                    std::to_string(tokens) + " star tokens!");
+        return;
+    }
     if (which == 1) {
         if (won) mailReceived.insert("Beat_PK");
         say(won ? "You beat Journey of the Prairie King! Score " + std::to_string(score) : "Game over. Score " + std::to_string(score));
@@ -190,6 +199,43 @@ void Game::arcadeUpdate(float dt, const Input& in) {
             a.score += 100;
             sfx("cowboy_powerup");
         }
+    } else if (a.game == 3 || a.game == 4) {
+        a.timer -= dt;
+        if (a.timer <= 0) { arcadeEnd(true); return; }
+        a.cool -= dt;
+        a.spawn -= dt;
+        bool sling = a.game == 3;
+        if (sling) {                                        // move the crosshair, A lets fly
+            a.px = std::max(6.0f, std::min(186.0f, a.px + in.mx * 130.0f * dt));
+            a.py = std::max(6.0f, std::min(170.0f, a.py + in.my * 130.0f * dt));
+        } else {                                            // raise and lower the hook
+            a.px = 96;
+            a.py = std::max(40.0f, std::min(180.0f, a.py + in.my * 110.0f * dt));
+        }
+        if (a.spawn <= 0) {
+            bool fromLeft = rand32() & 1;
+            Arcade::Foe f;
+            f.x = fromLeft ? -10.0f : 202.0f;
+            f.y = sling ? 16.0f + (float)(rand32() % 130) : 50.0f + (float)(rand32() % 125);
+            f.kind = (int)(rand32() % 4);
+            f.hp = 1;
+            f.vx = (fromLeft ? 1.0f : -1.0f) * (sling ? 55.0f + (float)(rand32() % 60) : 35.0f + (float)(rand32() % 50));
+            a.foes.push_back(f);
+            a.spawn = sling ? 0.55f : 0.7f;
+        }
+        for (auto& f : a.foes) f.x += f.vx * dt;
+        if (in.action && a.cool <= 0) {
+            a.cool = sling ? 0.3f : 0.45f;
+            sfx(sling ? "slingshot" : "fishSlap");
+            Arcade::Foe* best = nullptr;
+            float bestD = sling ? 13.0f : 12.0f;
+            for (auto& f : a.foes) {
+                float d = std::max(std::fabs(f.x - a.px), std::fabs(f.y - a.py));
+                if (f.hp > 0 && d < bestD) { bestD = d; best = &f; }
+            }
+            if (best) { best->hp = 0; a.score++; sfx("coin"); }
+        }
+        a.foes.erase(std::remove_if(a.foes.begin(), a.foes.end(), [](const Arcade::Foe& f) { return f.hp <= 0 || f.x < -14 || f.x > 206; }), a.foes.end());
     } else if (a.game == 2) {
         float speed = 70.0f + std::min(60.0f, a.dist / 40.0f);
         a.dist += speed * dt;

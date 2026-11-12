@@ -323,13 +323,7 @@ void Game::fairChoice(const std::string& key) {
     if (key == "fair:fish" || key == "fair:sling") {
         if (money < 50) { say("It's 50g a go."); return; }
         money -= 50;
-        bool fish = key == "fair:fish";
-        int skill = skillLevels[fish ? SK_FISHING : SK_COMBAT];
-        int hits = 3 + (int)(rand32() % 8) + skill;           // more practice, more hits
-        int won = fish ? hits * 6 : hits * 5;
-        starTokens += won;
-        sfx(fish ? "fishSlap" : "slingshot");
-        showMessage(std::string(fish ? "You hooked " : "You hit ") + std::to_string(hits) + (fish ? " fish" : " targets") + ": " + std::to_string(won) + " star tokens!");
+        arcadeStart(key == "fair:fish" ? 4 : 3);          // played on the top screen; the tokens come at the end
         return;
     }
     if (key == "fair:green" || key == "fair:orange") {

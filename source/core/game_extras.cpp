@@ -109,6 +109,22 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
     int heldId = held.type == SLOT_OBJECT ? held.id : -1;
     auto useHeld = [&](int n) { held.count -= n; if (held.count <= 0) held = Slot(); };
 
+    // ---- things mods let you talk to from where you stand (SVE's Dusty in his pen) ----
+    if (verb == "NPCSpeechMessageNoRadius" || verb == "NPCSpeechMessage") {
+        std::istringstream ss(rest);
+        std::string who, key;
+        ss >> who >> key;
+        const std::string* s = mapString(key);
+        if (!s) return false;
+        std::string text = *s;
+        if (!text.empty() && text[0] == '*') text.erase(0, 1);                       // "*You give Dusty many pets$0"
+        size_t d = text.rfind('$');
+        if (d != std::string::npos && d + 2 >= text.size()) text.erase(d);
+        if (who == "Dusty") sfx("dog_bark");
+        showMessage(text + (who == "Dusty" ? "." : ""));
+        return true;
+    }
+
     // ---- doors ----
     if (verb == "Door") {
         std::istringstream ss(rest);
@@ -426,7 +442,13 @@ bool Game::extraChoice(const std::string& what, const std::string& key) {
         timeOfDay = std::min(25 * 60, timeOfDay + 180);
         static const char* const MOVIES[] = {"The Brave Little Sapling", "Journey Of The Prairie King: The Motion Picture", "Mysterium",
             "The Miracle At Coldstar Ranch", "Natural Wonders: Exploring Our Vibrant World", "Wumbus", "It Howls In The Rain", "The Zuzu City Express"};
-        showMessage(std::string("The lights go down... \"") + MOVIES[((year - 1) % 2) * 4 + season % 4] + "\" was worth the ticket.");
+        std::string with;
+        for (auto it = mailReceived.begin(); it != mailReceived.end();)
+            if (it->rfind("movieGuest:", 0) == 0) { with = it->substr(11); it = mailReceived.erase(it); } else ++it;
+        NpcState* guest = with.empty() ? nullptr : npcByNameMut(with);
+        if (guest) guest->friendship = std::min(friendshipCap(*guest), guest->friendship + 200);
+        showMessage(std::string("The lights go down... \"") + MOVIES[((year - 1) % 2) * 4 + season % 4] + "\" was worth the ticket." +
+                    (guest && guest->def ? "#$b#" + guest->def->display + " loved it, and loved the company." : ""));
         if (hasMap("Town")) enterMap("Town");
     } else if (key.rfind("extra:snack:", 0) == 0) {
         int cost = atoi(key.c_str() + 12);

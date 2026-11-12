@@ -707,6 +707,21 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- the last pieces (game_last.cpp) ----
+    bool desertFest() const; bool troutDerby() const; bool squidFest() const; bool nightMarket() const;
+    std::string mapForToday(const std::string& name) const;
+    int giveNamed(const char* name, int n);
+    int perfection();
+    int masteryLevel();
+    void lastXp(int skill, int xp);
+    void lastMapFixes();
+    void lastMorning();
+    void lastCaught(int fish);
+    void lastMineFloor(int level);
+    void lastSlain();
+    bool lastAction(const std::string& verb, const std::string& rest);
+    bool lastChoice(const std::string& what, const std::string& key);
+    bool lastInteract(int tx, int ty);
     // ---- the odd corners (game_extras.cpp) ----
     std::map<std::string, int> stats;        // the game's own counters: monstersKilled, ticketPrizesClaimed...
     std::vector<int> crystalSeq;             // the crystal cave's tune, while you're playing it back
@@ -752,13 +767,13 @@ public:
     void slimeHutchEnter();
     // ---- the arcade machines (game_arcade.cpp) ----
     struct Arcade {
-        int game = 0;              // 0 off, 1 Journey of the Prairie King, 2 Junimo Kart
+        int game = 0;              // 0 off, 1 Journey of the Prairie King, 2 Junimo Kart, 3 the fair's slingshot, 4 its fishing
         float t = 0, pause = 0;
         int lives = 3, score = 0, stage = 1;
         // prairie king (a 192x192 field)
         float px = 96, py = 96, cool = 0, spawn = 1, timer = 40;
         struct Shot { float x, y, vx, vy; };
-        struct Foe { float x, y; int kind, hp; };
+        struct Foe { float x, y; int kind, hp; float vx = 0; };
         std::vector<Shot> shots, bossShots;
         std::vector<Foe> foes;
         struct Drop { float x, y; int kind; float life; };   // 0 coin, 1 rapid fire, 2 spread shot, 3 life, 4 coffee, 5 nuke

@@ -286,6 +286,7 @@ void Game::swingWeapon(const ToolDef& w) {
         orderEvent("slay", 0, 1, mo.kind);
         if (cur->mineLevel > 300) walnutChance(3, 10);
         stats["monstersKilled"]++;
+        lastSlain();
         qiBeanChance(8);
         if (FarmBuilding* hutch = buildingForInterior(cur->name))   // a hutch slime: one fewer lives there now
             if (hutch->type == "Slime Hutch" && !hutch->pending.empty()) hutch->pending.pop_back();
@@ -356,6 +357,7 @@ void Game::enterMine(int level) {
         return;
     }
     orderEvent("floor", 0, level, "");
+    lastMineFloor(level);
     if (level == 310 && !mailReceived.count("Island_VolcanoTop")) {   // the forge at the top of the volcano
         mailReceived.insert("Island_VolcanoTop");
         gotWalnut(4, "You reached the top of the volcano!");
