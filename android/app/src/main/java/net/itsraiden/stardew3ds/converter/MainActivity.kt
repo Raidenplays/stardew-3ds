@@ -258,22 +258,42 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().remove("converted").apply()
                 progress(20, "Copying your game files...")
                 say("Copying your game files into the app...")
+                // a zip is only unpacked again when it's a different zip (or a different size) from last time
+                fun stampOf(uris: List<Uri>) = uris.joinToString("|") { u ->
+                    val size = try { contentResolver.openFileDescriptor(u, "r")?.use { it.statSize } ?: -1L } catch (_: Exception) { -1L }
+                    "$u:$size"
+                }
                 if (contentZip != null) {
-                    contentDir.deleteRecursively()
-                    progress(-1, "Unzipping your game files...")
-                    unzipIn(contentZip!!, contentDir, "content")
+                    val stamp = stampOf(listOf(contentZip!!))
+                    if (stamp == prefs.getString("contentStamp", "") && findContentRoot(contentDir) != null) {
+                        say("Your game files are already unpacked from last time.")
+                    } else {
+                        contentDir.deleteRecursively()
+                        prefs.edit().remove("contentStamp").apply()
+                        progress(-1, "Unzipping your game files...")
+                        unzipIn(contentZip!!, contentDir, "content")
+                        prefs.edit().putString("contentStamp", stamp).apply()
+                    }
                 } else {
+                    prefs.edit().remove("contentStamp").apply()
                     copyTreeIn(contentUri!!, contentDir, "content")
                 }
                 val hasMods = modsUri != null || modZips.isNotEmpty()
-                modsDir.deleteRecursively()
-                if (modsUri != null) {
-                    say("Copying your mods...")
-                    copyTreeIn(modsUri!!, modsDir, "mods")
-                } else if (modZips.isNotEmpty()) {
-                    say("Unzipping your mods...")
-                    progress(32, "Unzipping your mods...")
-                    modZips.forEachIndexed { i, z -> unzipIn(z, File(modsDir, "mod$i"), nameOf(z)) }
+                val modStamp = if (modZips.isNotEmpty()) stampOf(modZips) else ""
+                if (modZips.isNotEmpty() && modStamp == prefs.getString("modStamp", "") && modsDir.isDirectory) {
+                    say("Your mods are already unpacked from last time.")
+                } else {
+                    modsDir.deleteRecursively()
+                    prefs.edit().remove("modStamp").apply()
+                    if (modsUri != null) {
+                        say("Copying your mods...")
+                        copyTreeIn(modsUri!!, modsDir, "mods")
+                    } else if (modZips.isNotEmpty()) {
+                        say("Unzipping your mods...")
+                        progress(32, "Unzipping your mods...")
+                        modZips.forEachIndexed { i, z -> unzipIn(z, File(modsDir, "mod$i"), nameOf(z)) }
+                        prefs.edit().putString("modStamp", modStamp).apply()
+                    }
                 }
                 val logoPath = ""   // the logo is built into the game now
                 outDir.deleteRecursively()

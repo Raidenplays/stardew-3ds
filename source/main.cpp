@@ -321,8 +321,9 @@ int main() {
     if (!ok) {
         fatalScreen(canvas, top,
                     "Couldn't load game files: " + err +
-                        "\n\nRun tools/convert.py on your own Stardew Valley 'Content (unpacked)' "
-                        "folder and copy the result to sdmc:/3ds/stardew3ds/");
+                        "\n\nGet the stardew3ds converter (Android app or PC tool) from "
+                        "github.com/Raidenplays/stardew-3ds, convert your own Stardew Valley Content folder "
+                        "with it, and send or copy the result to sdmc:/3ds/stardew3ds/");
         C2D_Fini();
         C3D_Fini();
         gfxExit();

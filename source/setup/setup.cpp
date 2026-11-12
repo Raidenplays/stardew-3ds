@@ -249,7 +249,7 @@ void Setup::finish() {
     item_.clear();
     // VERSION is written once every stage is ported (see begin()).
     error_ = "Textures converted. Maps and game data can't be converted on the 3DS yet; "
-             "use the phone or PC converter for now.";
+             "use the Android or PC converter from github.com/Raidenplays/stardew-3ds.";
     state_ = State::Failed;
 }
 

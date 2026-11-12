@@ -55,18 +55,18 @@ void drawSetupTop(Canvas& c, const setup::Setup& su, SetupView v, float t) {
     const float X = 18, W = 364, TX = X + 16, TW = W - 32;
     switch (v) {
     case SetupView::NeedFiles: {
-        float y = window(c, X, 30, W, 170, "Welcome!");
-        y = wrap(c, TX, y, TW, 0.45f, TXT, "This game plays with your own copy of Stardew Valley.", 15) + 4;
-        y = wrap(c, TX, y, TW, 0.42f, TXT,
-                 "1. On your PC, find your Stardew Valley folder (Steam: right-click the game, Manage, "
-                 "Browse local files).", 13) + 2;
-        y = wrap(c, TX, y, TW, 0.42f, TXT, "2. Copy that whole folder onto your SD card, into:", 13);
-        c.text(TX + 10, y, 0.42f, RED, "sdmc:/3ds/stardew3ds/", ALIGN_LEFT);
+        float y = window(c, X, 14, W, 212, "Welcome!");
+        y = wrap(c, TX, y, TW, 0.45f, TXT, "This game plays with your own copy of Stardew Valley.", 15) + 3;
+        y = wrap(c, TX, y, TW, 0.42f, TXT, "1. Get the stardew3ds converter (Android app or PC tool) from:", 13);
+        c.text(TX + 10, y, 0.42f, RED, "github.com/Raidenplays/stardew-3ds", ALIGN_LEFT);
         y += 15;
         y = wrap(c, TX, y, TW, 0.42f, TXT,
-                 "Mods like Stardew Valley Expanded and Ridgeside Village come along if they're in its Mods "
-                 "folder.", 13) + 2;
-        wrap(c, TX, y, TW, 0.42f, SOFT, "Then put the SD card back in and press A.", 13);
+                 "2. Give it your game's Content folder (and your Mods folder for Stardew Valley Expanded or "
+                 "Ridgeside Village) and press Convert.", 13) + 2;
+        y = wrap(c, TX, y, TW, 0.42f, TXT, "3. Send the result to this 3DS over Wi-Fi (ftpd), or save it to the SD card in:", 13);
+        c.text(TX + 10, y, 0.42f, RED, "sdmc:/3ds/stardew3ds/", ALIGN_LEFT);
+        y += 16;
+        wrap(c, TX, y, TW, 0.42f, SOFT, "Then come back here and press A.", 13);
         break;
     }
     case SetupView::Confirm: {
