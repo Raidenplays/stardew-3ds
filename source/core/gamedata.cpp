@@ -370,7 +370,8 @@ bool GameData::load(const std::string& root, std::string* err) {
                 it.kind = atoi(f[5].c_str());
                 it.tradeId = atoi(f[6].c_str());
                 it.tradeAmt = atoi(f[7].c_str());
-                if (f.size() >= 9) it.noMail = f[8];
+                if (f.size() >= 9 && f[8] != "-") it.noMail = f[8];
+                if (f.size() >= 10) it.cond = f[9];
             }
             shops[f[0]].push_back(it);
         }

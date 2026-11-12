@@ -731,6 +731,7 @@ public:
     int clubCoins = 0;                   // Qi coins, for the casino
     int shopFunds(const std::string& shop, std::string* unit = nullptr) const;   // what you have of the thing this shop takes
     std::string shopEntryName(const ShopEntry& e) const;
+    bool gameQuery(const std::string& cond) const;   // the game's own "CONDITION args, CONDITION args" strings
     // ---- bee houses, tappers, rods, crystalariums, crab pots... (game_machines.cpp) ----
     bool specialMachine(const Placed& p) const;
     void specialStart(Placed& p, const std::string& where);

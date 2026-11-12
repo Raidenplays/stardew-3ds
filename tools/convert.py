@@ -1559,6 +1559,18 @@ def write_crafting(content, out_dir, objs):
 def write_shops(content, out_dir, season_bits):
     shops = _load_json(content, "Data/Shops.json")
     n = skipped = 0
+    # what things cost when the shop doesn't say: furniture and big craftables carry their own price
+    own_price = {1: {}, 2: {}, 3: {}}
+    try:
+        for fid, line in _load_json(content, "Data/Furniture.json").items():
+            p = str(line).split("/")
+            if str(fid).isdigit() and len(p) > 5 and p[5].strip().lstrip("-").isdigit():
+                own_price[3][int(fid)] = int(p[5])
+        for bid, bc in _load_json(content, "Data/BigCraftables.json").items():
+            if str(bid).isdigit() and isinstance(bc, dict):
+                own_price[1][int(bid)] = int(bc.get("Price") or 0)
+    except Exception:
+        pass
     with open(os.path.join(out_dir, "shops.dat"), "w", encoding="utf-8") as f:
         for shop_id, sh in shops.items():
             for it in sh.get("Items", []) or []:
@@ -1584,12 +1596,19 @@ def write_shops(content, out_dir, season_bits):
                     if mm:
                         no_mail = mm.group(1)
                         cond.remove(x)
-                cond = [x for x in cond if not x.startswith("SYNCED_CHOICE")]
-                ok, mask, min_year = _parse_condition(", ".join(cond), season_bits)
-                if not ok:
+                # seasons and "from year N" are worked out here; everything else the game checks when you open the shop
+                simple, live = [], []
+                for x in cond:
+                    (simple if _parse_condition(x, season_bits)[0] else live).append(x)
+                ok, mask, min_year = _parse_condition(", ".join(simple), season_bits)
+                live_cond = _clean(", ".join(live))
+                if live:
                     skipped += 1
-                    continue
                 price = int(it.get("Price", -1) or -1)
+                if price <= 0 and kind:
+                    price = own_price[kind].get(iid, 0) or (1000 if kind == 2 else 500)
+                    if kind == 3 and shop_id == "Carpenter":
+                        price = max(price, 100)
                 # what you pay with: -1 gold, -2 star tokens, -3 Qi coins, or an object id
                 trade = {1: -2, 2: -3}.get(int(sh.get("Currency") or 0), -1)
                 amount = 0
@@ -1598,9 +1617,9 @@ def write_shops(content, out_dir, season_bits):
                     if tid is None or tid < 0:
                         continue
                     trade, amount = tid, int(it.get("TradeItemAmount") or 1)
-                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\t{kind}\t{trade}\t{amount}\t{no_mail}\n")
+                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\t{kind}\t{trade}\t{amount}\t{no_mail or "-"}\t{live_cond}\n")
                 n += 1
-    print(f"  shops.dat: {n} shop items ({skipped} with conditions not supported yet)")
+    print(f"  shops.dat: {n} shop items ({skipped} the game checks each time you open the shop)")
 
 
 

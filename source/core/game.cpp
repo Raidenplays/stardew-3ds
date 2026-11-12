@@ -806,6 +806,7 @@ std::vector<ShopEntry> Game::shopStock(const std::string& shop) const {
             if (si.seasonMask && !(si.seasonMask & (1 << season))) continue;
             if (year < si.minYear) continue;
             if (!si.noMail.empty() && mailReceived.count(si.noMail)) continue;
+            if (!si.cond.empty() && !gameQuery(si.cond)) continue;
             ShopEntry e{si.itemId + si.kind * SHOP_KIND, 0, si.kind, si.itemId, si.tradeId};
             int base = 0;
             if (si.kind == 0) { const ObjectDef* o = data.object(si.itemId); if (!o) continue; base = o->price * 2; }
@@ -858,6 +859,97 @@ bool Game::buy(const std::string& shop, int itemId, int qty) {
             return true;
         }
     return false;
+}
+
+// The game's own conditions ("DAY_OF_WEEK Monday, PLAYER_HEARTS Current Krobus 10"): every clause must hold.
+bool Game::gameQuery(const std::string& cond) const {
+    auto words = [](const std::string& s) {
+        std::vector<std::string> out;
+        std::string cur;
+        bool quoted = false;
+        for (char ch : s) {
+            if (ch == '"') { quoted = !quoted; continue; }
+            if (ch == ' ' && !quoted) { if (!cur.empty()) out.push_back(cur); cur.clear(); }
+            else cur += ch;
+        }
+        if (!cur.empty()) out.push_back(cur);
+        return out;
+    };
+    auto num = [](const std::vector<std::string>& a, size_t i, int dflt = 0) { return i < a.size() ? atoi(a[i].c_str()) : dflt; };
+    // a roll that comes out the same all day (or all week) for the same key
+    auto roll = [&](const std::string& span, const std::string& key) {
+        uint32_t h = (uint32_t)(span == "week" ? absoluteDay() / 7 : span == "season" ? absoluteDay() / 28 : absoluteDay()) * 2654435761u;
+        for (char ch : key) h = (h ^ (uint8_t)ch) * 16777619u;
+        h ^= h >> 15; h *= 0x2c1b3c6du; h ^= h >> 12;
+        return (h & 0xFFFFFF) / (double)0x1000000;
+    };
+    size_t at = 0;
+    while (at <= cond.size()) {
+        size_t end = at;                                 // split on commas outside quotes
+        for (bool q = false; end < cond.size() && (q || cond[end] != ','); end++) q ^= cond[end] == '"';
+        std::vector<std::string> a = words(cond.substr(at, end - at));
+        at = end + 1;
+        if (a.empty()) continue;
+        bool neg = a[0][0] == '!';
+        std::string q = a[0].substr(neg ? 1 : 0);
+        a.erase(a.begin());
+        if (!a.empty() && (a[0] == "Current" || a[0] == "Host" || a[0] == "Any" || a[0] == "Target") && q.rfind("PLAYER_", 0) == 0) a.erase(a.begin());
+        bool ok = false;
+        if (q == "DAY_OF_WEEK") {
+            static const char* const DAYS[] = {"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"};
+            for (auto& d : a) {
+                std::string l = d;
+                for (auto& ch : l) ch = (char)tolower((unsigned char)ch);
+                ok |= l == DAYS[day % 7] || l.substr(0, 3) == std::string(DAYS[day % 7]).substr(0, 3);
+            }
+        } else if (q == "DAY_OF_MONTH") {
+            for (auto& d : a) ok |= d == "odd" ? day % 2 == 1 : d == "even" ? day % 2 == 0 : atoi(d.c_str()) == day;
+        } else if (q == "YEAR") ok = year >= num(a, 0, 1);
+        else if (q == "DAYS_PLAYED") ok = absoluteDay() >= num(a, 0);
+        else if (q == "SEASON") { static const char* const S[] = {"spring", "summer", "fall", "winter"}; for (auto& d : a) ok |= d == S[season % 4]; }
+        else if (q == "PLAYER_HAS_ACHIEVEMENT") ok = mailReceived.count("ach:" + (a.empty() ? std::string() : a[0])) != 0;
+        else if (q == "PLAYER_HAS_ALL_ACHIEVEMENTS") { ok = true; for (auto& ach : const_cast<Game*>(this)->achievements()) ok &= ach.earned; }
+        else if (q == "MINE_LOWEST_LEVEL_REACHED") ok = mineDeepest >= num(a, 0);
+        else if (q == "PLAYER_HAS_MAIL") ok = !a.empty() && mailReceived.count(a[0]) != 0;
+        else if (q == "PLAYER_HAS_SEEN_EVENT") ok = !a.empty() && eventsSeen.count(a[0]) != 0;
+        else if (q == "PLAYER_HEARTS") {
+            if (a.size() >= 2 && a[0] == "Any") { for (auto& n : npcs) ok |= n.hearts() >= num(a, 1); }
+            else if (const NpcState* n = a.empty() ? nullptr : npcByName(a[0])) ok = n->hearts() >= num(a, 1);
+        } else if (q == "PLAYER_NPC_RELATIONSHIP") ok = !spouse.empty() || !engagedTo.empty();
+        else if (q == "PLAYER_BASE_FARMING_LEVEL" || q == "PLAYER_FARMING_LEVEL") ok = skillLevels[SK_FARMING] >= num(a, 0);
+        else if (q == "PLAYER_BASE_FISHING_LEVEL" || q == "PLAYER_FISHING_LEVEL") ok = skillLevels[SK_FISHING] >= num(a, 0);
+        else if (q == "PLAYER_BASE_MINING_LEVEL" || q == "PLAYER_MINING_LEVEL") ok = skillLevels[SK_MINING] >= num(a, 0);
+        else if (q == "PLAYER_BASE_FORAGING_LEVEL" || q == "PLAYER_FORAGING_LEVEL") ok = skillLevels[SK_FORAGING] >= num(a, 0);
+        else if (q == "PLAYER_BASE_COMBAT_LEVEL" || q == "PLAYER_COMBAT_LEVEL") ok = skillLevels[SK_COMBAT] >= num(a, 0);
+        else if (q == "PLAYER_FARMHOUSE_UPGRADE") ok = houseLevel >= num(a, 0);
+        else if (q == "MUSEUM_DONATIONS") ok = (int)museumDonated.size() >= num(a, 0);
+        else if (q == "WORLD_STATE_FIELD") ok = a.size() >= 2 && a[0] == "GoldenWalnutsFound" && walnutsFound >= num(a, 1);
+        else if (q == "PLAYER_HAS_TOWN_KEY") ok = mailReceived.count("HasTownKey") != 0;
+        else if (q == "IS_COMMUNITY_CENTER_COMPLETE") ok = ccDone();
+        else if (q == "IS_JOJA_MART_COMPLETE") ok = mailReceived.count("JojaMember") && mailReceived.count("ccVault") && !ccDone();
+        else if (q == "PLAYER_HAS_CRAFTING_RECIPE" || q == "PLAYER_HAS_COOKING_RECIPE") {
+            std::string name;
+            for (auto& w : a) name += (name.empty() ? "" : " ") + w;
+            for (auto& r : data.recipes) ok |= r.name == name && recipeKnown(r);
+        } else if (q == "PLAYER_HAS_ITEM") {
+            std::string id = a.empty() ? "" : a[0];
+            if (id.rfind("(T)", 0) == 0 || id.rfind("(W)", 0) == 0) {      // a tool, by its key
+                for (int i = 0; i < invSlots; i++)
+                    if (inv[i].type == SLOT_TOOL) { const ToolDef* t = data.tool(inv[i].id); ok |= t && t->key.find(id.substr(3)) != std::string::npos; }
+            } else ok = countItem(atoi(id.rfind("(O)", 0) == 0 ? id.c_str() + 3 : id.c_str())) >= std::max(1, num(a, 1, 1));
+        } else if (q == "RANDOM") ok = roll("day", cond) < atof(a.empty() ? "0" : a[0].c_str());
+        else if (q == "SYNCED_RANDOM") ok = a.size() >= 3 && roll(a[0], a[1]) < atof(a[2].c_str());
+        else if (q == "SYNCED_CHOICE") {                 // span key min max values...
+            if (a.size() >= 5) {
+                int lo = num(a, 2), hi = num(a, 3), pick = lo + (int)(roll(a[0], a[1]) * (hi - lo + 1));
+                for (size_t i = 4; i < a.size(); i++) ok |= atoi(a[i].c_str()) == pick;
+            }
+        } else if (q == "ANY") { for (auto& sub : a) ok |= gameQuery(sub); }
+        else if (q == "PLAYER_STAT") ok = false;         // prize-ticket and similar counters start at zero here
+        else ok = false;                                 // multiplayer, conversation topics: never true on a 3DS
+        if (ok == neg) return false;
+    }
+    return true;
 }
 
 int Game::shopFunds(const std::string& shop, std::string* unit) const {

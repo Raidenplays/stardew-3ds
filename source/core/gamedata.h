@@ -260,6 +260,7 @@ struct ShopItem {
     int tradeId = -1;         // -1 gold, -2 star tokens, -3 Qi coins, else the object you pay with
     int tradeAmt = 0;
     std::string noMail;       // sold only until this letter/flag is set
+    std::string cond;         // the rest of the game's own condition, checked when the shop opens
 };
 
 struct Layout {
