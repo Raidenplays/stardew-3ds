@@ -76,7 +76,7 @@ class MainActivity : AppCompatActivity() {
     }
     private val pickDll = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            if (!nameOf(uri).substringAfterLast('/').equals(DLL, ignoreCase = true)) {
+            if (!Regex("gamedata.*\\.dll$", RegexOption.IGNORE_CASE).containsMatchIn(nameOf(uri))) {
                 say("That's ${nameOf(uri)}. The file needed is $DLL (in your Stardew Valley folder, next to Content).")
             } else {
                 try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}

@@ -54,12 +54,20 @@
 
   <section class="step">
     <h2><span class="num">3</span> Your PC farm <span class="opt">optional</span></h2>
-    <p class="hint">To carry on a farm from your PC, pick its save folder (named like <em>Farmer_123456789</em>).
-      Windows: <code>%AppData%\StardewValley\Saves</code>. Linux: <code>~/.config/StardewValley/Saves</code>.</p>
+    <p class="hint">To carry on a farm from your PC, pick your <em>Saves</em> folder (or one farm's folder inside it,
+      named like <em>Farmer_123456789</em>). Saves aren't kept in the game folder:</p>
+    <ul class="hint where">
+      <li>Windows: <code>%AppData%\StardewValley\Saves</code> (paste that into the folder window's address bar)</li>
+      <li>Linux and Mac: <code>~/.config/StardewValley/Saves</code></li>
+    </ul>
     <div class="row">
       <button type="button" id="pickSave" class="quiet">Choose folder</button>
       <span class="picked" id="saveName">none</span>
       <button type="button" id="clearSave" class="link" hidden>remove</button>
+    </div>
+    <div class="row" id="farmRow" hidden>
+      <label for="farm">Farm to bring over</label>
+      <select id="farm"></select>
     </div>
   </section>
 

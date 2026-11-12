@@ -28,7 +28,7 @@
     $("convert").disabled = busy || !ready || !picked.game.length || (needDll && !dll);
     $("dllBox").hidden = !needDll;
     $("pickDll").disabled = busy;
-    for (const id of ["pickGame", "pickMods", "pickSave", "zip", "saveTo"]) $(id).disabled = busy;
+    for (const id of ["pickGame", "pickMods", "pickSave", "zip", "saveTo", "farm"]) $(id).disabled = busy;
     $("clearMods").hidden = !picked.mods.length;
     $("clearSave").hidden = !picked.save.length;
     $("result").hidden = !converted;
@@ -141,6 +141,48 @@
     waitingKind = null;
   });
 
+  // A farm is a folder like Farmer_123456789 holding a file of the same name. They are looked for
+  // in the save folder that was picked and, in case a copy is kept there, in the game and mods folders.
+  let farms = [];
+  function findFarms() {
+    const before = $("farm").value;
+    farms = [];
+    for (const kind of ["save", "game", "mods"]) {
+      for (const e of picked[kind]) {
+        const parts = e.path.split("/");
+        const name = parts[parts.length - 1];
+        if (parts.length < 2 || name !== parts[parts.length - 2] || !/_\d+$/.test(name)) continue;
+        const dir = parts.slice(0, -1).join("/") + "/";
+        farms.push({ name, files: picked[kind].filter((x) => x.path.startsWith(dir)).map((x) => ({ path: x.path.slice(dir.length - name.length - 1), file: x.file })), when: e.file.lastModified || 0 });
+      }
+    }
+    farms.sort((x, y) => y.when - x.when);   // most recently played first
+    const sel = $("farm");
+    sel.innerHTML = "";
+    for (const f of farms) {
+      const o = document.createElement("option");
+      o.value = f.name;
+      o.textContent = f.name.replace(/_\d+$/, "") + (f.when ? " (last played " + new Date(f.when).toLocaleDateString() + ")" : "");
+      sel.appendChild(o);
+    }
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = "Don't bring a farm";
+    sel.appendChild(none);
+    if (farms.some((f) => f.name === before) || before === "" && sel.dataset.touched) sel.value = before;
+    $("farmRow").hidden = !farms.length;
+    const el = label.save;
+    if (picked.save.length) {
+      el.className = farms.length ? "picked ok" : "picked bad";
+      el.textContent = farms.length ? top(picked.save) + " (" + farms.length + (farms.length === 1 ? " farm)" : " farms)")
+        : "\"" + top(picked.save) + "\" has no farm inside. Pick your Saves folder.";
+    } else {
+      el.className = farms.length ? "picked ok" : "picked";
+      el.textContent = farms.length ? "found " + farms.length + (farms.length === 1 ? " farm" : " farms") + " in your other folders" : "none";
+    }
+  }
+  $("farm").onchange = () => { $("farm").dataset.touched = "1"; converted = false; refresh(); };
+
   function top(entries) { return entries.length ? entries[0].path.split("/")[0] : ""; }
 
   function use(kind, entries) {
@@ -170,10 +212,8 @@
       el.className = packs ? "picked ok" : "picked bad";
       el.textContent = packs ? top(entries) + " (" + packs + " mods)" : "\"" + top(entries) + "\" has no mods inside";
       if (!packs) picked.mods = [];
-    } else {
-      el.className = "picked ok";
-      el.textContent = top(entries);
     }
+    findFarms();
     hint();
     refresh();
   }
@@ -188,10 +228,10 @@
   $("dllInput").addEventListener("change", (ev) => {
     const f = ev.target.files[0];
     if (!f) return;
-    const right = f.name.toLowerCase() === DLL.toLowerCase();
+    const right = /gamedata.*\.dll$/i.test(f.name);   // a copy may have been renamed a little
     dll = right ? f : null;
     $("dllName").className = right ? "picked ok" : "picked bad";
-    $("dllName").textContent = right ? f.name : "That's " + f.name + ". The file needed is " + DLL + ".";
+    $("dllName").textContent = right ? DLL : "That's " + f.name + ". The file needed is " + DLL + ".";
     hint();
     refresh();
   });
@@ -213,7 +253,8 @@
     status("Converting...");
     // the DLL picked on its own joins the game folder, where the converter looks for it
     const game = needDll && dll ? picked.game.concat([{ path: top(picked.game) + "/" + DLL, file: dll }]) : picked.game;
-    worker.postMessage({ cmd: "convert", game, mods: picked.mods, save: picked.save });
+    const farm = farms.find((f) => f.name === $("farm").value);
+    worker.postMessage({ cmd: "convert", game, mods: picked.mods, save: farm ? farm.files : [] });
   }
   $("convert").onclick = convert;
 
