@@ -34,9 +34,11 @@
     <LinearLayout style="@style/Row">
         <EditText android:id="@+id/ip" android:layout_width="0dp" android:layout_weight="1"
             android:layout_height="wrap_content" android:hint="3DS IP (from ftpd)"
-            android:inputType="text" android:textColor="#FFE8B0" android:textColorHint="#8A7050" />
+            android:inputType="phone" android:digits="0123456789." android:selectAllOnFocus="true" android:imeOptions="actionNext"
+            android:textColor="#FFE8B0" android:textColorHint="#8A7050" />
         <EditText android:id="@+id/port" android:layout_width="80dp" android:layout_height="wrap_content"
-            android:hint="port" android:inputType="number" android:textColor="#FFE8B0" android:textColorHint="#8A7050" />
+            android:hint="port" android:inputType="number" android:maxLength="5" android:selectAllOnFocus="true" android:imeOptions="actionDone"
+            android:textColor="#FFE8B0" android:textColorHint="#8A7050" />
         <Button android:id="@+id/send" style="@style/Btn" android:text="Send" />
     </LinearLayout>
 
@@ -46,7 +48,7 @@
     <TextView android:id="@+id/barText" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:textColor="#E0C8A0" android:textSize="12sp" android:text="Ready" />
 
-    <ScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="0dp"
+    <ScrollView android:id="@+id/scroll" android:focusable="false" android:descendantFocusability="blocksDescendants" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" android:layout_marginTop="8dp" android:background="#1A100A" android:padding="6dp">
         <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textColor="#D8E8C8" android:textSize="11sp" android:fontFamily="monospace" android:textIsSelectable="true" />

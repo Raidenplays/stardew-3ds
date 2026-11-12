@@ -189,7 +189,7 @@ class MainActivity : AppCompatActivity() {
     private fun appendLog(s: String) {
         log.append(s + "\n")
         if (log.lineCount > 4000) log.text = log.text.toString().takeLast(60000)
-        scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
+        scroll.post { scroll.scrollTo(0, log.bottom) }   // not fullScroll: that steals focus from the IP and port boxes
     }
 
     // While converting or sending, the phone must not doze: the screen stays on, and if it's locked by hand
