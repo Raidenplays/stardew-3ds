@@ -18,6 +18,8 @@ struct Ui {
     bool quit = false;
     int mapCache = 1;         // 0 off, 1 on, 2 on + flipped: the map drawn as two pictures instead of tile by tile
     bool showPerf = false;    // performance readout (Options tab, or L + SELECT)
+    bool padPro = false;      // look for a Circle Pad Pro (old 3DS)
+    int padProState = 0;      // 0 off, 1 looking, 2 connected (set by the platform)
     std::string status;
     float statusTime = 0;
 

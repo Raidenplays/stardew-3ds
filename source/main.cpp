@@ -1,6 +1,7 @@
 // stardew3ds -- an original 3DS farming engine that plays with assets
 // converted from your own copy of Stardew Valley (see tools/convert.py).
 #include <3ds.h>
+#include "platform/cpp_pad.h"
 #include <citro2d.h>
 
 #include <algorithm>
@@ -372,13 +373,28 @@ int main() {
         in.walk = kHeld & KEY_B;
         in.sx = (kHeld & KEY_A) ? 1 : (kHeld & KEY_Y) ? -1 : 0;
         in.sy = (kHeld & KEY_B) ? 1 : (kHeld & KEY_X) ? -1 : 0;
+        {   // a Circle Pad Pro, when it's switched on in Options: its stick aims, ZL / ZR step through the toolbar
+            static bool padOn = false;
+            static bool lastZl = false, lastZr = false;
+            if (ui.padPro != padOn) { padOn = ui.padPro; if (padOn) cpp_pad::start(); else cpp_pad::stop(); }
+            int st = padOn ? cpp_pad::state() : 0;
+            ui.padProState = st;
+            float cx, cy;
+            bool zl, zr, rr;
+            cpp_pad::read(cx, cy, zl, zr, rr);
+            if (cx > 0.5f) in.sx = 1; else if (cx < -0.5f) in.sx = -1;
+            if (cy > 0.5f) in.sy = 1; else if (cy < -0.5f) in.sy = -1;
+            if (zl && !lastZl) in.prev = true;
+            if ((zr && !lastZr)) in.next = true;
+            lastZl = zl; lastZr = zr;
+        }
         if (kHeld & KEY_CSTICK_LEFT) in.sx = -1;          // the C-stick aims too
         if (kHeld & KEY_CSTICK_RIGHT) in.sx = 1;
         if (kHeld & KEY_CSTICK_UP) in.sy = -1;
         if (kHeld & KEY_CSTICK_DOWN) in.sy = 1;
         in.hold = kHeld & (KEY_A | KEY_Y);
-        in.prev = kDown & KEY_L;
-        in.next = kDown & KEY_R;
+        in.prev = in.prev || (kDown & KEY_L);
+        in.next = in.next || (kDown & KEY_R);
         bool aDown = kDown & (KEY_A | KEY_Y);
         if (kHeld & (KEY_A | KEY_Y)) holdA += dt; else holdA = 0;
         in.action = aDown || (holdA > 0.45f && game.toolTimer <= 0);
@@ -478,7 +494,7 @@ int main() {
         {   // ...or when something it shows has changed (money, energy, the bag, the tab, a new perf reading)
             static uint32_t lastSig = 0;
             uint32_t sig = (uint32_t)game.money * 31u + (uint32_t)game.energy * 131u + (uint32_t)game.health * 17u + (uint32_t)game.selected * 7u +
-                           (uint32_t)ui.tab * 1009u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf;
+                           (uint32_t)ui.tab * 1009u + (uint32_t)(ui.padProState + (ui.padPro ? 4 : 0)) * 811u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf;
             for (int k = 0; k < game.invSlots; k++) sig = sig * 16777619u ^ (uint32_t)(game.inv[k].id * 64 + game.inv[k].count + game.inv[k].type * 7919);
             for (char ch : ui.status) sig = sig * 16777619u ^ (uint8_t)ch;
             if (ui.showPerf) for (const char* p = perfLine1; *p; p++) sig = sig * 16777619u ^ (uint8_t)*p;
@@ -569,6 +585,7 @@ int main() {
     canvas.dropTextures();
     C2D_Fini();
     C3D_Fini();
+    cpp_pad::stop();
     romfsExit();
     irrstExit();
     gfxExit();

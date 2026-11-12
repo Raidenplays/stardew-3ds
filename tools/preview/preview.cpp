@@ -781,6 +781,7 @@ int main(int argc, char** argv) {
             step(g, ui, none, 5);
             shot(c, g, ui, "fixes");
         }
+        if (getenv("OPTIONS")) { ui.tab = TAB_OPTIONS; ui.padPro = true; ui.padProState = 1; shot(c, g, ui, "options"); ui.tab = TAB_ITEMS; }
         if (getenv("ISLAND")) {   // ISLAND=1: everything the parrots build, at --where / --at
             for (const char* f : {"Island_FirstParrot", "Island_Turtle", "Island_UpgradeBridge", "Island_UpgradeTrader", "Island_VolcanoBridge",
                                   "Island_UpgradeHouse", "Island_W_Obelisk", "Island_Resort"}) g.mailReceived.insert(f);

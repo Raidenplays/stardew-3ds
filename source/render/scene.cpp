@@ -1999,11 +1999,13 @@ static void drawOptionsTab(Canvas& c, Game& g, Ui& ui) {
         box(c, 40, PANEL_Y + 10 + i * 40, 240, 32, COL_PANEL_DARK, COL_BORDER);
         c.text(160, PANEL_Y + 17 + i * 40, 0.55f, COL_TEXT, labels[i], ALIGN_CENTER);
     }
-    box(c, 14, PANEL_Y + 130, 142, 22, COL_PANEL_DARK, COL_BORDER);
-    c.text(85, PANEL_Y + 134, 0.42f, COL_TEXT, ui.showPerf ? "Perf info: on" : "Perf info: off", ALIGN_CENTER);
     static const char* mcText[3] = {"Fast map: off", "Fast map: on", "Fast map: flip"};
-    box(c, 164, PANEL_Y + 130, 142, 22, COL_PANEL_DARK, COL_BORDER);
-    c.text(235, PANEL_Y + 134, 0.42f, COL_TEXT, mcText[ui.mapCache % 3], ALIGN_CENTER);
+    const char* labels3[3] = {ui.showPerf ? "Perf: on" : "Perf: off", mcText[ui.mapCache % 3],
+                              !ui.padPro ? "Pad Pro: off" : ui.padProState == 2 ? "Pad Pro: found" : "Pad Pro: looking"};
+    for (int k = 0; k < 3; k++) {
+        box(c, 12 + k * 100, PANEL_Y + 130, 96, 22, COL_PANEL_DARK, COL_BORDER);
+        c.text(60 + k * 100, PANEL_Y + 135, 0.38f, COL_TEXT, labels3[k], ALIGN_CENTER);
+    }
     if (ui.statusTime > 0) c.text(160, PANEL_Y + 156, 0.5f, COL_TEXT, ui.status, ALIGN_CENTER);
     c.text(160, PANEL_Y + 172, 0.38f, COL_TEXT_SOFT, "The game also saves every time you sleep.", ALIGN_CENTER);
     (void)g;
@@ -2017,6 +2019,7 @@ void loadUiSettings(Ui& ui, const std::string& path) {
         int v;
         if (sscanf(line, "fastMap=%d", &v) == 1) ui.mapCache = std::max(0, std::min(2, v));
         if (sscanf(line, "perfInfo=%d", &v) == 1) ui.showPerf = v != 0;
+        if (sscanf(line, "padPro=%d", &v) == 1) ui.padPro = v != 0;
     }
     fclose(f);
 }
@@ -2024,7 +2027,7 @@ void loadUiSettings(Ui& ui, const std::string& path) {
 void saveUiSettings(const Ui& ui, const std::string& path) {
     FILE* f = fopen(path.c_str(), "w");
     if (!f) return;
-    fprintf(f, "fastMap=%d\nperfInfo=%d\n", ui.mapCache, ui.showPerf ? 1 : 0);
+    fprintf(f, "fastMap=%d\nperfInfo=%d\npadPro=%d\n", ui.mapCache, ui.showPerf ? 1 : 0, ui.padPro ? 1 : 0);
     fclose(f);
 }
 
@@ -2034,12 +2037,14 @@ static std::string settingsPath(const std::string& savePath) {
 }
 
 static void touchOptionsTab(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
-    if (hit(tx, ty, 14, PANEL_Y + 130, 142, 22)) { ui.showPerf = !ui.showPerf; saveUiSettings(ui, settingsPath(savePath)); return; }
-    if (hit(tx, ty, 164, PANEL_Y + 130, 142, 22)) {
-        ui.mapCache = (ui.mapCache + 1) % 3;
-        saveUiSettings(ui, settingsPath(savePath));
-        return;
-    }
+    for (int k = 0; k < 3; k++)
+        if (hit(tx, ty, 12 + k * 100, PANEL_Y + 130, 96, 22)) {
+            if (k == 0) ui.showPerf = !ui.showPerf;
+            else if (k == 1) ui.mapCache = (ui.mapCache + 1) % 3;
+            else ui.padPro = !ui.padPro;
+            saveUiSettings(ui, settingsPath(savePath));
+            return;
+        }
     for (int i = 0; i < 3; i++)
         if (hit(tx, ty, 40, PANEL_Y + 10 + i * 40, 240, 32)) {
             if (i == 1) {
