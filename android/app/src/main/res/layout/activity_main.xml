@@ -20,6 +20,14 @@
         <TextView android:id="@+id/contentName" style="@style/Value" />
     </LinearLayout>
     <LinearLayout style="@style/Row">
+        <Button android:id="@+id/pickDll" style="@style/Btn" android:text="Game DLL" />
+        <TextView android:id="@+id/dllName" style="@style/Value" />
+        <Button android:id="@+id/clearDll" style="@style/Small" android:text="x" />
+    </LinearLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="StardewValley.GameData.dll is in your Stardew Valley folder, next to Content. The converter needs it to read the game's data. Skip this if it's already inside the folder or zip you picked."
+        android:textColor="#B8A078" android:textSize="11sp" android:layout_marginBottom="6dp" />
+    <LinearLayout style="@style/Row">
         <Button android:id="@+id/pickMods" style="@style/Btn" android:text="Mods folder" />
         <Button android:id="@+id/pickModZips" style="@style/Small" android:layout_width="56dp" android:text="zips" />
         <TextView android:id="@+id/modsName" style="@style/Value" />

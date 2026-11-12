@@ -2,6 +2,9 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const picked = { game: [], mods: [], save: [] };
+  const DLL = "StardewValley.GameData.dll";
+  let dll = null;           // that file, picked on its own
+  let needDll = false;      // a packed game folder without it
   let worker = null;
   let ready = false;
   let busy = false;
@@ -22,7 +25,9 @@
   function bar(pct) { $("barFill").style.width = Math.max(0, Math.min(100, pct)) + "%"; }
 
   function refresh() {
-    $("convert").disabled = busy || !ready || !picked.game.length;
+    $("convert").disabled = busy || !ready || !picked.game.length || (needDll && !dll);
+    $("dllBox").hidden = !needDll;
+    $("pickDll").disabled = busy;
     for (const id of ["pickGame", "pickMods", "pickSave", "zip", "saveTo"]) $(id).disabled = busy;
     $("clearMods").hidden = !picked.mods.length;
     $("clearSave").hidden = !picked.save.length;
@@ -43,7 +48,7 @@
         ready = true;
         state.phase = "ready";
         bar(0);
-        status(picked.game.length ? "Ready to convert." : "Pick your Stardew Valley folder to begin.");
+        hint();
         refresh();
       } else if (m.t === "done") {
         converted = m.ok;
@@ -142,6 +147,7 @@
     picked[kind] = entries;
     converted = false;
     const el = label[kind];
+    if (kind === "game") needDll = false;
     if (!entries.length) {
       el.className = "picked";
       el.textContent = kind === "game" ? "not picked" : "none";
@@ -152,9 +158,12 @@
         el.className = "picked bad";
         el.textContent = "\"" + top(entries) + "\" has no Content/Maps inside. Pick your Stardew Valley folder.";
       } else {
-        const packed = maps.some((e) => /\.xnb$/i.test(e.path));
+        const packed = maps.some((e) => /\.xnb$/i.test(e.path)) && !maps.some((e) => /\.tmx$/i.test(e.path));
+        const hasDll = entries.some((e) => e.path.split("/").pop() === DLL);
+        needDll = packed && !hasDll;
         el.className = "picked ok";
-        el.textContent = top(entries) + " (" + entries.length + " files" + (packed ? "" : ", unpacked") + ")";
+        el.textContent = top(entries) + " (" + entries.length + " files" + (packed ? "" : ", unpacked") + ")"
+          + (packed && hasDll ? ", " + DLL + " found" : "");
       }
     } else if (kind === "mods") {
       const packs = entries.filter((e) => /(^|\/)manifest\.json$/i.test(e.path)).length;
@@ -165,9 +174,27 @@
       el.className = "picked ok";
       el.textContent = top(entries);
     }
-    if (ready && !busy) status(picked.game.length ? "Ready to convert." : "Pick your Stardew Valley folder to begin.");
+    hint();
     refresh();
   }
+
+  function hint() {
+    if (!ready || busy) return;
+    status(!picked.game.length ? "Pick your Stardew Valley folder to begin."
+      : needDll && !dll ? "One more file: add " + DLL + " (step 1)." : "Ready to convert.");
+  }
+
+  $("pickDll").onclick = () => { $("dllInput").value = ""; $("dllInput").click(); };
+  $("dllInput").addEventListener("change", (ev) => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    const right = f.name.toLowerCase() === DLL.toLowerCase();
+    dll = right ? f : null;
+    $("dllName").className = right ? "picked ok" : "picked bad";
+    $("dllName").textContent = right ? f.name : "That's " + f.name + ". The file needed is " + DLL + ".";
+    hint();
+    refresh();
+  });
 
   $("pickGame").onclick = () => pick("game");
   $("pickMods").onclick = () => pick("mods");
@@ -177,14 +204,16 @@
 
   // ------------------------------------------------------------ convert, then hand over
   function convert() {
-    if (busy || !ready || !picked.game.length) return;
+    if (busy || !ready || !picked.game.length || (needDll && !dll)) return;
     $("log").textContent = "";
     state.log = [];
     state.phase = "converting";
     converted = false;
     setBusy(true);
     status("Converting...");
-    worker.postMessage({ cmd: "convert", game: picked.game, mods: picked.mods, save: picked.save });
+    // the DLL picked on its own joins the game folder, where the converter looks for it
+    const game = needDll && dll ? picked.game.concat([{ path: top(picked.game) + "/" + DLL, file: dll }]) : picked.game;
+    worker.postMessage({ cmd: "convert", game, mods: picked.mods, save: picked.save });
   }
   $("convert").onclick = convert;
 

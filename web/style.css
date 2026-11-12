@@ -41,6 +41,8 @@ h2 { font-size: 1.05rem; margin: 0 0 6px; display: flex; align-items: center; ga
   background: var(--wood); color: #fff; font-size: 0.85rem;
 }
 .opt { font-weight: 400; font-size: 0.8rem; color: var(--soft); border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; }
+h3 { font-size: 0.95rem; margin: 14px 0 4px; }
+#dllBox { border-top: 1px dashed var(--line); margin-top: 14px; }
 .hint { color: var(--soft); font-size: 0.92rem; margin: 0 0 10px; }
 .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .picked { color: var(--soft); overflow-wrap: anywhere; }

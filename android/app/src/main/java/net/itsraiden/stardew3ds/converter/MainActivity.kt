@@ -40,6 +40,7 @@ import kotlin.concurrent.thread
  */
 class MainActivity : AppCompatActivity() {
 
+    private val DLL = "StardewValley.GameData.dll"
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var log: TextView
     private lateinit var scroll: ScrollView
@@ -49,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private var contentUri: Uri? = null
     private var modsUri: Uri? = null
     private var logoUri: Uri? = null
+    private var dllUri: Uri? = null              // StardewValley.GameData.dll picked on its own
     private var contentZip: Uri? = null          // or the game files as a .zip
     private var modZips: List<Uri> = emptyList() // or mods as .zip files (each zip = one or more mods)
     @Volatile private var busy = false
@@ -70,6 +72,16 @@ class MainActivity : AppCompatActivity() {
         if (uri != null) {
             try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
             logoUri = uri; prefs.edit().putString("logo", uri.toString()).apply(); refresh()
+        }
+    }
+    private val pickDll = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            if (!nameOf(uri).substringAfterLast('/').equals(DLL, ignoreCase = true)) {
+                say("That's ${nameOf(uri)}. The file needed is $DLL (in your Stardew Valley folder, next to Content).")
+            } else {
+                try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                dllUri = uri; prefs.edit().putString("dll", uri.toString()).apply(); refresh()
+            }
         }
     }
     private val pickContentZip = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -110,6 +122,7 @@ class MainActivity : AppCompatActivity() {
         prefs.getString("mods", null)?.let { modsUri = Uri.parse(it) }
         prefs.getString("logo", null)?.let { logoUri = Uri.parse(it) }
         prefs.getString("contentZip", null)?.let { contentZip = Uri.parse(it) }
+        prefs.getString("dll", null)?.let { dllUri = Uri.parse(it) }
         prefs.getString("modZips", null)?.let { s -> modZips = s.split("\n").filter { it.isNotBlank() }.map { Uri.parse(it) } }
         findViewById<EditText>(R.id.ip).setText(prefs.getString("ip", ""))
         findViewById<EditText>(R.id.port).setText(prefs.getString("port", "5000"))
@@ -118,6 +131,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.pickMods).setOnClickListener { pickMods.launch(null) }
         findViewById<Button>(R.id.pickContentZip).setOnClickListener { pickContentZip.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
         findViewById<Button>(R.id.pickModZips).setOnClickListener { pickModZips.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }
+        findViewById<Button>(R.id.pickDll).setOnClickListener { pickDll.launch(arrayOf("*/*")) }
+        findViewById<Button>(R.id.clearDll).setOnClickListener { dllUri = null; prefs.edit().remove("dll").apply(); refresh() }
         findViewById<Button>(R.id.clearMods).setOnClickListener { modsUri = null; modZips = emptyList(); prefs.edit().remove("mods").remove("modZips").apply(); refresh() }
         findViewById<Button>(R.id.convert).setOnClickListener { convert() }
         findViewById<Button>(R.id.importSave).setOnClickListener {
@@ -156,6 +171,7 @@ class MainActivity : AppCompatActivity() {
             modsUri == null -> "none (no SVE / Ridgeside)"
             else -> nameOf(modsUri)
         }
+        findViewById<TextView>(R.id.dllName).text = if (dllUri != null) DLL else "not picked"
         val ready = File(outDir, "3ds/stardew3ds").isDirectory
         status.text = when {
             busy -> "Working..."
@@ -217,7 +233,7 @@ class MainActivity : AppCompatActivity() {
     private fun setBusy(b: Boolean) { ui.post {
         busy = b
         stayAwake(b)
-        listOf(R.id.convert, R.id.saveTo, R.id.send, R.id.pickContent, R.id.pickMods)
+        listOf(R.id.convert, R.id.saveTo, R.id.send, R.id.pickContent, R.id.pickMods, R.id.pickDll)
             .forEach { findViewById<Button>(it).isEnabled = !b }
         refresh()
     } }
@@ -231,7 +247,7 @@ class MainActivity : AppCompatActivity() {
         val md = java.security.MessageDigest.getInstance("MD5")
         (toolsDir.listFiles() ?: emptyArray()).filter { it.isFile }.sortedBy { it.name }.forEach { md.update(it.name.toByteArray()); md.update(it.readBytes()) }
         val tools = md.digest().joinToString("") { "%02x".format(it) }
-        return listOf(contentUri, contentZip, modsUri, modZips.joinToString(","), tools).joinToString("|")
+        return listOf(contentUri, contentZip, modsUri, modZips.joinToString(","), dllUri, tools).joinToString("|")
     }
 
     private fun convert() {
@@ -302,6 +318,13 @@ class MainActivity : AppCompatActivity() {
                 val root = findContentRoot(contentDir) ?: run {
                     say("! Couldn't find a Maps folder in what you picked - pick your game's Content folder (normal or unpacked)")
                     return@thread
+                }
+                // the game DLL picked on its own goes inside Content, where the converter looks for it
+                dllUri?.let { u ->
+                    try {
+                        contentResolver.openInputStream(u)!!.use { i -> File(root, DLL).outputStream().use { i.copyTo(it) } }
+                        say("Added $DLL")
+                    } catch (e: Exception) { say("! Couldn't read the $DLL you picked: ${e.message}") }
                 }
                 say("Converting (this takes a while with SVE and Ridgeside)...")
                 progress(40, "Converting...")

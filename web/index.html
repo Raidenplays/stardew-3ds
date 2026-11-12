@@ -30,6 +30,15 @@
       <button type="button" id="pickGame">Choose folder</button>
       <span class="picked" id="gameName">not picked</span>
     </div>
+    <div id="dllBox" hidden>
+      <h3>StardewValley.GameData.dll</h3>
+      <p class="hint" id="dllHint">The converter reads the game's data files with this one file from your game. It sits in
+        the Stardew Valley folder, right next to <em>Content</em>. It wasn't in the folder you picked, so add it here.</p>
+      <div class="row">
+        <button type="button" id="pickDll">Choose the file</button>
+        <span class="picked" id="dllName">not picked</span>
+      </div>
+    </div>
   </section>
 
   <section class="step">
@@ -86,6 +95,7 @@
   </footer>
 </main>
 <input type="file" id="dirInput" webkitdirectory multiple hidden>
+<input type="file" id="dllInput" accept=".dll" hidden>
 <script src="app.js"></script>
 </body>
 </html>

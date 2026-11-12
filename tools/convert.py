@@ -2480,8 +2480,9 @@ def main():
             print(f"  ! {xnbunpack.DLL} not found next to or inside your Content folder")
         unpacked = os.path.join(args[1], "_unpacked")
         if not xnbunpack.unpack(content, unpacked, dll):
-            sys.exit(f"Your game's {xnbunpack.DLL} is needed to read its Data files. Copy it from your "
-                     "Stardew Valley folder (it's next to Content) into the Content folder or zip, then convert again.")
+            sys.exit(f"Your game's {xnbunpack.DLL} is needed to read its Data files. It's in your Stardew Valley "
+                     "folder, next to Content: add it in the converter (the Game DLL step), or copy it into the "
+                     "Content folder or zip, then convert again.")
         content = unpacked
         took("unpacked")
     season_merges = []
