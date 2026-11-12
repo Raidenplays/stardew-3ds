@@ -116,6 +116,7 @@ static double tickMs() { return svcGetSystemTick() / (double)CPU_TICKS_PER_MSEC;
 
 int main() {
     gfxInitDefault();
+    irrstInit();   // the New 3DS C-stick and ZL/ZR (does nothing on an old 3DS)
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(12288);   // both eyes + bottom screen per frame
@@ -371,6 +372,10 @@ int main() {
         in.walk = kHeld & KEY_B;
         in.sx = (kHeld & KEY_A) ? 1 : (kHeld & KEY_Y) ? -1 : 0;
         in.sy = (kHeld & KEY_B) ? 1 : (kHeld & KEY_X) ? -1 : 0;
+        if (kHeld & KEY_CSTICK_LEFT) in.sx = -1;          // the C-stick aims too
+        if (kHeld & KEY_CSTICK_RIGHT) in.sx = 1;
+        if (kHeld & KEY_CSTICK_UP) in.sy = -1;
+        if (kHeld & KEY_CSTICK_DOWN) in.sy = 1;
         in.hold = kHeld & (KEY_A | KEY_Y);
         in.prev = kDown & KEY_L;
         in.next = kDown & KEY_R;
@@ -565,6 +570,7 @@ int main() {
     C2D_Fini();
     C3D_Fini();
     romfsExit();
+    irrstExit();
     gfxExit();
     return 0;
 }
