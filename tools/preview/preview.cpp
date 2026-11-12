@@ -786,6 +786,34 @@ int main(int argc, char** argv) {
             step(g, ui, none, 5);
             shot(c, g, ui, "fixes");
         }
+        if (getenv("WALKDIFF")) {   // the cached map against tile-by-tile drawing, frame by frame along a walk
+            c.resize(400, 240);
+            c.setOrigin(0, 0);
+            c.setClip(0, 0, 400, 240);
+            g.fade = 0;
+            int worst = 0, worstStep = -1, total = 0;
+            float sx = g.px, sy = g.py;
+            for (int step = 0; step < 600; step++) {
+                // a loop: down, right, up, left, 3 px a frame
+                int leg = (step / 150) % 4;
+                g.px = sx + (leg == 1 ? (step % 150) * 3 : leg == 2 ? 450 : leg == 3 ? 450 - (step % 150) * 3 : 0);
+                g.py = sy + (leg == 0 ? (step % 150) * 3 : leg == 1 || leg == 2 ? (leg == 1 ? 450 : 450 - (step % 150) * 3) : 0);
+                ui.mapCache = 1;
+                drawTop(c, g, ui, 1000);
+                std::vector<uint32_t> a = c.fb;
+                ui.mapCache = 0;
+                drawTop(c, g, ui, 1000);
+                int diff = 0, firstY = -1;
+                for (size_t i = 0; i < a.size() && i < c.fb.size(); i++)
+                    if (a[i] != c.fb[i]) { diff++; if (firstY < 0) firstY = (int)(i / 400); }
+                total += diff > 0;
+                if (diff > worst) { worst = diff; worstStep = step; }
+                if (diff && total <= 6) printf("  step %d at %.0f,%.0f: %d pixels differ, first on row %d\n", step, g.px, g.py, diff, firstY);
+            }
+            printf("  walkdiff: %d of 600 frames differ; worst %d pixels at step %d\n", total, worst, worstStep);
+            ui.mapCache = 1;
+            g.px = sx; g.py = sy;
+        }
         if (getenv("OPTIONS")) { ui.tab = TAB_OPTIONS; ui.padPro = true; ui.padProState = 1; shot(c, g, ui, "options"); ui.tab = TAB_ITEMS; }
         if (getenv("ISLAND")) {   // ISLAND=1: everything the parrots build, at --where / --at
             for (const char* f : {"Island_FirstParrot", "Island_Turtle", "Island_UpgradeBridge", "Island_UpgradeTrader", "Island_VolcanoBridge",

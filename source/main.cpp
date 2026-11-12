@@ -527,10 +527,10 @@ int main() {
 
         float slider = osGet3DSliderState();
         bool stereo = slider > 0.01f;
-        const float MAX_SHIFT = 2.0f;   // px per depth unit at full slider
+        const float MAX_SHIFT = 2.0f;   // px per depth unit, per eye, at full slider
         for (int eye = 0; eye < (stereo ? 2 : 1); eye++) {
             C3D_RenderTarget* t = eye == 0 ? top : topR;
-            canvas.eye = stereo ? (eye == 0 ? -slider : slider) * MAX_SHIFT : 0.0f;
+            canvas.eye = stereo ? (eye == 0 ? slider : -slider) * MAX_SHIFT : 0.0f;   // + depth comes towards you: the left eye sees it further right
             C2D_TargetClear(t, C2D_Color32(0, 0, 0, 0xFF));
             C2D_SceneBegin(t);
             canvas.screen = t;

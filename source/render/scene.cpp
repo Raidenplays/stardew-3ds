@@ -1217,7 +1217,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             static const int flap[6] = {0, 1, 2, 3, 2, 1};
             int idx = kinds[(h >> 9) % 6] + flap[(int)(t * 12) % 6];
             bool left = std::cos(t * 0.37f) < 0;
-            c.image("TileSheets_critters", (idx % 20) * 16, (idx / 20) * 16, 16, 16, std::floor(x), std::floor(y), left);
+            float pop = c.shift(1.0f + (float)((h >> 20) % 3) * 0.5f);   // fluttering just above the ground, towards you
+            c.image("TileSheets_critters", (idx % 20) * 16, (idx / 20) * 16, 16, 16, std::floor(x) + pop, std::floor(y), left);
         }
     }
     profEnd(PROF_FRONT);
@@ -1289,7 +1290,6 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     if (g.raining) {
         // the game's raindrops (TileSheets/rain): a falling streak, then a 3-frame splash
         bool sprite = c.texWidth("TileSheets_rain") >= 64;
-        float sh = c.shift(2.0f);
         const int N = g.stormy ? 90 : 60;
         for (int i = 0; i < N; i++) {
             uint32_t h0 = (uint32_t)(i + 1) * 2654435761u;
@@ -1297,12 +1297,14 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
             uint32_t tt = timeMs + (h0 >> 4) % period;
             uint32_t cycle = tt / period, ph = tt % period;
             uint32_t h = (cycle * 40503u + (uint32_t)i * 2246822519u) * 2654435761u;
-            float x0 = (float)(h % 480) - 20 + sh, y0 = (float)((h >> 9) % 220) - 40;
+            // in 3D each drop falls from in front of the screen down to the ground, where it splashes
+            float pop = c.shift(1.5f + (float)((h0 >> 12) % 3) * 0.75f);
+            float x0 = (float)(h % 480) - 20, y0 = (float)((h >> 9) % 220) - 40;
             uint32_t fallMs = period - 240;
             int row = (h >> 3) & 1;
             if (ph < fallMs) {
                 float k = ph / (float)fallMs;
-                float x = x0 + 30 - k * 30, y = y0 + k * 60;
+                float x = x0 + 30 - k * 30 + pop * (1 - k), y = y0 + k * 60;
                 if (sprite) c.image("TileSheets_rain", 0, row * 16, 16, 16, x, y);
                 else c.line(x + 8, y, x + 4, y + 10, RGBA(0xA0, 0xB8, 0xFF, 0x90), 1.0f);
             } else if (sprite) {
@@ -1314,9 +1316,9 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     }
     if (g.snowing) {
         // soft flakes drifting down and swaying
-        float sh = c.shift(2.0f);
         for (int i = 0; i < 70; i++) {
             uint32_t h = (uint32_t)(i + 1) * 2654435761u;
+            float sh = c.shift(1.5f + (float)((h >> 9) % 3) * 0.75f);   // flakes at three depths in front of the screen
             float speed = 0.012f + ((h >> 22) & 63) * 0.0002f;
             float x = std::fmod((float)((h >> 5) % 440) + std::sin(timeMs * 0.0015f + i) * 10.0f - g.px * 0.6f, 440.0f);
             float y = std::fmod((float)((h >> 13) % 280) + timeMs * speed - g.py * 0.6f, 280.0f);
@@ -1332,11 +1334,11 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     if (g.windy && g.season != WINTER) {
         // blowing petals (spring) / leaves (fall): Cursors row 1184/1200/1216, 4-frame flutter
         int row = g.season == SPRING ? 1184 : g.season == SUMMER ? 1200 : 1216;
-        float sh = c.shift(2.0f);
         float camX = g.px, camY = g.py;
         const int N = 36;
         for (int i = 0; i < N; i++) {
             uint32_t h = (uint32_t)(i + 1) * 2654435761u;
+            float sh = c.shift(1.5f + (float)((h >> 7) % 3) * 0.75f);   // petals and leaves blow past in front of the screen
             float speed = 0.012f + (h >> 24) * 0.00008f;              // px per ms, drifting left
             float fall = 0.006f + ((h >> 16) & 255) * 0.00003f;       // and slowly down
             float x = std::fmod((float)((h >> 5) % 1000) - timeMs * speed - camX * 0.9f, 460.0f);
@@ -1376,7 +1378,7 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
 static void countText(Canvas& c, float rightX, float y, int count);
 
 static void drawHud(Canvas& c, Game& g) {
-    float hs = c.shift(3.0f);
+    float hs = c.shift(1.0f);   // the HUD floats just in front of the world (2 px an eye at full 3D)
     static const char* days[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     char buf[48];
     if (!g.placing.empty()) {   // choosing where Robin builds: just the instructions
