@@ -245,6 +245,7 @@ struct Input {
     bool prev = false, next = false;   // L / R
     bool hold = false;      // A is held down (charging upgraded tools)
     int sx = 0, sy = 0;     // the face buttons as a direction (A right, Y left, X up, B down): arcade shooting
+    int ax = 0, ay = 0;     // a second stick: the way to face (tools and actions go that way), whichever way you walk
 };
 
 enum FishState : int { FS_NONE = 0, FS_CHARGE, FS_CAST, FS_WAIT, FS_BITE, FS_REEL, FS_DONE };

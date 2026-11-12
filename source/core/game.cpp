@@ -1510,9 +1510,13 @@ void Game::update(float dt, const Input& in) {
     float mx = in.mx, my = in.my;
     float len = std::sqrt(mx * mx + my * my);
     moving = len > 0.2f;
+    // a second stick points you: you can back away from something and still face it
+    bool aimed = in.ax || in.ay;
+    if (aimed) facing = in.ax > 0 ? FACE_RIGHT : in.ax < 0 ? FACE_LEFT : in.ay > 0 ? FACE_DOWN : FACE_UP;
     if (moving) {
         if (len > 1) { mx /= len; my /= len; }
-        if (std::fabs(mx) > std::fabs(my)) facing = mx > 0 ? FACE_RIGHT : FACE_LEFT;
+        if (aimed) {}
+        else if (std::fabs(mx) > std::fabs(my)) facing = mx > 0 ? FACE_RIGHT : FACE_LEFT;
         else facing = my > 0 ? FACE_DOWN : FACE_UP;
         float sp = (in.walk ? WALK_SPEED : RUN_SPEED) * (riding ? 1.6f : 1.0f) * (speedBoost > 0 ? 1.25f : 1.0f) * dt;
         float nx = px + mx * sp, ny = py + my * sp;

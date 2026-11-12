@@ -426,14 +426,29 @@ int main() {
             cpp_pad::read(cx, cy, zl, zr, rr);
             if (cx > 0.5f) in.sx = 1; else if (cx < -0.5f) in.sx = -1;
             if (cy > 0.5f) in.sy = 1; else if (cy < -0.5f) in.sy = -1;
+            // out in the world the stick turns you to face that way (one of the four, whichever is stronger)
+            if (std::fabs(cx) > 0.5f || std::fabs(cy) > 0.5f) {
+                if (std::fabs(cx) >= std::fabs(cy)) in.ax = cx > 0 ? 1 : -1;
+                else in.ay = cy > 0 ? 1 : -1;
+            }
+            // and in the lists on the touch screen it scrolls
+            static float scrollWait = 0;
+            scrollWait -= dt;
+            if (std::fabs(cy) > 0.5f && scrollWait <= 0) {
+                int step = cy > 0 ? 1 : -1;
+                int* list = !ui.shop.empty() ? &ui.shopScroll : ui.tab == TAB_CRAFT ? &ui.craftScroll : ui.tab == TAB_QUESTS ? &ui.questScroll
+                          : ui.tab == TAB_SOCIAL ? (ui.collections ? &ui.colScroll : &ui.socialScroll) : nullptr;
+                if (list) { *list = std::max(0, *list + step); scrollWait = 0.12f; }
+            }
             if (zl && !lastZl) in.prev = true;
             if ((zr && !lastZr)) in.next = true;
             lastZl = zl; lastZr = zr;
         }
-        if (kHeld & KEY_CSTICK_LEFT) in.sx = -1;          // the C-stick aims too
-        if (kHeld & KEY_CSTICK_RIGHT) in.sx = 1;
-        if (kHeld & KEY_CSTICK_UP) in.sy = -1;
-        if (kHeld & KEY_CSTICK_DOWN) in.sy = 1;
+        if (kHeld & KEY_CSTICK_LEFT) in.sx = in.ax = -1;  // the New 3DS C-stick does the same
+        if (kHeld & KEY_CSTICK_RIGHT) in.sx = in.ax = 1;
+        if (kHeld & KEY_CSTICK_UP) in.sy = in.ay = -1;
+        if (kHeld & KEY_CSTICK_DOWN) in.sy = in.ay = 1;
+        if (in.ax && in.ay) in.ay = 0;
         in.hold = kHeld & (KEY_A | KEY_Y);
         in.prev = in.prev || (kDown & KEY_L);
         in.next = in.next || (kDown & KEY_R);
@@ -536,7 +551,7 @@ int main() {
         {   // ...or when something it shows has changed (money, energy, the bag, the tab, a new perf reading)
             static uint32_t lastSig = 0;
             uint32_t sig = (uint32_t)game.money * 31u + (uint32_t)game.energy * 131u + (uint32_t)game.health * 17u + (uint32_t)game.selected * 7u +
-                           (uint32_t)ui.tab * 1009u + (uint32_t)(ui.padProState + (ui.padPro ? 4 : 0)) * 811u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf;
+                           (uint32_t)ui.tab * 1009u + (uint32_t)(ui.shopScroll + ui.craftScroll * 3 + ui.questScroll * 5 + ui.socialScroll * 7 + ui.colScroll * 11) * 419u + (uint32_t)(ui.padProState + (ui.padPro ? 4 : 0)) * 811u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf;
             for (int k = 0; k < game.invSlots; k++) sig = sig * 16777619u ^ (uint32_t)(game.inv[k].id * 64 + game.inv[k].count + game.inv[k].type * 7919);
             for (char ch : ui.status) sig = sig * 16777619u ^ (uint8_t)ch;
             if (ui.showPerf) for (const char* p = perfLine1; *p; p++) sig = sig * 16777619u ^ (uint8_t)*p;
