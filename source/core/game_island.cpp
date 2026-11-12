@@ -247,14 +247,16 @@ bool Game::islandChoice(const std::string& what, const std::string& key) {
             jackBet = atoi(key.c_str() + 12);
             if (clubCoins < jackBet) { say("Not enough Qi coins."); jackBet = 0; return true; }
             clubCoins -= jackBet;
-            jackMine = 2 + (int)(rand32() % 10) + 1 + (int)(rand32() % 10);   // two cards, 1 to 10 or so
-            jackDealer = 1 + (int)(rand32() % 11);
+            jackMine = 1 + (int)(rand32() % 11) + 1 + (int)(rand32() % 9);    // two cards: the first up to 11, the rest 1 to 9
+            jackDealer = 1 + (int)(rand32() % 9);                             // the dealer's second card; the first stays hidden
+            jackHidden = 1 + (int)(rand32() % 11);
             calicoJack();
         } else if (key == "casino:hit") {
-            jackMine += 1 + (int)(rand32() % 11);
+            jackMine += 1 + (int)(rand32() % 9);
             calicoJack();
         } else if (key == "casino:stand") {
-            while (jackDealer < 18) jackDealer += 1 + (int)(rand32() % 11);
+            jackDealer += jackHidden;
+            while (jackDealer < 18) jackDealer += 1 + (int)(rand32() % 9);
             bool win = jackDealer > 21 || jackMine > jackDealer, push = jackDealer == jackMine;
             if (win) clubCoins += jackBet * 2; else if (push) clubCoins += jackBet;
             sfx(win ? "reward" : "cancel");
@@ -289,7 +291,7 @@ void Game::calicoJack() {
 bool Game::islandAction(const std::string& verb, const std::string& rest) {
     if (verb == "Parrot") { islandParrot(); return true; }
     if (verb == "QiDoor") {
-        if (walnutsFound < 100) { showMessage("A sealed door. A plaque reads: \"Only those who have found 100 golden walnuts may enter.\" You've found " + std::to_string(walnutsFound) + "."); return true; }
+        if (walnutsFound < 100) { showMessage(L("qiNutDoor", "'Only the greatest walnut hunters may enter here.' Your current status: {0}/100", std::to_string(walnutsFound))); return true; }
         sfx("doorClose");
         warpTo("QiNutRoom", 7, 8, false);
         return true;
@@ -297,7 +299,7 @@ bool Game::islandAction(const std::string& verb, const std::string& rest) {
     if (verb == "QiChallengeBoard" || (verb == "DropBox" && rest.find("QiChallengeBox") != std::string::npos)) { ordersBoard(true); return true; }
     if (verb == "QiCat") { showMessage("Meow. (The cat looks like it knows something you don't.)"); return true; }
     if (verb == "BuyQiCoins") {
-        ask(*this, "Buy 100 Qi coins for 1,000g? You have " + std::to_string(clubCoins) + ".", {{"Buy", "casino:coins"}, {"No", ""}}, "casino");
+        ask(*this, L("Club_Buy100Coins", "Buy 100 Qi Coins for 1,000g?") + " (" + std::to_string(clubCoins) + ")", {{"Yes", "casino:coins"}, {"No", ""}}, "casino");
         return true;
     }
     if (verb == "ClubShop") { if (!data.shops.count("Casino")) return false; openShop = "Casino"; return true; }
@@ -313,7 +315,7 @@ bool Game::islandAction(const std::string& verb, const std::string& rest) {
         return true;
     }
     if (verb == "ClubSeller") {
-        ask(*this, "\"Psst. I've got a Statue of Endless Fortune. One million g.\"", {{"Buy it (1,000,000g)", "casino:statue"}, {"No", ""}}, "casino");
+        ask(*this, L("Club_ClubSeller", "Psst... I have a 'Statue of Endless Fortune' for sale... only 1,000,000g. What do you say?"), {{"Yes", "casino:statue"}, {"No", ""}}, "casino");
         return true;
     }
     if (verb == "ClubComputer") { showMessage("Qi coins: " + std::to_string(clubCoins) + ". The house always wins... usually."); return true; }

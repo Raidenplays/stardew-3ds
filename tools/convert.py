@@ -1757,6 +1757,11 @@ def write_world_text(content, out_dir):
     with open(os.path.join(out_dir, "mapstrings.dat"), "w", encoding="utf-8") as f:
         for k, v in load("Strings/StringsFromMaps.json").items():
             f.write(f"{_flat(k)}\t{_flat(v)}\n")
+        # what the game itself says at doors, shrines, boxes and desks, and villagers' one-off lines
+        for k, v in load("Strings/Locations.json").items():
+            f.write(f"loc:{_flat(k)}\t{_flat(' '.join(str(v).split()))}\n")
+        for k, v in load("Data/ExtraDialogue.json").items():
+            f.write(f"xd:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Strings/Notes.json").items():
             f.write(f"note:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Data/SecretNotes.json").items():

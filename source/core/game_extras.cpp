@@ -25,6 +25,13 @@ static void ask2(Game& g, const std::string& text, const std::vector<std::pair<s
     g.pendingChoice = "extra";
 }
 
+std::string Game::L(const std::string& key, const std::string& fallback, const std::string& a0, const std::string& a1) {
+    std::string s = gameLine("loc:" + key, fallback, a0, a1);
+    for (auto& ch : s)
+        if (ch == '^') ch = ' ';                          // their line breaks: our box wraps by itself
+    return s;
+}
+
 int Game::objectByName(const std::string& name) const {
     for (auto& kv : data.objects)
         if (kv.second.name == name) return kv.first;
@@ -138,7 +145,9 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
         }
         if (!ok) {
             const NpcState* n = npcByName(first);
-            say((n && n->def ? n->def->display : first) + "'s room. You aren't close enough friends to go in.");
+            std::string nm = n && n->def ? n->def->display : first;
+            const std::string* gen = mapString("gender:" + first);
+            say(L(gen && *gen == "Female" ? "DoorUnlock_NotFriend_Female" : "DoorUnlock_NotFriend_Male", nm + "'s room. You aren't close enough friends to go in.", nm));
             return true;
         }
         stepThroughDoor();
@@ -160,7 +169,7 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
     }
     if (verb == "Warp_Sunroom_Door") {
         const NpcState* n = npcByName("Caroline");
-        if (!n || n->hearts() < 2) { say("Caroline's sunroom. You aren't close enough friends to go in."); return true; }
+        if (!n || n->hearts() < 2) { say(L("Caroline_Sunroom_Door", "Caroline only lets her friends enter here...")); return true; }
         return enterMap("Sunroom");
     }
     if (verb == "WizardHatch") {
@@ -194,13 +203,13 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
         showMessage("The machine whirrs... " + std::to_string(n) + " " + (o ? o->name : "prize") + "!");
         return true;
     }
-    if (verb == "LedgerBook") { showMessage("The town ledger. Your farm's finances are all in one name: " + me.name + "."); return true; }
-    if (verb == "LostAndFound") { showMessage("The lost and found box is empty."); return true; }
+    if (verb == "LedgerBook") { showMessage(L("ManorHouse_LedgerBook_Singleplayer", "Pelican Town Ledger Book...")); return true; }
+    if (verb == "LostAndFound") { showMessage(L("ManorHouse_LAF_Check", "The town's 'Lost and Found' box.")); return true; }
     if (verb == "DivorceBook") {
-        if (spouse.empty()) { showMessage("A book of marriage records. You aren't married."); return true; }
+        if (spouse.empty()) { showMessage(L("ManorHouse_DivorceBook_NoSpouse", "Pelican Town Marriage Log... You aren't married.")); return true; }
         const NpcState* n = npcByName(spouse);
-        ask2(*this, "File for divorce from " + (n && n->def ? n->def->display : spouse) + "? It costs 50,000g and can't be undone.",
-             {{"File for divorce (50,000g)", "extra:divorce"}, {"No", ""}});
+        (void)n;
+        ask2(*this, L("ManorHouse_DivorceBook_Question", "File for divorce? There is a 50,000g fee."), {{"Yes", "extra:divorce"}, {"No", ""}});
         return true;
     }
     if (verb == "MayorFridge") {
@@ -209,45 +218,48 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
                 useHeld(10);
                 mailReceived.insert("qi:beets");
                 sfx("Ship");
-                showMessage("You tuck 10 beets into the mayor's fridge. A note is taped inside: \"Give the sand dragon his final meal.\"");
-            } else showMessage("Lewis's fridge. Someone wants 10 beets left in here.");
+                showMessage(L("ManorHouse_MayorFridge_ConsumeBeets", "You quickly place the beets in the fridge. There's a note taped to the milk:") + "#$b#" +
+                            L("ManorHouse_MayorFridge_MrQiNote", "'Good job, kid. Your final task: Give the sand dragon his last meal. -Mr. Qi'"));
+            } else showMessage(L("ManorHouse_MayorFridge_Initial", "It's the mayor's fridge."));
             return true;
         }
-        showMessage("Lewis's fridge. Mostly leftovers.");
+        showMessage(L("ManorHouse_MayorFridge_Initial", "It's the mayor's fridge. It's mostly full of milk and iced tea."));
         return true;
     }
 
     // ---- Qi's errands: tunnel lockbox, railroad box, the fridge, the sand dragon ----
     if (verb == "TunnelSafe") {
-        if (flag("qi:battery")) { showMessage("The lockbox is empty now."); return true; }
+        if (flag("qi:battery")) { showMessage(L("Railroad_Box_Initial", "It's an empty box.")); return true; }
         if (heldId == 787) {
             useHeld(1);
             mailReceived.insert("qi:battery");
             sfx("Ship");
-            showMessage("The battery pack clicks in and the box opens. A note: \"Go to the box by the train platform with a rainbow shell.\"");
-        } else showMessage("A lockbox with a dead power slot. It needs a battery pack.");
+            showMessage(L("Tunnel_TunnelSafe_ConsumeBattery", "It worked! The lock-box swings open. Inside, there's a note:") + "#$b#" +
+                        L("Tunnel_TunnelSafe_MrQiNote", "'Your first task: Bring a rainbow shell to the train platform. Leave it in the box. -Mr. Qi'"));
+        } else showMessage(L("Tunnel_TunnelSafe_Initial", "It's a battery powered lock-box. Unfortunately, there's no battery in it."));
         return true;
     }
     if (verb == "RailroadBox") {
-        if (!flag("qi:battery")) { showMessage("An empty box."); return true; }
-        if (flag("qi:shell")) { showMessage("The box is empty now."); return true; }
+        if (!flag("qi:battery") || flag("qi:shell")) { showMessage(L("Railroad_Box_Initial", "It's an empty box.")); return true; }
         if (heldId == 394) {
             useHeld(1);
             mailReceived.insert("qi:shell");
             sfx("Ship");
-            showMessage("You leave the rainbow shell. A note: \"Put 10 beets in the mayor's fridge.\"");
-        } else showMessage("An empty box. Someone wants a rainbow shell left here.");
+            showMessage(L("Railroad_Box_ConsumeShell", "You throw the shell into the box. A note falls down from the rafters above:") + "#$b#" +
+                        L("Railroad_Box_MrQiNote", "'Well done. Your next task: Place 10 beets inside Mayor's fridge. -Mr. Qi'"));
+        } else showMessage(L("Railroad_Box_Initial", "It's an empty box."));
         return true;
     }
     if (verb == "SandDragon") {
-        if (flag("HasClubCard")) { showMessage("The bones of a great sand dragon."); return true; }
-        if (!flag("qi:beets")) { showMessage("The bones of a great sand dragon. Its jaws hang open."); return true; }
-        if (heldId == 768) {
-            useHeld(1);
-            mailReceived.insert("HasClubCard");
-            sfx("reward");
-            showMessage("You place the solar essence in its jaws. Something glints between the teeth: a Club Card! The casino behind Sandy's shop will let you in now.");
-        } else showMessage("The sand dragon wants its final meal: a solar essence.");
+        if (flag("HasClubCard") || flag("qi:lumber") || !flag("qi:beets") || heldId != 768) {
+            showMessage(L("Desert_SandDragon_Initial", "Its maw gapes at the desert sun. Even in death, it yearns for a taste."));
+            return true;
+        }
+        useHeld(1);
+        mailReceived.insert("qi:lumber");                 // the card is waiting in the lumber pile by the farmhouse
+        sfx("reward");
+        showMessage(L("Desert_SandDragon_ConsumeEssence", "You place the essence in the dragon's maw. There's a note hidden in the eye socket:") + "#$b#" +
+                    L("Desert_SandDragon_MrQiNote", "'You've proven yourself, kid. Check out the pile of lumber next to your house. -Mr. Qi'"));
         return true;
     }
     if (verb == "WitchCaveBlock") {
@@ -266,20 +278,46 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
     // ---- the sewer statue and the witch's hut ----
     if (verb == "DogStatue") {
         if (professions.empty()) { showMessage("The Statue of Uncertainty. It has nothing to change for you yet."); return true; }
-        ask2(*this, "The Statue of Uncertainty: \"For 10,000g I'll let you choose your professions again.\"", {{"Pay 10,000g", "extra:statue"}, {"Leave", ""}});
+        ask2(*this, L("Sewer_DogStatue", "-Statue Of Uncertainty- The statue can help you change professions. Make an offering of 10,000g?"), {{"Yes", "extra:statue"}, {"No", ""}});
         return true;
     }
-    if (verb == "EvilShrineCenter") {
-        if (kids.empty()) { showMessage("The Dark Shrine of Selfishness. It has nothing to take from you."); return true; }
-        if (heldId != 74) { showMessage("The Dark Shrine of Selfishness. Offer a prismatic shard and your children will be turned into doves, forever."); return true; }
-        ask2(*this, "Offer the prismatic shard? Your children will be gone forever.", {{"Offer it", "extra:doves"}, {"No", ""}});
+    if (verb == "EvilShrineLeft") {                      // selfishness: the children become doves
+        if (kids.empty()) { showMessage(L("WitchHut_EvilShrineLeftInactive", "-Dark Shrine of Selfishness- The statue stares through you...")); return true; }
+        if (countItem(74) < 1) {
+            showMessage(L("WitchHut_EvilShrineLeft", "-Dark Shrine of Selfishness- Your children will turn into doves and fly away... Make an offering of one Prismatic Shard?") +
+                        "#$b#" + L("WitchHut_NoOffering", "You don't have the necessary offering."));
+            return true;
+        }
+        ask2(*this, L("WitchHut_EvilShrineLeft", "-Dark Shrine of Selfishness- Your children will turn into doves and fly away... Make an offering of one Prismatic Shard?"),
+             {{"Yes", "extra:doves"}, {"No", ""}});
         return true;
     }
-    if (verb == "EvilShrineLeft") {
+    if (verb == "EvilShrineCenter") {                    // memory: your exes forget
         bool ex = false;
         for (auto& f : mailReceived) ex |= f.rfind("divorced:", 0) == 0;
-        if (!ex) { showMessage("The Dark Shrine of Memory. You have no one who needs to forget."); return true; }
-        ask2(*this, "The Dark Shrine of Memory: for 30,000g, those you divorced will forget you were ever married.", {{"Pay 30,000g", "extra:memory"}, {"No", ""}});
+        if (!ex) { showMessage(L("WitchHut_EvilShrineCenterInactive", "-Dark Shrine of Memory- The statue stares through you...")); return true; }
+        ask2(*this, L("WitchHut_EvilShrineCenter", "-Dark Shrine of Memory- The relationship between you and your ex-spouses will be wiped from memory. Make an offering of 30,000g?"),
+             {{"Yes", "extra:memory"}, {"No", ""}});
+        return true;
+    }
+    if (verb == "MonsterGrave") { showMessage(L("Backwoods_MonsterGrave", "A small grave.")); return true; }
+    if (verb == "EmilyRoomObject") { showMessage(L("HaleyHouse_EmilyRoomObject", "There's a tape inside: 'Freeform Dance Rhythms'")); return true; }
+    if (verb == "ElliottBook") { showMessage(L("ElliottHouse_ElliottBook_Blank", "Blank book")); return true; }
+    if (verb == "NPCMessage") {                          // NPCMessage Sam "Data\ExtraDialogue:Key/Strings\Locations:Key"
+        size_t c1 = rest.find(':');
+        if (c1 == std::string::npos) return false;
+        size_t e = rest.find_first_of("/\"", c1);
+        std::string key = rest.substr(c1 + 1, e == std::string::npos ? std::string::npos : e - c1 - 1);
+        const std::string* line = mapString("xd:" + key);
+        if (!line) line = mapString("loc:" + key);
+        if (!line) return false;
+        std::string who = rest.substr(0, rest.find(' '));
+        const NpcState* n = npcByName(who);
+        std::string text = *line;
+        size_t d = text.rfind('$');
+        if (d != std::string::npos && d + 2 >= text.size()) text.erase(d);
+        if (n && n->loc == cur->name) showMessage((n->def ? n->def->display : who) + ": \"" + text + "\"");
+        else return false;                               // nobody's there to mind
         return true;
     }
     if (verb == "MagicInk") {
@@ -295,8 +333,8 @@ bool Game::extraAction(const std::string& verb, const std::string& rest) {
     static const char* const MOVIES[] = {"The Brave Little Sapling", "Journey Of The Prairie King: The Motion Picture", "Mysterium",
         "The Miracle At Coldstar Ranch", "Natural Wonders: Exploring Our Vibrant World", "Wumbus", "It Howls In The Rain", "The Zuzu City Express"};
     const char* movie = MOVIES[((year - 1) % 2) * 4 + season % 4];
-    if (verb == "Theater_Poster") { showMessage(std::string("Now showing: \"") + movie + "\""); return true; }
-    if (verb == "Theater_PosterComingSoon") { showMessage(std::string("Coming soon: \"") + MOVIES[(((year - 1) % 2) * 4 + season % 4 + 1) % 8] + "\""); return true; }
+    if (verb == "Theater_Poster") { showMessage(L("Theater_Poster_0", "Now Playing: \"{0}.\"", movie)); return true; }
+    if (verb == "Theater_PosterComingSoon") { showMessage(L("Theater_Poster_Coming_Soon", "Coming soon: \"{0}.\"", MOVIES[(((year - 1) % 2) * 4 + season % 4 + 1) % 8])); return true; }
     if (verb == "Theater_BoxOffice") {
         if (data.shops.count("BoxOffice")) { openShop = "BoxOffice"; return true; }
         return false;
@@ -412,7 +450,7 @@ bool Game::extraChoice(const std::string& what, const std::string& key) {
         spouse.clear();
         babyDue = 0;
         babyAsk = false;
-        showMessage("The papers are filed. You are no longer married.");
+        showMessage(L("ManorHouse_DivorceBook_Filed", "Your divorce papers have been filed."));
     } else if (key == "extra:statue") {
         if (money < 10000) { say("Not enough money"); return true; }
         money -= 10000;
@@ -421,7 +459,7 @@ bool Game::extraChoice(const std::string& what, const std::string& key) {
             for (int lv = 5; lv <= 10; lv += 5)
                 if (skillLevels[sk] >= lv) levelUps.push_back({sk, lv});
         sfx("reward");
-        showMessage("Your mind goes blank... You'll choose your professions again when you go to bed.");
+        showMessage(L("Sewer_DogStatueFinished", "*woof* *woof* (It's done... now go to sleep...)"));
     } else if (key == "extra:doves") {
         if (countItem(74) < 1) return true;
         takeItem(74, 1);

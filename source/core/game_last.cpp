@@ -114,6 +114,17 @@ void Game::lastMapFixes() {
         } else if (mailReceived.count("raccoonTreeFallen")) stamp("Forest_RaccoonStump", 53, 2);
     }
     if (cur->name == "Beach" && squidFest()) stamp("Beach_SquidFest", 11, 3);
+    if (cur->name == "Submarine" && stats["submarine"] != absoluteDay())
+        ask3(*this, L("Submarine_SubmergeQuestion", "Captain: Ahoy there! Want to take the deep-sea fishing tour? It'll cost ya 1,000g."), {{"Yes", "last:sub:yes"}, {"No", "last:sub:no"}});
+    if (cur->name == "MermaidHouse")
+        ask3(*this, "The mermaid sings, slow and strange, and the lanterns sway." + std::string(mailReceived.count("gotPearl") ? "" : " Five clam shells sit in a row before the stage."),
+             mailReceived.count("gotPearl") ? std::vector<std::pair<std::string, std::string>>{{"Listen a while", ""}}
+                                            : std::vector<std::pair<std::string, std::string>>{{"Play the shells", "last:shell:0"}, {"Just listen", ""}});
+    if (cur->name == "Farm" && mailReceived.count("qi:lumber") && !mailReceived.count("HasClubCard")) {
+        mailReceived.insert("HasClubCard");
+        sfx("reward");
+        showMessage("Something glints in the pile of lumber next to your house... You found the Club Card!");
+    }
     if (cur->name == "Farm" && mailReceived.count("nightTerrors") && timeOfDay >= 19 * 60 && cur->monsters.empty()) {
         static const char* const KINDS[] = {"Bat", "Green Slime", "Shadow Brute"};
         for (int k = 0; k < 4; k++) {
@@ -229,6 +240,7 @@ bool Game::lastAction(const std::string& verb, const std::string& rest) {
         ask3(*this, "Claim the mastery of " + skill + "?", {{"Claim it", "last:mastery:" + skill}, {"Not yet", ""}});
         return true;
     }
+    if (verb == "LeoParrot") { sfx("parrot"); say("Squawk!"); return true; }
     if (verb == "GrandpaMasteryNote") { showMessage("A note in Grandpa's hand: \"If you're reading this, you've gone further than I ever did. I'm proud of you.\""); return true; }
 
     // ---- the raccoon ----
@@ -373,13 +385,13 @@ bool Game::lastAction(const std::string& verb, const std::string& rest) {
     // ---- the summit ----
     if (verb == "SummitBoulder") {
         int p = perfection();
-        if (p < 100) { showMessage("A great boulder blocks the path up. Something tells you it will move when the valley is perfect. (" + std::to_string(p) + "%)"); return true; }
+        if (p < 100) { showMessage(L("SummitBoulder", "It seems impossible to budge...") + " (" + std::to_string(p) + "%)"); return true; }
         return enterMap("Summit");
     }
 
     // ---- Emily's sewing machine and dye pots, the Wizard's shrine ----
     if (verb == "Tailoring") {
-        if (held.type != SLOT_OBJECT || heldId == 428 || countItem(428) < 1) { showMessage("The sewing machine. Hold an item and have cloth in your bag: the item decides the shirt."); return true; }
+        if (held.type != SLOT_OBJECT || heldId == 428 || countItem(428) < 1) { showMessage(L("HaleyHouse_SewingMachine", "It's a sewing machine...") + "#$b#(Hold an item, with cloth in your bag: the item decides the shirt.)"); return true; }
         takeItem(428, 1);
         me.outfit.shirt = (int)(((uint32_t)heldId * 2654435761u) >> 8) % 112;
         if (--held.count <= 0) held = Slot();
@@ -388,7 +400,7 @@ bool Game::lastAction(const std::string& verb, const std::string& rest) {
         return true;
     }
     if (verb == "DyePot") {
-        if (held.type != SLOT_OBJECT) { showMessage("A pot of dye. Drop something colourful in to dye your trousers."); return true; }
+        if (held.type != SLOT_OBJECT) { showMessage(L("HaleyHouse_DyePot", "An array of brightly colored dyes.") + "#$b#(Hold something colourful to dye your trousers.)"); return true; }
         uint32_t h = (uint32_t)heldId * 2654435761u;
         static const uint8_t DYES[8][3] = {{200, 40, 40}, {230, 130, 30}, {220, 200, 50}, {60, 160, 60}, {46, 85, 183}, {120, 60, 170}, {220, 120, 170}, {60, 60, 60}};
         const uint8_t* d = DYES[(h >> 10) % 8];
@@ -399,11 +411,14 @@ bool Game::lastAction(const std::string& verb, const std::string& rest) {
         return true;
     }
     if (verb == "WizardShrine") {
-        ask3(*this, "The Shrine of Illusions: change how you look, 500g a time.", {{"Next hairstyle", "last:look:hair"}, {"Next shirt", "last:look:shirt"}, {"Leave", ""}});
+        ask3(*this, L("WizardTower_WizardShrine", "The Shrine Of Illusions. Make an offering of 500g to change your appearance?"),
+             {{"Next hairstyle", "last:look:hair"}, {"Next shirt", "last:look:shirt"}, {"Leave", ""}});
         return true;
     }
     if (verb == "EvilShrineRight") {
-        if (heldId != 203) { showMessage(std::string("The Dark Shrine of Night Terrors. Offer a strange bun to ") + (flag("nightTerrors") ? "send the monsters away." : "let monsters onto your farm at night.")); return true; }
+        std::string text = flag("nightTerrors") ? L("WitchHut_EvilShrineRightDeActivate", "-Dark Shrine of Night Terrors- The seal of protection will be restored. Make an offering of one Strange Bun?")
+                                                : L("WitchHut_EvilShrineRightActivate", "-Dark Shrine of Night Terrors- Monsters will appear on your farm at night. Make an offering of one Strange Bun?");
+        if (heldId != 203) { showMessage(text + "#$b#" + L("WitchHut_NoOffering", "You don't have the necessary offering.")); return true; }
         if (--held.count <= 0) held = Slot();
         if (flag("nightTerrors")) mailReceived.erase("nightTerrors"); else mailReceived.insert("nightTerrors");
         sfx("wand");
@@ -480,6 +495,35 @@ bool Game::lastChoice(const std::string& what, const std::string& key) {
         else me.outfit.shirt = (me.outfit.shirt + 1) % 112;
         sfx("wand");
         say(key == "last:look:hair" ? "Your hair shimmers and changes." : "Your shirt shimmers and changes.");
+    } else if (key == "last:sub:yes" || key == "last:sub:no") {
+        if (key == "last:sub:yes" && money >= 1000) {
+            money -= 1000;
+            stats["submarine"] = absoluteDay();
+            sfx("pullItemFromWater");
+            say("The submarine sinks into the dark. Cast a line through the hatch.");
+        } else {
+            if (key == "last:sub:yes") say("Not enough money");
+            enterMap("BeachNightMarket");
+        }
+    } else if (key.rfind("last:shell:", 0) == 0) {       // the song's notes, lowest shell to highest: 1 5 4 2 3
+        static const int SONG[5] = {1, 5, 4, 2, 3};
+        int pick = atoi(key.c_str() + 11);
+        if (pick == 0) { crystalSeq.clear(); }
+        else crystalSeq.push_back(pick);
+        size_t at = crystalSeq.size();
+        bool ok = true;
+        for (size_t k = 0; k < at; k++) ok &= crystalSeq[k] == SONG[k];
+        if (!ok) { crystalSeq.clear(); sfx("cancel"); say("A sour note. The mermaid frowns."); return true; }
+        if (at >= 5) {
+            crystalSeq.clear();
+            mailReceived.insert("gotPearl");
+            addItem(797, 1);
+            sfx("reward");
+            showMessage("The shells ring out her song. The mermaid smiles and tosses you a pearl!");
+            return true;
+        }
+        if (at) sfx("crystal");
+        ask3(*this, "Shell " + std::to_string(at + 1) + " of 5: which one?", {{"1", "last:shell:1"}, {"2", "last:shell:2"}, {"3", "last:shell:3"}, {"4", "last:shell:4"}, {"5", "last:shell:5"}});
     } else if (key.rfind("last:market:", 0) == 0) {
         std::string shop = key.substr(12);
         if (data.shops.count(shop) || shop == "Traveler") openShop = shop;

@@ -1483,13 +1483,14 @@ static void drawArcade(Canvas& c, Game& g) {
     if (a.game == 1) {
         float ox = (TOP_W - 192) / 2.0f, oy = (TOP_H - 192) / 2.0f;
         c.rect(ox - 4, oy - 4, 200, 200, RGBA(0x6A, 0x3A, 0x18));
-        c.rect(ox, oy, 192, 192, RGBA(0xE8, 0xC8, 0x88));
+        const uint32_t ground = a.world == 2 ? RGBA(0x7C, 0xB0, 0x60) : a.world >= 3 ? RGBA(0x8C, 0x88, 0xA0) : RGBA(0xE8, 0xC8, 0x88);
+        c.rect(ox, oy, 192, 192, ground);
         for (int y = 0; y < 12; y++)                       // a little desert texture
             for (int x = 0; x < 12; x++)
-                if ((x * 7 + y * 13) % 5 == 0) c.rect(ox + x * 16 + 5, oy + y * 16 + 9, 3, 1, RGBA(0xC8, 0xA0, 0x60));
+                if ((x * 7 + y * 13) % 5 == 0) c.rect(ox + x * 16 + 5, oy + y * 16 + 9, 3, 1, a.world == 2 ? RGBA(0x58, 0x90, 0x48) : a.world >= 3 ? RGBA(0x68, 0x64, 0x80) : RGBA(0xC8, 0xA0, 0x60));
         for (int k = 0; k < 4; k++) {                      // the four gates
             float gx = k == 0 ? ox - 4 : k == 1 ? ox + 192 : ox + 80, gy = k == 2 ? oy - 4 : k == 3 ? oy + 192 : oy + 80;
-            c.rect(gx, gy, k < 2 ? 4 : 32, k < 2 ? 32 : 4, RGBA(0xE8, 0xC8, 0x88));
+            c.rect(gx, gy, k < 2 ? 4 : 32, k < 2 ? 32 : 4, ground);
         }
         for (auto& s : a.shots) {
             if (art) c.image(CUR, 544, 1728, 16, 16, ox + s.x - 8, oy + s.y - 8);
@@ -1514,7 +1515,7 @@ static void drawArcade(Canvas& c, Game& g) {
             if (art) c.imageScaled(CUR, 416 + fr, 1712, 16, 16, ox + a.bx - 16, oy + a.by - 16, 2.0f);
             else c.rect(ox + a.bx - 12, oy + a.by - 12, 24, 24, RGBA(0x50, 0x30, 0x60));
             c.rect(ox + 46, oy + 4, 100, 5, RGBA(0x40, 0x20, 0x20));
-            c.rect(ox + 46, oy + 4, 100.0f * std::max(0, a.bhp) / 45.0f, 5, RGBA(0xD0, 0x30, 0x30));
+            c.rect(ox + 46, oy + 4, 100.0f * std::max(0, a.bhp) / (30.0f + 15.0f * a.world), 5, RGBA(0xD0, 0x30, 0x30));
         }
         if (a.pause <= 0 || ((int)(a.t * 10) & 1)) {
             if (art) c.image(CUR, 464 + (((int)(a.t * 6) & 1) ? 16 : 0), 1728, 16, 16, ox + a.px - 8, oy + a.py - 8);
@@ -1525,7 +1526,7 @@ static void drawArcade(Canvas& c, Game& g) {
             else c.rect(8 + i * 14, 8, 10, 10, RGBA(0xE0, 0x40, 0x40));
         }
         if (a.boss) snprintf(buf, sizeof buf, "The outlaw!");
-        else snprintf(buf, sizeof buf, "Stage %d", a.stage);
+        else snprintf(buf, sizeof buf, "Land %d-%d", a.world, a.stage);
         c.text(8, 30, 0.45f, COL_CREAM, buf);
         if (a.rapid > 0) c.text(8, 62, 0.34f, COL_CREAM, "Rapid fire");
         if (a.spread > 0) c.text(8, 74, 0.34f, COL_CREAM, "Spread shot");
@@ -1590,7 +1591,7 @@ static void drawArcade(Canvas& c, Game& g) {
         float cy = base - a.cartY - 14;
         if (mart) c.image(MC, 0, 0, 16, 16, 40 - 8, cy);
         else c.rect(40 - 7, cy + 4, 14, 10, RGBA(0x8A, 0x5A, 0x30));
-        snprintf(buf, sizeof buf, "Track %d/3   Score %d   Best %d", a.stage, a.score, g.junimoBest);
+        snprintf(buf, sizeof buf, "Track %d/6   Score %d   Best %d", a.stage, a.score, g.junimoBest);
         c.text(8, 8, 0.45f, COL_CREAM, buf);
         c.text(TOP_W - 8, 8, 0.36f, COL_CREAM, "A: jump   L: quit", ALIGN_RIGHT);
     }

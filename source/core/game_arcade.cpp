@@ -154,7 +154,21 @@ void Game::arcadeUpdate(float dt, const Input& in) {
             for (auto& s : a.shots)
                 if (s.x > -500 && std::fabs(s.x - a.bx) < 14 && std::fabs(s.y - a.by) < 14) {
                     s.x = -1000;
-                    if (--a.bhp <= 0) { a.score += 1000; sfx("Cowboy_monsterDie"); arcadeEnd(true); return; }
+                    if (--a.bhp <= 0) {
+                        a.score += 1000;
+                        sfx("Cowboy_monsterDie");
+                        if (a.world >= 3) { arcadeEnd(true); return; }
+                        a.world++;                          // on to the next land: the woods, then the graveyard
+                        a.stage = 1;
+                        a.boss = false;
+                        a.bossShots.clear();
+                        a.foes.clear();
+                        a.timer = 40.0f;
+                        a.pause = 2.0f;
+                        a.lives = std::min(5, a.lives + 1);
+                        a.px = 96; a.py = 96;
+                        return;
+                    }
                 }
             for (auto& s : a.bossShots) { s.x += s.vx * dt; s.y += s.vy * dt; }
             a.bossShots.erase(std::remove_if(a.bossShots.begin(), a.bossShots.end(), [](const Arcade::Shot& s) { return s.x < 0 || s.x > 192 || s.y < 0 || s.y > 192; }), a.bossShots.end());
@@ -185,7 +199,7 @@ void Game::arcadeUpdate(float dt, const Input& in) {
         if (a.timer <= 0 && a.foes.empty()) {
             if (a.stage >= 3) {                         // the last stage ends with the outlaw himself
                 a.boss = true;
-                a.bhp = 45;
+                a.bhp = 30 + 15 * a.world;
                 a.px = 96; a.py = 150;
                 a.pause = 1.5f;
                 a.score += 100;
@@ -257,7 +271,7 @@ void Game::arcadeUpdate(float dt, const Input& in) {
         if (a.cartY < -30.0f) { arcadeEnd(false); return; }               // down the hole
         a.score = (a.stage - 1) * 15000 + (int)(a.dist * 3.0f);
         if (cell >= (int)a.track.size() - 6) {
-            if (a.stage >= 3) { a.score += 500; arcadeEnd(true); return; }
+            if (a.stage >= 6) { a.score += 500; arcadeEnd(true); return; }
             a.stage++;                                      // on to the next track
             kartTrack();
             a.pause = 0;

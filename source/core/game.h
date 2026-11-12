@@ -707,6 +707,8 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // the game's own line for a place (Strings/Locations), with our wording only if the converter didn't have it
+    std::string L(const std::string& key, const std::string& fallback, const std::string& a0 = "", const std::string& a1 = "");
     // ---- the last pieces (game_last.cpp) ----
     bool desertFest() const; bool troutDerby() const; bool squidFest() const; bool nightMarket() const;
     std::string mapForToday(const std::string& name) const;
@@ -737,7 +739,7 @@ public:
     int walnuts = 0, walnutsFound = 0;
     int walnutPools[4] = {0, 0, 0, 0};       // crops, fishing, volcano rocks, volcano monsters: five each
     std::set<std::string> walnutsGot;        // "map:x:y" of the ones picked up
-    int jackBet = 0, jackMine = 0, jackDealer = 0;
+    int jackBet = 0, jackMine = 0, jackDealer = 0, jackHidden = 0;
     void gotWalnut(int n, const std::string& why);
     void walnutChance(int pool, int oneIn);
     void islandWalnuts();
@@ -779,7 +781,8 @@ public:
         struct Drop { float x, y; int kind; float life; };   // 0 coin, 1 rapid fire, 2 spread shot, 3 life, 4 coffee, 5 nuke
         std::vector<Drop> drops;
         float rapid = 0, spread = 0, fast = 0;
-        bool boss = false;         // the outlaw at the end
+        bool boss = false;         // the outlaw at the end of each land
+        int world = 1;             // 1 the prairie, 2 the woods, 3 the graveyard
         float bx = 96, by = 28, bvx = 45, bcool = 1.5f;
         int bhp = 0;
         // junimo kart

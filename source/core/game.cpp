@@ -592,6 +592,8 @@ bool Game::tileSolid(int tx, int ty) const {
     if (bushAt(tx, ty) >= 0) return true;
     if (!cur->clumps.empty() && clumpAt(tx, ty) >= 0) return true;
     if (!cur->fruitTrees.empty() && fruitTreeAt(tx, ty) >= 0) return true;
+    for (auto& n : npcs)   // someone who never leaves their spot (Raiden and his 3DS) is in the way
+        if (n.def && n.loc == cur->name && n.tileX() == tx && n.tileY() == ty && n.def->dialogue.count("fact_0")) return true;
     if (cur->mineLevel && m.tile(L_BUILDINGS, tx, ty) != NO_TILE) return true;   // a ladder that turned up
     if (cur->mineLevel && tx == cur->chestX && ty == cur->chestY) return true;
     const Soil& s = cur->soils[i];
