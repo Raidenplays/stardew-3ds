@@ -220,6 +220,7 @@ public:
         }
     }
 
+    int pixelSheet = -1;   // -1 not looked for yet, 0 no sheet (rectangles), 1 drawn from UiFont_pixel
     // Tiny text (scale below ~0.41) uses PIXEL_FONT when the game fonts are on.
     bool pixelTiny() const { return fontSmall.ok(); }
     static void pixelSpan(int code, int& lo, int& hi) {
@@ -244,10 +245,19 @@ public:
         else if (align == ALIGN_RIGHT) x -= w;
         int ix = (int)(x + 0.5f);
         int iy = (int)(y + (scale * 30.0f - 7) / 2 + 0.5f);
+        // one picture per letter when the font sheet is there (art/ui/UiFont_pixel.png, 8x8 cells, 16 across);
+        // a letter is otherwise up to a dozen little rectangles, which adds up over a whole screen of text
+        if (pixelSheet < 0) pixelSheet = texWidth("UiFont_pixel") >= 128 ? 1 : 0;
         for (size_t i = 0; i < s.size();) {
             int cp = nextCodepoint(s, i), lo, hi;
             pixelSpan(cp, lo, hi);
             if (hi < 0) { ix += 3; continue; }
+            if (pixelSheet == 1) {
+                int g = cp - 32;
+                image("UiFont_pixel", (g % 16) * 8 + lo, (g / 16) * 8, hi - lo + 1, 7, (float)ix, (float)iy, false, color);
+                ix += hi - lo + 2;
+                continue;
+            }
             for (int r = 0; r < 7; r++) {   // one rect per horizontal run
                 uint8_t bits = PIXEL_FONT[cp - 32][r];
                 for (int b = lo; b <= hi;) {

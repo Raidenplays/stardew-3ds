@@ -134,7 +134,7 @@ int main() {
     data.vfs.setRoot(root);
     C2DCanvas canvas([&data](const std::string& rel) {
         if (rel == "tex/UiLogo_user.s3t" || rel == "tex/UiBadge_3ds.s3t" ||
-            rel == "tex/Characters_Raiden.s3t" || rel == "tex/Portraits_Raiden.s3t") return "romfs:/" + rel;
+            rel == "tex/Characters_Raiden.s3t" || rel == "tex/Portraits_Raiden.s3t" || rel == "tex/UiFont_pixel.s3t") return "romfs:/" + rel;
         return data.vfs.path(rel);
     });
 
