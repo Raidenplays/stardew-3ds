@@ -34,10 +34,10 @@
     <LinearLayout style="@style/Row">
         <EditText android:id="@+id/ip" android:layout_width="0dp" android:layout_weight="1"
             android:layout_height="wrap_content" android:hint="3DS IP (from ftpd)"
-            android:inputType="phone" android:digits="0123456789." android:selectAllOnFocus="true" android:imeOptions="actionNext"
+            android:inputType="textNoSuggestions" android:singleLine="true"
             android:textColor="#FFE8B0" android:textColorHint="#8A7050" />
         <EditText android:id="@+id/port" android:layout_width="80dp" android:layout_height="wrap_content"
-            android:hint="port" android:inputType="number" android:maxLength="5" android:selectAllOnFocus="true" android:imeOptions="actionDone"
+            android:hint="port" android:inputType="number" android:singleLine="true"
             android:textColor="#FFE8B0" android:textColorHint="#8A7050" />
         <Button android:id="@+id/send" style="@style/Btn" android:text="Send" />
     </LinearLayout>

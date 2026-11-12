@@ -224,6 +224,16 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- convert
 
+    private var redo = false   // a second tap on Convert redoes it even when nothing changed
+    // What a conversion depends on: which files you picked, and the converter's own code (not the build number,
+    // so a new build that only changes the game doesn't make you convert again).
+    private fun fingerprint(): String {
+        val md = java.security.MessageDigest.getInstance("MD5")
+        (toolsDir.listFiles() ?: emptyArray()).filter { it.isFile }.sortedBy { it.name }.forEach { md.update(it.name.toByteArray()); md.update(it.readBytes()) }
+        val tools = md.digest().joinToString("") { "%02x".format(it) }
+        return listOf(contentUri, contentZip, modsUri, modZips.joinToString(","), tools).joinToString("|")
+    }
+
     private fun convert() {
         if (contentUri == null && contentZip == null) return say("Pick your Content folder or zip first")
         if (busy) return
@@ -234,6 +244,18 @@ class MainActivity : AppCompatActivity() {
                 val contentDir = File(inDir, "content")
                 val modsDir = File(inDir, "mods")
                 updateFromRepo()
+                // Same game files, same mods, same build as last time, and the result is still here: nothing to redo.
+                val print = fingerprint()
+                if (!redo && print == prefs.getString("converted", "") && File(outDir, "3ds/stardew3ds/data").isDirectory) {
+                    redo = true
+                    File(gameDir, "stardew3ds.3dsx").takeIf { it.isFile }?.copyTo(File(outDir, "3ds/stardew3ds.3dsx"), overwrite = true)
+                    say("Nothing has changed since your last convert, so your files are ready: Save or Send them.")
+                    say("(Tap Convert again if you want to redo it anyway.)")
+                    progress(100, "Already converted - save or send it")
+                    return@thread
+                }
+                redo = false
+                prefs.edit().remove("converted").apply()
                 progress(20, "Copying your game files...")
                 say("Copying your game files into the app...")
                 if (contentZip != null) {
@@ -270,6 +292,7 @@ class MainActivity : AppCompatActivity() {
                 // the newest game goes along with the converted files
                 val game = File(gameDir, "stardew3ds.3dsx")
                 if (code == 0 && game.isFile) game.copyTo(File(outDir, "3ds/stardew3ds.3dsx"), overwrite = true)
+                if (code == 0) prefs.edit().putString("converted", print).apply()
                 say(if (code == 0) "Done!" else "Converter stopped (code $code)")
                 progress(if (code == 0) 100 else 0, if (code == 0) "Done - save or send it" else "Stopped (see log)")
             } catch (e: Throwable) {
@@ -352,15 +375,16 @@ class MainActivity : AppCompatActivity() {
     /** Downloads the newest build's converter code and stardew3ds.3dsx - only when
      *  the app doesn't have them yet. */
     private fun updateFromRepo() {
-        if (File(toolsDir, "convert.py").isFile && File(gameDir, "stardew3ds.3dsx").isFile) {
-            val have = prefs.getString("build", "") ?: ""
-            say("Using your converter and game" + if (have.isNotEmpty()) " ($have)" else "")
-            progress(18, "Using what you have" + if (have.isNotEmpty()) " ($have)" else "")
-            return
-        }
-        progress(2, "Getting the converter and game from GitHub...")
+        val have = prefs.getString("build", "") ?: ""
+        val haveFiles = File(toolsDir, "convert.py").isFile && File(gameDir, "stardew3ds.3dsx").isFile
+        progress(2, "Checking GitHub for a newer build...")
         try {
             val rel = JSONArray(fetch("https://api.github.com/repos/$repo/releases?per_page=1")!!).getJSONObject(0)
+            if (haveFiles && rel.getString("tag_name") == have) {
+                say("Converter and game are up to date ($have)")
+                progress(18, "Up to date ($have)")
+                return
+            }
             val tag = rel.getString("tag_name")
             say("Getting $tag from GitHub...")
             toolsDir.mkdirs()
