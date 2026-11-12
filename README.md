@@ -1,5 +1,10 @@
 # stardew3ds
 
+> **Unofficial fan project.** stardew3ds is not affiliated with, endorsed by or supported by ConcernedApe.
+> Stardew Valley is a trademark of ConcernedApe LLC. This project contains none of the game's code, art,
+> maps or data, claims no rights to any of it, and is free: it only plays with a copy of Stardew Valley
+> you own. If ConcernedApe asks for it to be taken down, it will be.
+
 A Nintendo 3DS homebrew farming engine that plays using **your own copy of
 Stardew Valley's assets**. The engine is original code. It contains no code,
 art, maps or data from the game. You convert your own Steam install's content

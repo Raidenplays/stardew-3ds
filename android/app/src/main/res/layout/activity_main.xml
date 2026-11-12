@@ -6,6 +6,9 @@
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="stardew3ds converter" android:textSize="22sp" android:textStyle="bold"
         android:textColor="#FFE8B0" android:layout_marginBottom="4dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Unofficial fan project, not affiliated with or endorsed by ConcernedApe. Uses your own copy of Stardew Valley."
+        android:textColor="#B8A078" android:textSize="11sp" android:layout_marginBottom="4dp" />
     <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:textColor="#E0C8A0" android:textSize="13sp" android:layout_marginBottom="10dp" />
 

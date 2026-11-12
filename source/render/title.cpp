@@ -294,6 +294,15 @@ static bool btnEnabled(const TitleUi& t, int i) { return i == 0 || i == 3 || (i 
 
 // ---------------------------------------------------------------- drawing
 
+// Who made this and who didn't: on the title's touch screen, between the buttons and the Circle Pad Pro one.
+static void unofficialNotice(Canvas& c, float y) {
+    c.rect(8, y - 3, 304, 50, RGBA(0x10, 0x0C, 0x08, 0x90));
+    c.text(160, y, 0.38f, RGBA(0xFF, 0xF4, 0xD8), "Unofficial fan port. Not affiliated with ConcernedApe.", ALIGN_CENTER);
+    c.text(160, y + 11, 0.38f, RGBA(0xE0, 0xD0, 0xB0), "Stardew Valley is a trademark of ConcernedApe LLC.", ALIGN_CENTER);
+    c.text(160, y + 22, 0.38f, RGBA(0xE0, 0xD0, 0xB0), "Plays with your own copy of the game.", ALIGN_CENTER);
+    c.text(160, y + 33, 0.38f, RGBA(0xE0, 0xD0, 0xB0), "Will be removed if ConcernedApe requests it.", ALIGN_CENTER);
+}
+
 void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     if (t.screen == TS_SPLASH) { drawSplash(c, t); return; }
     if (t.screen == TS_DONE_CONTINUE || t.screen == TS_EXIT) { c.rect(0, 0, 400, 240, RGBA(0, 0, 0)); return; }   // leaving: not the creator
@@ -375,7 +384,7 @@ static void arrows(Canvas& c, float y, bool on) {
 }
 
 // The way into the Circle Pad Pro's calibration, at the foot of the title's bottom screen.
-static const float PADBTN_X = 84, PADBTN_Y = 210, PADBTN_W = 152, PADBTN_H = 24;
+static const float PADBTN_X = 84, PADBTN_Y = 214, PADBTN_W = 152, PADBTN_H = 24;
 static void padProButton(Canvas& c) {
     uiSlot(c, PADBTN_X, PADBTN_Y, PADBTN_W, PADBTN_H, false);
     c.text(160, PADBTN_Y + 5, 0.42f, TXT, "Circle Pad Pro", ALIGN_CENTER);
@@ -423,8 +432,8 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
             }
         }
         if (t.introT >= INTRO_SECONDS && t.cursor == 2)
-            c.text(160, BTNS_Y4 + BTN_H + 10, 0.4f, CREAM, "Co-op is coming later", ALIGN_CENTER);
-        if (t.introT >= INTRO_SECONDS) padProButton(c);
+            c.text(160, BTNS_Y4 - 16, 0.4f, CREAM, "Co-op is coming later", ALIGN_CENTER);
+        if (t.introT >= INTRO_SECONDS) { unofficialNotice(c, 162); padProButton(c); }
         whiteOver(c, 320, 1 - t.introT / FADE_IN);
         return;
     }
@@ -432,11 +441,12 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
         const char* labels[2] = {"New farm", "Continue"};
         for (int i = 0; i < 2; i++) {
             bool on = t.cursor == i, off = i == 1 && !t.hasSave;
-            float y = 60 + i * 64;
+            float y = 48 + i * 58;
             uiSlot(c, 40, y, 240, 52, on && !off);
             c.text(160, y + 16, 0.6f, off ? SOFT : TXT, labels[i], ALIGN_CENTER);
         }
-        if (!t.hasSave) c.text(160, 192, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        if (!t.hasSave) c.text(160, 32, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        unofficialNotice(c, 164);
         padProButton(c);
         return;
     }
@@ -604,7 +614,7 @@ void titleTouch(TitleUi& t, const GameData& data, int x, int y) {
             return;
         }
         for (int i = 0; i < 2; i++)
-            if (x >= 40 && x < 280 && y >= 60 + i * 64 && y < 112 + i * 64) {
+            if (x >= 40 && x < 280 && y >= 48 + i * 58 && y < 100 + i * 58) {
                 t.cursor = i;
                 titleKey(t, data, TK_A);
             }
