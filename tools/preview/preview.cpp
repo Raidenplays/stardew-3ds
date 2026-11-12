@@ -294,6 +294,11 @@ int main(int argc, char** argv) {
         }
         titleSkipIntro(t);
         shoot("title");
+        titleTouch(t, data, 160, 220);         // the Circle Pad Pro button
+        shoot("padpro_looking");
+        t.padState = 2; t.padStep = 1; t.padX = 0.6f; t.padY = -0.4f; t.padButtons = 2;
+        shoot("padpro_step2");
+        titleKey(t, data, TK_B);
         titleKey(t, data, TK_A);              // New farm
         titleKey(t, data, TK_A);              // type a name
         titleKey(t, data, TK_DOWN);

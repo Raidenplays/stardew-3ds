@@ -238,8 +238,50 @@ int main() {
         if (hasSave) game.load(savePath);   // the title shows your farmer
         title.sound = [&sound](const char* cue) { sound.play(cue); };
         u64 tLast = osGetTime();
-        while (aptMainLoop() && (title.screen == TS_SPLASH || title.screen == TS_TITLE || title.screen == TS_CREATE)) {
+        Ui padUi;                                         // just for the pad's saved settings
+        loadUiSettings(padUi, root + "settings.txt");
+        if (padUi.padCal[2] > 0) cpp_pad::calibrate(padUi.padCal[0], padUi.padCal[1], padUi.padCal[2], padUi.padCal[3]);
+        int calLoX = 0, calHiX = 0, calLoY = 0, calHiY = 0, calCx = 0x800, calCy = 0x800;
+        while (aptMainLoop() && (title.screen == TS_SPLASH || title.screen == TS_TITLE || title.screen == TS_CREATE || title.screen == TS_PADPRO)) {
             hidScanInput();
+            if (title.screen == TS_PADPRO) {              // calibrating the Circle Pad Pro
+                cpp_pad::start();
+                int rx, ry, rb;
+                cpp_pad::raw(rx, ry, rb);
+                title.padState = cpp_pad::state();
+                title.padButtons = rb;
+                if (title.padState != 2 && title.padStep < 2) title.padStep = 0;
+                if (title.padStep == 0) { title.padX = (rx - 0x800) / 1100.0f; title.padY = -(ry - 0x800) / 1100.0f; }
+                if (title.padStep == 1) {
+                    calLoX = std::min(calLoX, rx); calHiX = std::max(calHiX, rx);
+                    calLoY = std::min(calLoY, ry); calHiY = std::max(calHiY, ry);
+                    title.padX = (rx - calCx) / 1100.0f; title.padY = -(ry - calCy) / 1100.0f;
+                }
+                if (title.padStep == 2) {
+                    float fx, fy; bool b1, b2, b3;
+                    cpp_pad::read(fx, fy, b1, b2, b3);
+                    title.padX = fx; title.padY = fy;
+                }
+                if (title.padConfirm) {
+                    title.padConfirm = false;
+                    if (title.padStep == 0) {
+                        calCx = rx; calCy = ry;
+                        calLoX = calHiX = rx; calLoY = calHiY = ry;
+                        title.padStep = 1;
+                    } else if (title.padStep == 1) {
+                        // the shorter reach each way, a touch inside the edge so a full push reads as full
+                        int rangeX = std::min(calCx - calLoX, calHiX - calCx) * 9 / 10, rangeY = std::min(calCy - calLoY, calHiY - calCy) * 9 / 10;
+                        if (rangeX >= 200 && rangeY >= 200) {
+                            cpp_pad::calibrate(calCx, calCy, rangeX, rangeY);
+                            padUi.padPro = true;
+                            padUi.padCal[0] = calCx; padUi.padCal[1] = calCy; padUi.padCal[2] = rangeX; padUi.padCal[3] = rangeY;
+                            saveUiSettings(padUi, root + "settings.txt");
+                            title.padStep = 2;
+                            sound.play("reward");
+                        } else sound.play("cancel");      // the stick hasn't been all the way round yet
+                    }
+                }
+            } else if (!padUi.padPro && cpp_pad::state() != 0) cpp_pad::stop();
             u64 tNow = osGetTime();
             float tdt = std::min(0.1f, (tNow - tLast) / 1000.0f);
             titleTick(title, tdt);
@@ -272,7 +314,7 @@ int main() {
             C3D_FrameEnd(0);
         }
         if (title.screen == TS_EXIT || title.screen == TS_SPLASH || title.screen == TS_TITLE ||
-            title.screen == TS_CREATE) {   // Exit button (or HOME > close)
+            title.screen == TS_CREATE || title.screen == TS_PADPRO) {   // Exit button (or HOME > close)
             C2D_Fini();
             C3D_Fini();
             romfsExit();

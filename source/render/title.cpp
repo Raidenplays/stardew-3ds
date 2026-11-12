@@ -300,6 +300,34 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 400, 240, RGBA(0x7C, 0xB8, 0xE8));   // sky
     c.rect(0, 170, 400, 70, RGBA(0x5C, 0x9C, 0x3C));  // hill
     c.rect(0, 168, 400, 4, RGBA(0x4A, 0x82, 0x30));
+    if (t.screen == TS_PADPRO) {
+        titleSky(c, 400, 240, t.t, false);
+        uiFrame(c, 18, 24, 364, 190);
+        c.text(200, 34, 0.6f, TXT, "Circle Pad Pro", ALIGN_CENTER);
+        const char* lines[4] = {"", "", "", ""};
+        if (t.padState != 2) {
+            lines[0] = "Looking for it...";
+            lines[1] = "Sit the 3DS in the Circle Pad Pro and check it";
+            lines[2] = "has a battery. The lights on the back of the";
+            lines[3] = "3DS must face the accessory's window.";
+        } else if (t.padStep == 0) {
+            lines[0] = "Found it!";
+            lines[1] = "Step 1: let go of the right stick so it";
+            lines[2] = "rests in the middle, then press A.";
+        } else if (t.padStep == 1) {
+            lines[0] = "Step 2: roll the right stick all the way";
+            lines[1] = "round its edge a few times, until the dot";
+            lines[2] = "reaches every side of the box below.";
+            lines[3] = "Then press A.";
+        } else {
+            lines[0] = "Saved. The right stick aims in the arcade";
+            lines[1] = "games, and ZL / ZR step through your toolbar.";
+            lines[2] = "Press A or B to go back.";
+        }
+        for (int i = 0; i < 4; i++) c.text(200, 70 + i * 22, 0.45f, i == 0 ? SEL : TXT, lines[i], ALIGN_CENTER);
+        c.text(200, 186, 0.4f, SOFT, "B: back", ALIGN_CENTER);
+        return;
+    }
     if (t.screen == TS_TITLE) {
         if (officialTitle(c)) {
             t.official = true;
@@ -346,10 +374,37 @@ static void arrows(Canvas& c, float y, bool on) {
     c.text(298, y + 3, 0.5f, on ? SEL : SOFT, ">", ALIGN_CENTER);
 }
 
+// The way into the Circle Pad Pro's calibration, at the foot of the title's bottom screen.
+static const float PADBTN_X = 84, PADBTN_Y = 210, PADBTN_W = 152, PADBTN_H = 24;
+static void padProButton(Canvas& c) {
+    uiSlot(c, PADBTN_X, PADBTN_Y, PADBTN_W, PADBTN_H, false);
+    c.text(160, PADBTN_Y + 5, 0.42f, TXT, "Circle Pad Pro", ALIGN_CENTER);
+}
+
 void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 320, 240, BG);
     if (t.screen == TS_SPLASH) { c.rect(0, 0, 320, 240, RGBA(255, 255, 255)); return; }   // white, like the top
     if (t.screen == TS_DONE_CONTINUE || t.screen == TS_EXIT) { c.rect(0, 0, 320, 240, RGBA(0, 0, 0)); return; }
+    if (t.screen == TS_PADPRO) {
+        titleSky(c, 320, 240, t.t, true);
+        uiFrame(c, 90, 20, 140, 140);                     // the stick's travel, and where it is now
+        c.rect(159, 30, 1, 120, SOFT);
+        c.rect(100, 89, 120, 1, SOFT);
+        if (t.padState == 2) {
+            float dx = 160 + std::max(-1.0f, std::min(1.0f, t.padX)) * 56, dy = 90 + std::max(-1.0f, std::min(1.0f, t.padY)) * 56;
+            c.rect(dx - 4, dy - 4, 9, 9, RGBA(0x30, 0x20, 0x10));
+            c.rect(dx - 3, dy - 3, 7, 7, RGBA(0xE0, 0x40, 0x40));
+        }
+        static const char* const NAMES[3] = {"ZL", "ZR", "R"};
+        for (int k = 0; k < 3; k++) {
+            bool down = t.padButtons & (1 << k);
+            uiSlot(c, 62 + k * 70, 170, 56, 26, down);
+            c.text(90 + k * 70, 175, 0.45f, down ? SEL : TXT, NAMES[k], ALIGN_CENTER);
+        }
+        uiSlot(c, 110, 206, 100, 26, false);
+        c.text(160, 211, 0.45f, TXT, "Back", ALIGN_CENTER);
+        return;
+    }
     if (t.screen == TS_TITLE && officialTitle(c)) {
         drawScene(c, t, sceneCam(t), true);
         // New, Load, Co-op, Exit pop in one by one; the lit row when picked
@@ -369,6 +424,7 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
         }
         if (t.introT >= INTRO_SECONDS && t.cursor == 2)
             c.text(160, BTNS_Y4 + BTN_H + 10, 0.4f, CREAM, "Co-op is coming later", ALIGN_CENTER);
+        if (t.introT >= INTRO_SECONDS) padProButton(c);
         whiteOver(c, 320, 1 - t.introT / FADE_IN);
         return;
     }
@@ -380,7 +436,8 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
             uiSlot(c, 40, y, 240, 52, on && !off);
             c.text(160, y + 16, 0.6f, off ? SOFT : TXT, labels[i], ALIGN_CENTER);
         }
-        if (!t.hasSave) c.text(160, 200, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        if (!t.hasSave) c.text(160, 192, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        padProButton(c);
         return;
     }
     static const char* names[CF_COUNT] = {"Name", "Farm name", "Favourite thing", "Hair", "Hair colour",
@@ -484,6 +541,11 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
         if (k == TK_A || k == TK_START || k == TK_B) titleSkipIntro(t);
         return;
     }
+    if (t.screen == TS_PADPRO) {
+        if (k == TK_B || ((k == TK_A || k == TK_START) && t.padStep >= 2)) t.screen = TS_TITLE;
+        else if (k == TK_A && t.padState == 2) t.padConfirm = true;
+        return;
+    }
     if (t.screen == TS_TITLE) {
         if (t.official) {   // New, Load, Co-op, Exit in a row
             if (k == TK_LEFT) t.cursor = (t.cursor + 3) % 4;
@@ -518,6 +580,17 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
 
 void titleTouch(TitleUi& t, const GameData& data, int x, int y) {
     if (t.screen == TS_SPLASH || (t.screen == TS_TITLE && t.introT < INTRO_SECONDS)) { titleSkipIntro(t); return; }
+    if (t.screen == TS_PADPRO) {
+        if (x >= 110 && x < 210 && y >= 206 && y < 232) t.screen = TS_TITLE;
+        return;
+    }
+    if (t.screen == TS_TITLE && x >= PADBTN_X && x < PADBTN_X + PADBTN_W && y >= PADBTN_Y && y < PADBTN_Y + PADBTN_H) {
+        t.screen = TS_PADPRO;
+        t.padStep = 0;
+        t.padConfirm = false;
+        if (t.sound) t.sound("select");
+        return;
+    }
     if (t.screen == TS_TITLE) {
         if (t.official) {
             for (int i = 0; i < 4; i++) {

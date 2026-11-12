@@ -23,6 +23,8 @@ volatile int padState = 0;
 volatile int rawX = 0x800, rawY = 0x800, buttons = 0;   // buttons: bit0 ZL, bit1 ZR, bit2 R
 int centreX = 0x800, centreY = 0x800;
 bool haveCentre = false;
+int rangeX = 1100, rangeY = 1100;
+bool calibrated = false;
 
 Result cmd0(u32 header) {
     u32* c = getThreadCommandBuffer();
@@ -87,7 +89,7 @@ bool takeReports() {
         rawX = p[1] | ((p[2] & 0x0F) << 8);
         rawY = (p[2] >> 4) | (p[3] << 4);
         buttons = ((p[4] & 0x20) ? 0 : 1) | ((p[4] & 0x40) ? 0 : 2) | ((p[4] & 0x80) ? 0 : 4);   // a set bit means not pressed
-        if (!haveCentre) { centreX = rawX; centreY = rawY; haveCentre = true; }   // wherever it rests when found
+        if (!haveCentre && !calibrated) { centreX = rawX; centreY = rawY; haveCentre = true; }   // wherever it rests when found
         got = true;
     }
     cmd1(0x00190040, count);                   // ReleaseReceivedData
@@ -157,7 +159,7 @@ void start() {
         stop();
         return;
     }
-    haveCentre = false;
+    if (!calibrated) haveCentre = false;
     running = true;
     padState = 1;
     s32 prio = 0x30;
@@ -193,7 +195,7 @@ void read(float& x, float& y, bool& zl, bool& zr, bool& r) {
     zl = zr = r = false;
     if (padState != 2) return;
     // about +-1200 either way from rest; a small dead zone in the middle
-    float fx = (rawX - centreX) / 1100.0f, fy = (rawY - centreY) / 1100.0f;
+    float fx = (rawX - centreX) / (float)rangeX, fy = (rawY - centreY) / (float)rangeY;
     if (fx > -0.25f && fx < 0.25f) fx = 0;
     if (fy > -0.25f && fy < 0.25f) fy = 0;
     x = fx > 1 ? 1 : fx < -1 ? -1 : fx;
@@ -201,6 +203,16 @@ void read(float& x, float& y, bool& zl, bool& zr, bool& r) {
     zl = buttons & 1;
     zr = buttons & 2;
     r = buttons & 4;
+}
+
+void raw(int& x, int& y, int& b) { x = rawX; y = rawY; b = buttons; }
+
+void calibrate(int cx, int cy, int rx, int ry) {
+    if (rx <= 0 || ry <= 0) { calibrated = false; haveCentre = false; rangeX = rangeY = 1100; return; }
+    centreX = cx; centreY = cy;
+    rangeX = rx < 200 ? 200 : rx;
+    rangeY = ry < 200 ? 200 : ry;
+    calibrated = true;
 }
 
 }  // namespace cpp_pad

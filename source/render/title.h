@@ -6,7 +6,7 @@
 #include "canvas.h"
 #include "core/game.h"
 
-enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE, TS_EXIT };
+enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE, TS_EXIT, TS_PADPRO };
 
 // Fields on the creation screen, top to bottom.
 enum CreateField {
@@ -27,6 +27,12 @@ struct TitleUi {
     bool official = false;       // drawing the game's own title sheet (4 buttons)
     bool creditsText = false;    // show the developer credit as text only (previews)
     std::string note;            // e.g. "Give your farmer a name"
+    // Circle Pad Pro calibration (TS_PADPRO): the app fills these in every frame
+    int padState = 0;            // 0 off, 1 looking, 2 connected
+    int padStep = 0;             // 0 let go of the stick, 1 roll it round the edge, 2 saved
+    float padX = 0, padY = 0;    // where the stick is, -1..1 (as measured so far)
+    int padButtons = 0;          // bit 0 ZL, 1 ZR, 2 R
+    bool padConfirm = false;     // A was pressed: the app takes the next step
     // text entry: the 3DS app plugs in the system keyboard; returns the new text
     std::function<std::string(const std::string& hint, const std::string& current, int maxLen)> keyboard;
     // sound effects (e.g. "logoClick"); empty until the engine has audio

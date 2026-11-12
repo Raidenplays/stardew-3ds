@@ -2020,6 +2020,8 @@ void loadUiSettings(Ui& ui, const std::string& path) {
         if (sscanf(line, "fastMap=%d", &v) == 1) ui.mapCache = std::max(0, std::min(2, v));
         if (sscanf(line, "perfInfo=%d", &v) == 1) ui.showPerf = v != 0;
         if (sscanf(line, "padPro=%d", &v) == 1) ui.padPro = v != 0;
+        int a, b, cc, d;
+        if (sscanf(line, "padCal=%d,%d,%d,%d", &a, &b, &cc, &d) == 4) { ui.padCal[0] = a; ui.padCal[1] = b; ui.padCal[2] = cc; ui.padCal[3] = d; }
     }
     fclose(f);
 }
@@ -2027,7 +2029,8 @@ void loadUiSettings(Ui& ui, const std::string& path) {
 void saveUiSettings(const Ui& ui, const std::string& path) {
     FILE* f = fopen(path.c_str(), "w");
     if (!f) return;
-    fprintf(f, "fastMap=%d\nperfInfo=%d\npadPro=%d\n", ui.mapCache, ui.showPerf ? 1 : 0, ui.padPro ? 1 : 0);
+    fprintf(f, "fastMap=%d\nperfInfo=%d\npadPro=%d\npadCal=%d,%d,%d,%d\n", ui.mapCache, ui.showPerf ? 1 : 0, ui.padPro ? 1 : 0, ui.padCal[0],
+            ui.padCal[1], ui.padCal[2], ui.padCal[3]);
     fclose(f);
 }
 

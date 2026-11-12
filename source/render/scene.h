@@ -20,6 +20,7 @@ struct Ui {
     bool showPerf = false;    // performance readout (Options tab, or L + SELECT)
     bool padPro = false;      // look for a Circle Pad Pro (old 3DS)
     int padProState = 0;      // 0 off, 1 looking, 2 connected (set by the platform)
+    int padCal[4] = {0, 0, 0, 0};   // centre x, y and range x, y from the title screen's calibration (0 = none)
     std::string status;
     float statusTime = 0;
 
