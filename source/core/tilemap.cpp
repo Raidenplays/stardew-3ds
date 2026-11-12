@@ -213,3 +213,92 @@ void TileMap::applyTileSwaps(const std::string& list) {
 }
 
 } // namespace sv
+
+namespace sv {
+
+bool TileMap::findFit(const TileMap& p, int& bx, int& by, int* fitScore) const {
+    if (p.w > w || p.h > h) return false;
+    // translate the patch's tilesheets to ours by texture name (-1: we don't have it)
+    std::vector<int> tsMap(p.tilesets.size(), -1);
+    for (size_t i = 0; i < p.tilesets.size(); i++)
+        for (size_t j = 0; j < tilesets.size(); j++)
+            if (tilesets[j].texture == p.tilesets[i].texture) tsMap[i] = (int)j;
+    int best = -1, total = 0;
+    for (int L = 0; L < L_COUNT; L++)
+        for (int i = 0; i < p.w * p.h; i++) total += p.tiles[L][i] != NO_TILE;
+    for (int oy = 0; oy + p.h <= h; oy++)
+        for (int ox = 0; ox + p.w <= w; ox++) {
+            int score = 0;
+            for (int L = 0; L < L_COUNT; L++)
+                for (int y = 0; y < p.h; y++) {
+                    const uint16_t* pt = &p.tiles[L][y * p.w];
+                    const uint8_t* ps = &p.tsIdx[L][y * p.w];
+                    const uint16_t* mt = &tiles[L][(oy + y) * w + ox];
+                    const uint8_t* ms = &tsIdx[L][(oy + y) * w + ox];
+                    for (int x = 0; x < p.w; x++)
+                        if (pt[x] != NO_TILE && pt[x] == mt[x] && tsMap[ps[x]] == ms[x]) score++;
+                }
+            if (score > best) { best = score; bx = ox; by = oy; }
+        }
+    if (fitScore) *fitScore = total ? best * 100 / total : 0;
+    return total > 0 && best * 4 >= total;   // at least a quarter of the ground lines up
+}
+
+bool TileMap::stamp(const TileMap& p, int dx, int dy) {
+    if (dx < 0 || dy < 0 || dx + p.w > w || dy + p.h > h) return false;
+    std::vector<int> tsMap(p.tilesets.size(), -1);
+    for (size_t i = 0; i < p.tilesets.size(); i++) {
+        for (size_t j = 0; j < tilesets.size(); j++)
+            if (tilesets[j].texture == p.tilesets[i].texture) tsMap[i] = (int)j;
+        if (tsMap[i] < 0 && tilesets.size() < 255) {
+            tilesets.push_back(p.tilesets[i]);
+            tsMap[i] = (int)tilesets.size() - 1;
+        }
+    }
+    bool hasBack = false;
+    for (int i = 0; i < p.w * p.h; i++) hasBack |= p.tiles[L_BACK][i] != NO_TILE;
+    for (int y = 0; y < p.h; y++)
+        for (int x = 0; x < p.w; x++) {
+            int pi = y * p.w + x, mi = (dy + y) * w + dx + x;
+            bool any = false;
+            for (int L = 0; L < L_COUNT; L++) any |= p.tiles[L][pi] != NO_TILE;
+            if (!any) continue;                       // a hole in the patch leaves the map alone
+            for (int L = 0; L < L_COUNT; L++) {
+                // the ground is never dug out; a patch with no ground of its own only adds to what's there
+                if (p.tiles[L][pi] == NO_TILE && (L == L_BACK || !hasBack)) continue;
+                int ts = p.tiles[L][pi] == NO_TILE ? 0 : tsMap[p.tsIdx[L][pi]];
+                if (ts < 0) continue;
+                tiles[L][mi] = p.tiles[L][pi];
+                tsIdx[L][mi] = (uint8_t)ts;
+            }
+            if (hasBack || p.tiles[L_BUILDINGS][pi] != NO_TILE) cellFlags[mi] = p.cellFlags[pi];
+            uint32_t cell = (uint32_t)mi;
+            auto it = std::lower_bound(actions.begin(), actions.end(), std::make_pair(cell, std::string()));
+            if (it != actions.end() && it->first == cell) actions.erase(it);
+        }
+    for (auto& a : p.actions) {
+        int x = (int)(a.first % (uint32_t)p.w), y = (int)(a.first / (uint32_t)p.w);
+        actions.push_back({(uint32_t)((dy + y) * w + dx + x), a.second});
+    }
+    std::sort(actions.begin(), actions.end());
+    for (auto pw : p.warps) {
+        pw.x += dx; pw.y += dy;
+        bool have = false;
+        for (auto& mw : warps) have |= mw.x == pw.x && mw.y == pw.y;
+        if (!have) warps.push_back(pw);
+    }
+    rev++;
+    return true;
+}
+
+} // namespace sv
+
+namespace sv {
+void TileMap::setAction(int x, int y, const std::string& a) {
+    if (!inBounds(x, y)) return;
+    uint32_t cell = (uint32_t)(y * w + x);
+    auto it = std::lower_bound(actions.begin(), actions.end(), std::make_pair(cell, std::string()));
+    if (it != actions.end() && it->first == cell) it->second = a;
+    else actions.insert(it, {cell, a});
+}
+} // namespace sv

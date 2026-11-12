@@ -284,6 +284,9 @@ void Game::swingWeapon(const ToolDef& w) {
             burst(t, 16, 0, 16, 24, mo.x, mo.y - 12, 8);
         }
         orderEvent("slay", 0, 1, mo.kind);
+        if (cur->mineLevel > 300) walnutChance(3, 10);
+        if (FarmBuilding* hutch = buildingForInterior(cur->name))   // a hutch slime: one fewer lives there now
+            if (hutch->type == "Slime Hutch" && !hutch->pending.empty()) hutch->pending.pop_back();
         if (wearing("Vampire Ring")) health = std::min(maxHealth, health + 2);
         if (wearing("Soul Sapper Ring")) energy = std::min(MAX_ENERGY, energy + 4);
         if (wearing("Savage Ring")) speedBoost = 3.0f;
@@ -351,6 +354,10 @@ void Game::enterMine(int level) {
         return;
     }
     orderEvent("floor", 0, level, "");
+    if (level == 310 && !mailReceived.count("Island_VolcanoTop")) {   // the forge at the top of the volcano
+        mailReceived.insert("Island_VolcanoTop");
+        gotWalnut(4, "You reached the top of the volcano!");
+    }
     say(skull ? "Skull Cavern, floor " + std::to_string(level - 120) : "Floor " + std::to_string(level));
     if (level > mineDeepest && !skull) {
         mineDeepest = level;

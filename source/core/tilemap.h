@@ -80,6 +80,11 @@ public:
         tiles[layer][y * w + x] = index;
         rev++;
     }
+    void setAction(int x, int y, const std::string& a);
+    // Lay a smaller map over this one at (dx, dy): tiles, walls, actions and warps. Returns false if it doesn't fit.
+    bool stamp(const TileMap& patch, int dx, int dy);
+    // Where a patch map belongs: the offset where most of its ground already matches. ok=false if nothing fits well.
+    bool findFit(const TileMap& patch, int& dx, int& dy, int* fitScore = nullptr) const;
     uint32_t rev = 0;   // bumps whenever a tile changes (cached drawings go stale)
     bool isAnimated(int ts, uint16_t t) const {
         if (ts < 0 || ts >= (int)tilesets.size()) return false;

@@ -1565,17 +1565,40 @@ def write_shops(content, out_dir, season_bits):
                 if it.get("IsRecipe"):
                     continue
                 raw = str(it.get("ItemId") or it.get("Id") or "")
-                if raw.startswith("(") and not raw.startswith("(O)"):
-                    continue      # furniture, tools, hats...: not sold here yet
-                iid = ITEM_IDS.get(raw)
+                kind = 0          # 0 object, 1 big craftable, 2 hat, 3 furniture
+                m = re.match(r"\((BC|H|F)\)(\d+)$", raw)
+                if m:
+                    kind = {"BC": 1, "H": 2, "F": 3}[m.group(1)]
+                    iid = int(m.group(2))
+                elif raw.startswith("(") and not raw.startswith("(O)"):
+                    continue      # tools, wallpaper, weapons: sold elsewhere
+                else:
+                    iid = ITEM_IDS.get(raw)
                 if iid is None or iid < 0:
                     continue
-                ok, mask, min_year = _parse_condition(it.get("Condition"), season_bits)
+                # "only until you have this letter" is the one mail condition shops use
+                cond = [x.strip() for x in str(it.get("Condition") or "").split(",") if x.strip()]
+                no_mail = ""
+                for x in list(cond):
+                    mm = re.match(r"!PLAYER_HAS_MAIL Current (\w+)", x)
+                    if mm:
+                        no_mail = mm.group(1)
+                        cond.remove(x)
+                cond = [x for x in cond if not x.startswith("SYNCED_CHOICE")]
+                ok, mask, min_year = _parse_condition(", ".join(cond), season_bits)
                 if not ok:
                     skipped += 1
                     continue
                 price = int(it.get("Price", -1) or -1)
-                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\n")
+                # what you pay with: -1 gold, -2 star tokens, -3 Qi coins, or an object id
+                trade = {1: -2, 2: -3}.get(int(sh.get("Currency") or 0), -1)
+                amount = 0
+                if it.get("TradeItemId"):
+                    tid = ITEM_IDS.get(str(it["TradeItemId"]))
+                    if tid is None or tid < 0:
+                        continue
+                    trade, amount = tid, int(it.get("TradeItemAmount") or 1)
+                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\t{kind}\t{trade}\t{amount}\t{no_mail}\n")
                 n += 1
     print(f"  shops.dat: {n} shop items ({skipped} with conditions not supported yet)")
 
@@ -1790,8 +1813,9 @@ def write_world_text(content, out_dir):
     n_so = 0
     with open(os.path.join(out_dir, "specialorders.dat"), "w", encoding="utf-8") as f:
         for key, od in load("Data/SpecialOrders.json").items():
-            if not isinstance(od, dict) or od.get("OrderType"):
-                continue   # Qi's and the desert festival's have their own boards
+            if not isinstance(od, dict) or od.get("OrderType") not in (None, "", "Qi"):
+                continue   # the desert festival's have their own board
+            is_qi = od.get("OrderType") == "Qi"
             variants = [(-1, {})]
             for el in od.get("RandomizedElements") or []:
                 if el.get("Name") == "Text":
@@ -1833,7 +1857,11 @@ def write_world_text(content, out_dir):
                     cnt = str(o.get("RequiredCount", "1"))
                     cnt = int(cnt) if cnt.isdigit() else 5
                     kind = {"Collect": "collect", "Donate": "donate", "Fish": "fish", "Deliver": "deliver", "Ship": "ship",
-                            "Slay": "slay", "ReachMineFloor": "floor"}.get(t)
+                            "Slay": "slay", "ReachMineFloor": "floor", "Gift": "gift", "JKScore": "jk"}.get(t)
+                    if data.get("UseShipmentValue"):
+                        kind = None
+                    if kind == "floor" and str(data.get("SkullCave", "")).lower() == "true":
+                        target = "skull"
                     if not kind or (kind in ("collect", "donate", "fish", "deliver", "ship") and not ids):
                         ok = False
                         break
@@ -1846,10 +1874,13 @@ def write_world_text(content, out_dir):
                     if r.get("Type") == "Money":
                         amt = str((r.get("Data") or {}).get("Amount", "2000"))
                         money = int(amt) if amt.isdigit() else 2500
+                    if r.get("Type") == "Gems":
+                        amt = str((r.get("Data") or {}).get("Amount", "20"))
+                        money = -(int(amt) if amt.isdigit() else 20)   # negative: paid in Qi gems
                 name = so_text(od.get("Name")).replace("{0}", subname)
                 text = so_text(od.get("Text")).replace("{0}", subname).replace("{Crop:Text}", subname).replace("{FishType:Text}", subname)
                 text = re.sub(r"\{\w+:\w+\}", subname, text)
-                f.write("\t".join([f"{_flat(key)}#{vi}", _flat(od.get("Requester", "")), name, text,
+                f.write("\t".join([f"{_flat(key)}#{vi}", "Qi" if is_qi else _flat(od.get("Requester", "")), name, text,
                                    str(days.get(str(od.get("Duration")), 7)), str(money), str(season),
                                    "|".join(objectives), "|".join(texts), "1" if od.get("Repeatable") else "0"]) + "\n")
                 n_so += 1

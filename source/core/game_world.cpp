@@ -59,6 +59,7 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
     if (verb == "Message" || verb == "Letter" || verb == "MessageOnce") {
         const std::string* s = mapString(unquote(rest));
         if (!s) return false;
+        if (festivalActive >= 0 && s->find("Smash stone") != std::string::npos) { fairChoice("fair:strength"); return true; }
         showMessage(*s);
         return true;
     }
@@ -206,11 +207,38 @@ bool Game::worldAction(const std::string& verb, const std::string& rest) {
         say("Ginger Island! Summer all year: anything grows on the farm to the west.");
         return true;
     }
-    if (verb == "VolcanoEntrance") { enterMine(301); return true; }
+    if (verb == "VolcanoEntrance") {
+        if (!mailReceived.count("Island_VolcanoBridge")) { islandOffer("Island_VolcanoBridge"); return true; }
+        enterMine(301);
+        return true;
+    }
+    if (islandAction(verb, rest)) return true;
+    if (verb == "FarmObelisk" && cur->name == "IslandWest") {
+        sfx("wand");
+        warpTo("Farm", data.layout.doorX, data.layout.doorY + 1, false);
+        return true;
+    }
     if (verb == "IslandTrader" || verb == "ResortBar" || verb == "VolcanoShop" || verb == "QiGemShop") {
         const char* shop = verb == "IslandTrader" ? "IslandTrade" : verb.c_str();
         if (!data.shops.count(shop)) return false;
         openShop = shop;
+        return true;
+    }
+    if (verb == "Shop") {   // festival stalls: "Shop <id>", or "Shop shop" for the day's own stall
+        std::string id = rest.substr(0, rest.find(' '));
+        if (!data.shops.count(id)) {
+            const Festival* f = festivalToday();
+            if (f && f->key == "fall16" && festivalActive >= 0) { fairBooth(); return true; }
+            static const char* const STALLS[][2] = {{"spring13", "Festival_EggFestival_Pierre"}, {"spring24", "Festival_FlowerDance_Pierre"},
+                {"summer11", "Festival_Luau_Pierre"}, {"summer28", "Festival_DanceOfTheMoonlightJellies_Pierre"},
+                {"fall16", "Festival_StardewValleyFair_StarTokens"}, {"fall27", "Festival_SpiritsEve_Pierre"},
+                {"winter8", "Festival_FestivalOfIce_TravelingMerchant"}};
+            id.clear();
+            for (auto& st : STALLS)
+                if (f && f->key == st[0]) id = st[1];
+        }
+        if (id.empty() || !data.shops.count(id)) return false;
+        openShop = id;
         return true;
     }
     if (verb == "BrokenBeachBridge") {
@@ -374,6 +402,8 @@ void Game::cartMorning() {
 // ---- repairs that change the map you're standing on
 void Game::applyMapFixes() {
     if (!cur) return;
+    islandStamps();
+    slimeHutchEnter();
     if (cur->name == "Beach" && mailReceived.count("beachBridgeFixed"))
         for (int x = 58; x <= 61; x++) cur->map.setFlags(x, 13, 0);   // planks over the gap
     if (cur->name == "FarmHouse") {

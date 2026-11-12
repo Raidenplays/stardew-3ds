@@ -299,12 +299,15 @@ bool Game::placeSelected(int tx, int ty) {
     bool big = sl.type == SLOT_BIG;
     if (!big) {
         const ObjectDef* o = sl.type == SLOT_OBJECT ? data.object(sl.id) : nullptr;
-        if (!o || !sprinklerRadius(o->name)) return false;
+        if (!o || (!sprinklerRadius(o->name) && sl.id != 710)) return false;
     }
+    bool crabPot = !big && sl.id == 710;   // goes in the water, by the shore
     const TileMap& m = cur->map;
     if (!m.inBounds(tx, ty)) return false;
     size_t idx = (size_t)ty * m.width() + tx;
-    if (tileSolid(tx, ty) || placedAt(tx, ty) || objectAt(tx, ty) || (m.flags(tx, ty) & CF_WATER) ||
+    if (crabPot) {
+        if (!(m.flags(tx, ty) & CF_WATER) || placedAt(tx, ty)) { say("Crab pots go in the water, right at the shore."); return true; }
+    } else if (tileSolid(tx, ty) || placedAt(tx, ty) || objectAt(tx, ty) || (m.flags(tx, ty) & CF_WATER) ||
         cur->debris[idx] || (cur->isFarm && cur->soils[idx].seed >= 0) || npcAt(tx, ty)) {
         say("Can't place that here");
         return true;
@@ -322,6 +325,7 @@ bool Game::placeSelected(int tx, int ty) {
     if (--sl.count <= 0) sl = Slot();
     Placed& np = placed[cur->name].back();
     if (grassAt(tx, ty)) cur->grass[(size_t)ty * cur->map.width() + tx] = 0;   // flattened
+    specialStart(np, cur->name);
     if (big) {   // machines that work on their own start now
         for (size_t i = 0; i < data.machineRules.size(); i++)
             if (data.machineRules[i].machine == np.id && data.machineRules[i].autoRun) {
@@ -347,7 +351,13 @@ void Game::startMachine(Placed& p, int ruleIdx, int input) {
     else p.readyAt = (int64_t)(absoluteDay() + 1) * 1440 + DAY_START;   // daily
 }
 
-bool Game::machineReady(const Placed& p) const { return p.rule >= 0 && p.readyAt >= 0 && p.readyAt <= nowMinutes(); }
+bool Game::machineReady(const Placed& p) const {
+    if (specialMachine(p)) {
+        bool incubator = p.big && (p.id == 101 || p.id == 254 || p.id == 156);
+        return !incubator && !p.held.empty() && p.readyAt >= 0 && p.readyAt <= nowMinutes();
+    }
+    return p.rule >= 0 && p.readyAt >= 0 && p.readyAt <= nowMinutes();
+}
 
 float Game::machineProgress(const Placed& p) const {
     if (p.rule < 0 || p.readyAt < 0) return 0;
@@ -364,6 +374,7 @@ bool Game::interactPlaced(Placed& p) {
         chestY = p.y;
         return true;
     }
+    if (specialMachine(p)) return specialInteract(p);
     if (!p.big) return false;
     if (p.id == 163) return caskInteract(p);
     if (machineReady(p)) {

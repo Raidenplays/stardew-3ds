@@ -1474,6 +1474,22 @@ static void drawArcade(Canvas& c, Game& g) {
             if (art) c.image(CUR, (f.kind ? 416 : 352) + fr, 1712, 16, 16, ox + f.x - 8, oy + f.y - 8);
             else c.rect(ox + f.x - 6, oy + f.y - 6, 12, 12, RGBA(0x40, 0x90, 0x40));
         }
+        for (auto& d : a.drops) {                          // what they dropped: a coloured token with its letter
+            static const uint32_t COLS[] = {RGBA(0xF0, 0xC8, 0x30), RGBA(0xE0, 0x50, 0x30), RGBA(0x40, 0x90, 0xE0), RGBA(0xE0, 0x40, 0x70), RGBA(0x80, 0x50, 0x30), RGBA(0x30, 0x30, 0x30)};
+            static const char* const TAG[] = {"$", "R", "S", "+", "C", "N"};
+            if (d.life < 2 && ((int)(a.t * 10) & 1)) continue;
+            c.rect(ox + d.x - 6, oy + d.y - 6, 12, 12, RGBA(0x20, 0x18, 0x10));
+            c.rect(ox + d.x - 5, oy + d.y - 5, 10, 10, COLS[d.kind % 6]);
+            c.text(ox + d.x, oy + d.y - 6, 0.36f, COL_CREAM, TAG[d.kind % 6], ALIGN_CENTER);
+        }
+        if (a.boss) {
+            for (auto& s : a.bossShots) c.rect(ox + s.x - 2, oy + s.y - 2, 5, 5, RGBA(0xC0, 0x20, 0x20));
+            int fr = ((int)(a.t * 6) & 1) * 16;
+            if (art) c.imageScaled(CUR, 416 + fr, 1712, 16, 16, ox + a.bx - 16, oy + a.by - 16, 2.0f);
+            else c.rect(ox + a.bx - 12, oy + a.by - 12, 24, 24, RGBA(0x50, 0x30, 0x60));
+            c.rect(ox + 46, oy + 4, 100, 5, RGBA(0x40, 0x20, 0x20));
+            c.rect(ox + 46, oy + 4, 100.0f * std::max(0, a.bhp) / 45.0f, 5, RGBA(0xD0, 0x30, 0x30));
+        }
         if (a.pause <= 0 || ((int)(a.t * 10) & 1)) {
             if (art) c.image(CUR, 464 + (((int)(a.t * 6) & 1) ? 16 : 0), 1728, 16, 16, ox + a.px - 8, oy + a.py - 8);
             else c.rect(ox + a.px - 6, oy + a.py - 6, 12, 12, RGBA(0xB0, 0x40, 0x30));
@@ -1482,8 +1498,12 @@ static void drawArcade(Canvas& c, Game& g) {
             if (art) c.image(CUR, 528, 1776, 16, 16, 8 + i * 18, 8);
             else c.rect(8 + i * 14, 8, 10, 10, RGBA(0xE0, 0x40, 0x40));
         }
-        snprintf(buf, sizeof buf, "Stage %d", a.stage);
+        if (a.boss) snprintf(buf, sizeof buf, "The outlaw!");
+        else snprintf(buf, sizeof buf, "Stage %d", a.stage);
         c.text(8, 30, 0.45f, COL_CREAM, buf);
+        if (a.rapid > 0) c.text(8, 62, 0.34f, COL_CREAM, "Rapid fire");
+        if (a.spread > 0) c.text(8, 74, 0.34f, COL_CREAM, "Spread shot");
+        if (a.fast > 0) c.text(8, 86, 0.34f, COL_CREAM, "Coffee!");
         snprintf(buf, sizeof buf, "%d", a.score);
         c.text(8, 46, 0.45f, COL_CREAM, buf);
         c.rect(TOP_W - 22, 30, 10, 160, RGBA(0x40, 0x30, 0x20));
@@ -1514,7 +1534,7 @@ static void drawArcade(Canvas& c, Game& g) {
         float cy = base - a.cartY - 14;
         if (mart) c.image(MC, 0, 0, 16, 16, 40 - 8, cy);
         else c.rect(40 - 7, cy + 4, 14, 10, RGBA(0x8A, 0x5A, 0x30));
-        snprintf(buf, sizeof buf, "Score %d   Best %d", a.score, g.junimoBest);
+        snprintf(buf, sizeof buf, "Track %d/3   Score %d   Best %d", a.stage, a.score, g.junimoBest);
         c.text(8, 8, 0.45f, COL_CREAM, buf);
         c.text(TOP_W - 8, 8, 0.36f, COL_CREAM, "A: jump   L: quit", ALIGN_RIGHT);
     }
@@ -2433,12 +2453,20 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
             if (i >= (int)stock.size()) break;
             float y = LIST_Y + r * ROW_H;
             box(c, 4, y, BOT_W - 8, ROW_H - 2, COL_SLOT, COL_SLOT_EDGE, 1);
-            const ObjectDef* o = g.data.object(stock[i].itemId);
-            if (o) {
-                itemIcon(c, o, 8, y + 3);
-                c.text(28, y + 3, 0.45f, COL_TEXT, o->name);
-            }
-            snprintf(buf, sizeof buf, "%dg", stock[i].price);
+            const ShopEntry& se = stock[i];
+            if (se.kind == 0) itemIcon(c, g.data.object(se.itemId), 8, y + 3);
+            else if (se.kind == 1) bigSprite(c, g, se.realId, 0, 10, y + 2, 10, 16);
+            else if (se.kind == 2) {
+                for (size_t ti = 0; ti < g.data.tools.size(); ti++)
+                    if (g.data.tools[ti].key == "Hat_" + std::to_string(se.realId)) {
+                        Slot hs; hs.type = SLOT_TOOL; hs.id = (int)ti; hs.count = 1;
+                        slotIcon(c, g, hs, 8, y + 3);
+                    }
+            } else c.rect(10, y + 5, 12, 12, RGBA(0xA0, 0x70, 0x40));
+            c.text(28, y + 3, 0.45f, COL_TEXT, g.shopEntryName(se));
+            if (se.tradeId == -1) snprintf(buf, sizeof buf, "%dg", se.price);
+            else if (se.tradeId >= 0 && g.data.object(se.tradeId)) snprintf(buf, sizeof buf, "%d %s", se.price, g.data.object(se.tradeId)->name.c_str());
+            else snprintf(buf, sizeof buf, "%d", se.price);
             c.text(206, y + 3, 0.45f, COL_TEXT, buf, ALIGN_RIGHT);
             int q = ui.cart.count(stock[i].itemId) ? ui.cart[stock[i].itemId] : 0;
             box(c, 222, y + 2, 26, 18, COL_PANEL_DARK, COL_BORDER, 1);
@@ -2455,12 +2483,14 @@ static void drawShop(Canvas& c, Game& g, Ui& ui) {
             c.text(scrollX + 64, 39, 0.42f, COL_TEXT, "Down", ALIGN_CENTER);
         }
         int total = cartTotal(g, ui);
-        bool afford = total <= g.money;
+        std::string unit;
+        int funds = g.shopFunds(ui.shop, &unit);
+        bool afford = total <= funds;
         box(c, 170, 206, 146, 30, total > 0 && afford ? COL_GREEN : RGBA(0x80, 0x70, 0x60), COL_GREEN_DARK);
-        snprintf(buf, sizeof buf, total > 0 ? "Buy  %dg" : "Pick items", total);
+        snprintf(buf, sizeof buf, total > 0 ? (unit == "money" ? "Buy  %dg" : "Buy  %d") : "Pick items", total);
         c.text(243, 212, 0.5f, COL_CREAM, buf, ALIGN_CENTER);
         c.text(8, 214, 0.38f, afford ? COL_CREAM : RGBA(0xFF, 0x90, 0x80),
-               afford ? "+ / - to set amounts" : "Not enough money");
+               afford ? (unit == "money" ? std::string("+ / - to set amounts") : "You have " + std::to_string(funds) + " " + unit) : "Not enough " + unit);
     } else {
         auto slots = sellableSlots(g);
         ui.shopScroll = std::max(0, std::min(ui.shopScroll, (int)slots.size() - SHOP_ROWS));
@@ -2519,7 +2549,7 @@ static void touchShop(Game& g, Ui& ui, int tx, int ty) {
         }
         if (hit(tx, ty, 170, 206, 146, 30)) {
             int total = cartTotal(g, ui);
-            if (total > 0 && total <= g.money) {
+            if (total > 0 && total <= g.shopFunds(ui.shop)) {
                 for (auto& kv : ui.cart)
                     if (kv.second > 0) g.buy(ui.shop, kv.first, kv.second);
                 ui.cart.clear();

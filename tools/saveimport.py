@@ -307,6 +307,12 @@ def import_save(save_path, root):
         for k, v in dict_items(p.find(tag)):
             out.append([key, clean(k.text or "")])
     out.append(["house", num(p, "houseUpgradeLevel")])
+    # Ginger Island walnuts (the save keeps them for the whole farm) and casino coins
+    held, found = num(sg, "goldenWalnuts"), num(sg, "goldenWalnutsFound")
+    if held or found:
+        out.append(["walnuts", held, max(held, found)])
+    if num(p, "clubCoins"):
+        out.append(["clubcoins", num(p, "clubCoins")])
     # collections: what's been shipped, caught and cooked
     for tag, key in (("basicShipped", "shippedever"), ("fishCaught", "fishever"), ("recipesCooked", "cookedever")):
         for k, v in dict_items(p.find(tag)):

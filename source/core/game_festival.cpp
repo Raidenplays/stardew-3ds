@@ -118,6 +118,7 @@ bool Game::festivalTalk(NpcState& n) {
         size_t at = p.text.find('@');
         if (at != std::string::npos) p.text.replace(at, 1, me.name);
         DialogueChoice c;
+        if (f.key == "fall16" && !fairJudged) { c.label = "Judge my grange display"; c.responseKey = "fair:grange"; p.choices.push_back(c); }
         c.label = "Yes"; c.responseKey = "festival:go"; p.choices.push_back(c);
         c.label = "Not yet"; c.responseKey = ""; p.choices.push_back(c);
         dialogue = DialogueBox();
@@ -249,28 +250,9 @@ void Game::festivalOutcome() {
         } else {
             msg = "You caught " + std::to_string(caught) + " fish through the ice. Willy took the prize this year.";
         }
-    } else if (f.key == "fall16") {      // the fair: your grange display is the best nine things in your bag
-        std::vector<int> pts;
-        std::set<int> cats;
-        for (int i = 0; i < invSlots; i++) {
-            const Slot& s = inv[i];
-            const ObjectDef* o = s.type == SLOT_OBJECT ? data.object(s.id) : nullptr;
-            if (!o || o->price <= 0) continue;
-            int v = itemPrice(s);
-            pts.push_back((s.quality >= 4 ? 4 : s.quality + 1) + (v >= 400 ? 5 : v >= 200 ? 4 : v >= 90 ? 3 : v >= 20 ? 2 : 1));
-            cats.insert(o->category);
-        }
-        std::sort(pts.rbegin(), pts.rend());
-        int score = 14 + std::min(30, (int)cats.size() * 5);
-        for (size_t i = 0; i < pts.size() && i < 9; i++) score += pts[i];
-        int prize = score >= 90 ? 1000 : score >= 75 ? 500 : score >= 60 ? 200 : 50;
-        money += prize * 2;
-        msg = "Your grange display scored " + std::to_string(score) + " points" + (score >= 90 ? ": first place!" : ".") +
-              " You traded your star tokens for " + std::to_string(prize * 2) + "g.";
-        if (score >= 90 && !mailReceived.count("CF_Fair") && data.object(434)) {
-            mailReceived.insert("CF_Fair");
-            addItem(434, 1);
-        }
+    } else if (f.key == "fall16") {
+        if (!fairJudged) fairGrange();
+        msg = "The fair winds down. See you next year!";
     } else if (f.key == "winter25") {    // the secret gift
         std::vector<NpcState*> pool;
         for (auto& n : npcs)
@@ -292,6 +274,81 @@ void Game::festivalOutcome() {
     }
     endFestival();
     if (!msg.empty()) say(msg);
+}
+
+// The fair: your grange display is the best nine things in your bag. Lewis pays out in star tokens.
+void Game::fairGrange() {
+    std::vector<int> pts;
+    std::set<int> cats;
+    for (int i = 0; i < invSlots; i++) {
+        const Slot& s = inv[i];
+        const ObjectDef* o = s.type == SLOT_OBJECT ? data.object(s.id) : nullptr;
+        if (!o || o->price <= 0) continue;
+        int v = itemPrice(s);
+        pts.push_back((s.quality >= 4 ? 4 : s.quality + 1) + (v >= 400 ? 5 : v >= 200 ? 4 : v >= 90 ? 3 : v >= 20 ? 2 : 1));
+        cats.insert(o->category);
+    }
+    std::sort(pts.rbegin(), pts.rend());
+    int score = 14 + std::min(30, (int)cats.size() * 5);
+    for (size_t i = 0; i < pts.size() && i < 9; i++) score += pts[i];
+    int prize = score >= 90 ? 1000 : score >= 75 ? 500 : score >= 60 ? 200 : 50;
+    starTokens += prize;
+    fairJudged = true;
+    sfx("reward");
+    showMessage("Your grange display scored " + std::to_string(score) + " points" + (score >= 90 ? ": first place!" : ".") + " Lewis hands you " +
+                std::to_string(prize) + " star tokens. Spend them at the booth before you go.");
+}
+
+// The booths. Each costs what the wiki says; they pay in star tokens.
+void Game::fairBooth() {
+    DialoguePage p;
+    p.text = "The fair booths. You have " + std::to_string(starTokens) + " star tokens.";
+    DialogueChoice c;
+    c.label = "Prize shop"; c.responseKey = "fair:shop"; p.choices.push_back(c);
+    c.label = "Fishing game (50g)"; c.responseKey = "fair:fish"; p.choices.push_back(c);
+    c.label = "Slingshot game (50g)"; c.responseKey = "fair:sling"; p.choices.push_back(c);
+    if (starTokens > 0) {
+        c.label = "Wheel: all on green (3 in 4)"; c.responseKey = "fair:green"; p.choices.push_back(c);
+        c.label = "Wheel: all on orange (1 in 4)"; c.responseKey = "fair:orange"; p.choices.push_back(c);
+    }
+    c.label = "Never mind"; c.responseKey = ""; p.choices.push_back(c);
+    dialogue = DialogueBox();
+    dialogue.active = true;
+    dialogue.pages.push_back(p);
+    pendingChoice = "fair";
+}
+
+void Game::fairChoice(const std::string& key) {
+    if (key == "fair:shop") { openShop = "Festival_StardewValleyFair_StarTokens"; return; }
+    if (key == "fair:fish" || key == "fair:sling") {
+        if (money < 50) { say("It's 50g a go."); return; }
+        money -= 50;
+        bool fish = key == "fair:fish";
+        int skill = skillLevels[fish ? SK_FISHING : SK_COMBAT];
+        int hits = 3 + (int)(rand32() % 8) + skill;           // more practice, more hits
+        int won = fish ? hits * 6 : hits * 5;
+        starTokens += won;
+        sfx(fish ? "fishSlap" : "slingshot");
+        showMessage(std::string(fish ? "You hooked " : "You hit ") + std::to_string(hits) + (fish ? " fish" : " targets") + ": " + std::to_string(won) + " star tokens!");
+        return;
+    }
+    if (key == "fair:green" || key == "fair:orange") {
+        bool green = rand32() % 4 != 0, won = green == (key == "fair:green");
+        int bet = starTokens;
+        starTokens += won ? bet : -bet;
+        sfx(won ? "reward" : "cancel");
+        showMessage(std::string("The wheel lands on ") + (green ? "green" : "orange") + (won ? "! You doubled up: " : "... you lost your ") + std::to_string(won ? starTokens : bet) + " star tokens.");
+        return;
+    }
+    if (key == "fair:strength") {
+        int power = 20 + (int)(rand32() % 81);
+        int won = power >= 95 ? 20 : power >= 60 ? 1 : 0;
+        starTokens += won;
+        sfx("hammer");
+        showMessage("WHAM! The meter climbs to " + std::to_string(power) + "." + (won ? " You win " + std::to_string(won) + " star token" + (won > 1 ? "s!" : "!") : " No prize this time."));
+        return;
+    }
+    if (key == "fair:grange") fairGrange();
 }
 
 void Game::festivalUpdate(float dt) {
@@ -336,6 +393,8 @@ void Game::endFestival() {
     if (festivalActive < 0) return;
     festivalActive = -1;
     eggHunt = 0;
+    starTokens = 0;
+    fairJudged = false;
     festLines.clear();
     for (auto& n : npcs) {               // everyone's home for the night
         n.loc = n.def->homeMap;

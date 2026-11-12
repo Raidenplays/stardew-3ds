@@ -162,8 +162,11 @@ bool Game::eventConditionsMet(const std::string& key) const {
             bool done = mailReceived.count("ccPantry") && mailReceived.count("ccCraftsRoom") && mailReceived.count("ccFishTank") &&
                         mailReceived.count("ccBoilerRoom") && mailReceived.count("ccBulletin") && mailReceived.count("ccVault");
             ok = (code == "C") == done;
-        } else if (code == "J") {          // Joja's warehouse finished: there is no Joja route
-            ok = false;
+        } else if (code == "J") {          // Joja's warehouse finished
+            ok = mailReceived.count("JojaMember") && mailReceived.count("ccPantry") && mailReceived.count("ccCraftsRoom") &&
+                 mailReceived.count("ccFishTank") && mailReceived.count("ccBoilerRoom") && mailReceived.count("ccVault");
+        } else if (code == "N") {          // golden walnuts found
+            ok = w.size() > 1 && walnutsFound >= atoi(w[1].c_str());
         } else if (code == "g") {
             ok = w.size() > 1 && w[1] == "male";   // the farmer sprite is the male base
         } else if (code == "b") {          // reached the bottom of the mines

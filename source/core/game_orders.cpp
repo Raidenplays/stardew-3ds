@@ -55,13 +55,14 @@ const Game::OrderDef* Game::orderDef(const std::string& key) {
 bool Game::ordersUnlocked() const { return absoluteDay() >= 58; }   // Fall 2, year 1
 
 // This week's two offers: the same all week, different next week.
-std::vector<const Game::OrderDef*> Game::ordersOffered() {
+std::vector<const Game::OrderDef*> Game::ordersOffered(bool qi) {
     loadOrders();
     std::vector<const OrderDef*> pool, out;
     std::set<std::string> seen;
     for (auto& d : orderDefs) {
         std::string base = d.key.substr(0, d.key.find('#'));
         if (d.season >= 0 && d.season != season) continue;
+        if ((d.requester == "Qi") != qi) continue;
         if (!d.repeatable && mailReceived.count("so:" + base)) continue;
         pool.push_back(&d);
     }
@@ -88,8 +89,8 @@ std::string Game::orderStatus() {
 }
 
 // The board: your current order (handing over anything it wants that you're carrying), or this week's offers.
-void Game::ordersBoard() {
-    if (!ordersUnlocked()) { say("Mayor Lewis is planning a board for bigger jobs here. Come back in the fall."); return; }
+void Game::ordersBoard(bool qi) {
+    if (!qi && !ordersUnlocked()) { say("Mayor Lewis is planning a board for bigger jobs here. Come back in the fall."); return; }
     if (!orderKey.empty()) {
         const OrderDef* d = orderDef(orderKey);
         if (!d) { orderKey.clear(); return; }
@@ -110,15 +111,16 @@ void Game::ordersBoard() {
         showMessage(orderStatus());
         return;
     }
-    auto offers = ordersOffered();
+    auto offers = ordersOffered(qi);
     if (offers.empty()) { say("No special orders this week."); return; }
     DialoguePage p;
-    p.text = "Special orders this week:";
+    p.text = qi ? "Mr. Qi's challenges this week:" : "Special orders this week:";
     for (auto* d : offers) {
         const NpcDef* who = nullptr;
         for (auto& n : data.npcs) if (n.name == d->requester) who = &n;
         DialogueChoice c;
-        c.label = d->name + " (" + (who ? who->display : d->requester) + ", " + std::to_string(d->money) + "g)";
+        c.label = d->money < 0 ? d->name + " (" + std::to_string(-d->money) + " Qi gems)"
+                               : d->name + " (" + (who ? who->display : d->requester) + ", " + std::to_string(d->money) + "g)";
         c.responseKey = "so:" + d->key;
         p.choices.push_back(c);
     }
@@ -155,7 +157,13 @@ void Game::orderEvent(const std::string& kind, int item, int count, const std::s
     for (size_t i = 0; i < d->objectives.size(); i++) {
         const auto& o = d->objectives[i];
         if (o.kind != kind || orderProgress[i] >= o.count) continue;
-        if (kind == "floor") { orderProgress[i] = std::max(orderProgress[i], std::min(count, o.count)); continue; }
+        if (kind == "floor") {
+            int lv = o.target == "skull" ? count - 120 : count > 120 ? 0 : count;   // the skull cavern counts from its own top
+            if (lv > 300 - 120 && o.target == "skull") lv = 0;                        // (the volcano isn't either)
+            orderProgress[i] = std::max(orderProgress[i], std::min(lv, o.count));
+            continue;
+        }
+        if (kind == "gift" || kind == "jk") { orderProgress[i] = kind == "jk" ? std::max(orderProgress[i], std::min(count, o.count)) : std::min(o.count, orderProgress[i] + count); continue; }
         if (kind == "slay") {
             if (!o.target.empty() && target.find(o.target) == std::string::npos) continue;
         } else {
@@ -184,6 +192,16 @@ bool Game::orderCheckDone() {
     if (!d) return false;
     for (size_t i = 0; i < d->objectives.size(); i++)
         if (i >= orderProgress.size() || orderProgress[i] < d->objectives[i].count) return false;
+    if (d->money < 0) {                                  // Mr. Qi pays in gems
+        addItem(858, -d->money);
+        sfx("questcomplete");
+        mailReceived.insert("so:" + d->key.substr(0, d->key.find('#')));
+        say("Challenge complete: " + d->name + "! +" + std::to_string(-d->money) + " Qi gems");
+        orderKey.clear();
+        orderProgress.clear();
+        orderDays = 0;
+        return true;
+    }
     money += d->money;
     totalEarned += d->money;
     mailReceived.insert("so:" + d->key.substr(0, d->key.find('#')));

@@ -133,6 +133,7 @@ bool Game::hasMap(const std::string& name) const {
 
 bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     if (cur && festivalWarp(name)) return true;
+    if (islandGate(name)) return true;
     if (name == "Farm" && cur)   // leaving a farm building: out its own door
         if (FarmBuilding* fb = buildingForInterior(cur->name))
             if (const BuildingType* bt = typeOf(*fb)) {
@@ -187,6 +188,7 @@ bool Game::warpTo(const std::string& name, int tx, int ty, bool door) {
     warpCooldown = 0.35f;
     toolTimer = 0;
     spawnObjects(*cur);
+    islandWalnuts();
     npcsEnterLocation();
     questEntered(name);
     checkEvents();
@@ -788,6 +790,13 @@ bool Game::eatSlot(int i) {
 
 // ------------------------------------------------------------ shops
 
+static int hatIndex(const GameData& d, int id) {
+    std::string key = "Hat_" + std::to_string(id);
+    for (size_t i = 0; i < d.tools.size(); i++)
+        if (d.tools[i].key == key) return (int)i;
+    return -1;
+}
+
 std::vector<ShopEntry> Game::shopStock(const std::string& shop) const {
     std::vector<ShopEntry> out;
     if (shop == "Traveler") return cartStock;   // today's cart
@@ -796,13 +805,18 @@ std::vector<ShopEntry> Game::shopStock(const std::string& shop) const {
         for (auto& si : it->second) {
             if (si.seasonMask && !(si.seasonMask & (1 << season))) continue;
             if (year < si.minYear) continue;
-            const ObjectDef* o = data.object(si.itemId);
-            if (!o) continue;
-            int price = si.price > 0 ? si.price : o->price * 2;
-            if (price <= 0) continue;
+            if (!si.noMail.empty() && mailReceived.count(si.noMail)) continue;
+            ShopEntry e{si.itemId + si.kind * SHOP_KIND, 0, si.kind, si.itemId, si.tradeId};
+            int base = 0;
+            if (si.kind == 0) { const ObjectDef* o = data.object(si.itemId); if (!o) continue; base = o->price * 2; }
+            else if (si.kind == 1) { if (!data.bigs.count(si.itemId)) continue; }
+            else if (si.kind == 2) { if (hatIndex(data, si.itemId) < 0) continue; }
+            else if (!data.furniture.count(si.itemId)) continue;
+            e.price = si.tradeId >= 0 ? std::max(1, si.tradeAmt) : si.price > 0 ? si.price : base;
+            if (e.price <= 0) continue;
             bool dup = false;
-            for (auto& e : out) dup |= e.itemId == si.itemId;
-            if (!dup) out.push_back({si.itemId, price});
+            for (auto& o : out) dup |= o.itemId == e.itemId;
+            if (!dup) out.push_back(e);
         }
         return out;
     }
@@ -824,16 +838,49 @@ bool Game::buy(const std::string& shop, int itemId, int qty) {
     for (auto& e : shopStock(shop))
         if (e.itemId == itemId) {
             int cost = e.price * qty;
-            if (cost > money) {
-                say("Not enough money");
+            std::string unit;
+            if (cost > shopFunds(shop, &unit)) {
+                say("Not enough " + unit);
                 return false;
             }
-            if (!addItem(itemId, qty)) return false;
-            money -= cost;
+            if (e.kind == 0) { if (!addItem(e.realId, qty)) return false; }
+            else if (e.kind == 1) {
+                Slot b; b.type = SLOT_BIG; b.id = e.realId; b.count = qty;
+                if (!addSlot(b)) return false;
+            } else if (e.kind == 2) { if (!giveTool("Hat_" + std::to_string(e.realId))) return false; }
+            else if (!placeFurnitureInHouse(e.realId)) { say("There's no room for it in your house."); return false; }
+            else say("It's been delivered to your house.");
+            if (e.tradeId == -1) money -= cost;
+            else if (e.tradeId == -2) starTokens -= cost;
+            else if (e.tradeId == -3) clubCoins -= cost;
+            else takeItem(e.tradeId, cost);
             sfx("purchase");
             return true;
         }
     return false;
+}
+
+int Game::shopFunds(const std::string& shop, std::string* unit) const {
+    int trade = -1;
+    auto it = data.shops.find(shop);
+    if (shop != "Traveler" && it != data.shops.end() && !it->second.empty()) trade = it->second.front().tradeId;
+    if (trade == -2) { if (unit) *unit = "star tokens"; return starTokens; }
+    if (trade == -3) { if (unit) *unit = "Qi coins"; return clubCoins; }
+    if (trade >= 0) {
+        const ObjectDef* o = data.object(trade);
+        if (unit) *unit = o ? o->name + "s" : "items";
+        return countItem(trade);
+    }
+    if (unit) *unit = "money";
+    return money;
+}
+
+std::string Game::shopEntryName(const ShopEntry& e) const {
+    if (e.kind == 1) { auto b = data.bigs.find(e.realId); return b != data.bigs.end() ? b->second.name : "?"; }
+    if (e.kind == 2) { const ToolDef* t = data.tool(hatIndex(data, e.realId)); return t ? t->name : "Hat"; }
+    if (e.kind == 3) { auto f = data.furniture.find(e.realId); return f != data.furniture.end() ? f->second.name : "Furniture"; }
+    const ObjectDef* o = data.object(e.realId ? e.realId : e.itemId);
+    return o ? o->name : "?";
 }
 
 int Game::sellPrice(const Slot& s) const {
@@ -903,6 +950,7 @@ bool Game::tryInteract(int tx, int ty) {
     if (Placed* p = placedAt(tx, ty))
         if (interactPlaced(*p)) return true;
     if (shakeBush(tx, ty)) return true;
+    if (pickWalnut(tx, ty)) return true;
     if (WorldObject* o = objectAt(tx, ty)) {
         if (!o->ore) {
             int id = o->itemId;
@@ -933,6 +981,7 @@ bool Game::tryInteract(int tx, int ty) {
             const ObjectDef* o = data.object(c->harvestId);
             if (o) gainXp(SK_FARMING, (int)std::lround(16.0 * std::log(0.018 * std::max(0, o->price) + 1.0)));
             questItem(c->harvestId, n);
+            if (cur->name == "IslandWest") walnutChance(0, 12);
             if (o) say("+" + std::to_string(n) + " " + o->name);
             if (c->regrowDays > 0) {
                 s.regrowWait = (int8_t)c->regrowDays;
@@ -1075,6 +1124,7 @@ void Game::useSelected(int tx, int ty) {
                         cur->objects.erase(cur->objects.begin() + (o - &cur->objects[0]));
                         if (addItem(drop, n)) itemFlies(drop, tx * TILE + 8.0f, ty * TILE + 10.0f, n);
                         gainXp(SK_MINING, 5);
+                        if (cur->mineLevel > 300) walnutChance(2, 25);
                         questItem(drop, n);
                         mineRockBroken(tx, ty, node);
                         const ObjectDef* od = data.object(drop);
@@ -1516,6 +1566,7 @@ bool Game::goToBed() {
         if (iw != locations.end()) growSoils(*iw->second, newSeason, true);
     }
 
+    bool stormedLastNight = stormy && raining;
     raining = (day > 3 && season != WINTER && rand32() % 100 < 18);
     windy = !raining && day > 2 && (season == SPRING || season == FALL) && rand32() % 100 < 15;
     stormy = raining && rand32() % 100 < (season == SUMMER ? 40 : 15);
@@ -1524,6 +1575,7 @@ bool Game::goToBed() {
         for (auto& s : farm->soils)
             if (s.tilled) s.watered = true;
 
+    specialMorning(stormedLastNight);
     applyLevelUps();
     sprinklersWater();
     machinesDayStart();
@@ -1550,7 +1602,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 32;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 33;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1781,6 +1833,10 @@ bool Game::save(const std::string& path) const {
             }
         w.i32(junimoBest);
     }
+    w.i32(walnuts); w.i32(walnutsFound); w.i32(clubCoins);   // v33
+    for (int k = 0; k < 4; k++) w.i32(walnutPools[k]);
+    w.u32((uint32_t)walnutsGot.size());
+    for (auto& k : walnutsGot) w.str(k);
     w.str(orderKey); w.i32(orderDays);
     w.u32((uint32_t)orderProgress.size());
     for (int v : orderProgress) w.i32(v);
@@ -2181,6 +2237,15 @@ bool Game::load(const std::string& path, std::string* err) {
                     if (in && i < in->soils.size()) in->soils[i] = s;
                 }
                 junimoBest = r.i32();
+            }
+            walnuts = walnutsFound = clubCoins = 0;
+            walnutsGot.clear();
+            for (int k = 0; k < 4; k++) walnutPools[k] = 0;
+            if (version >= 33) {
+                walnuts = r.i32(); walnutsFound = r.i32(); clubCoins = r.i32();
+                for (int k = 0; k < 4; k++) walnutPools[k] = r.i32();
+                uint32_t nw = r.u32();
+                for (uint32_t k = 0; k < nw && r.ok && k < 1000; k++) walnutsGot.insert(r.str());
             }
             if (version >= 31) {
                 orderKey = r.str(); orderDays = r.i32();

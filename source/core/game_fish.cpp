@@ -120,6 +120,7 @@ void Game::fishingUpdate(float dt, const Input& in) {
                     addItem(f.fish, 1);
                 fishCaught[f.fish]++;
                 orderEvent("fish", f.fish, 1, "");
+                if (cur->name.rfind("Island", 0) == 0) walnutChance(1, 6);
                     questItem(f.fish, 1);
                     const ObjectDef* o = data.object(f.fish);
                     say("Caught " + (o ? o->name : std::string("something")));

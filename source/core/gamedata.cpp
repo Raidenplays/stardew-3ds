@@ -366,6 +366,12 @@ bool GameData::load(const std::string& root, std::string* err) {
             it.price = atoi(f[2].c_str());
             it.seasonMask = (uint8_t)atoi(f[3].c_str());
             it.minYear = atoi(f[4].c_str());
+            if (f.size() >= 8) {
+                it.kind = atoi(f[5].c_str());
+                it.tradeId = atoi(f[6].c_str());
+                it.tradeAmt = atoi(f[7].c_str());
+                if (f.size() >= 9) it.noMail = f[8];
+            }
             shops[f[0]].push_back(it);
         }
     }

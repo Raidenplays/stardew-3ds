@@ -781,6 +781,15 @@ int main(int argc, char** argv) {
             step(g, ui, none, 5);
             shot(c, g, ui, "fixes");
         }
+        if (getenv("ISLAND")) {   // ISLAND=1: everything the parrots build, at --where / --at
+            for (const char* f : {"Island_FirstParrot", "Island_Turtle", "Island_UpgradeBridge", "Island_UpgradeTrader", "Island_VolcanoBridge",
+                                  "Island_UpgradeHouse", "Island_W_Obelisk", "Island_Resort"}) g.mailReceived.insert(f);
+            g.teleport("Farm", 60, 20);
+            g.teleport(whereMap, atX, atY);
+            step(g, ui, none, 5);
+            printf("  island: found %d\n", g.walnutsFound);
+            shot(c, g, ui, "island");
+        }
         if (getenv("COLL")) {   // COLL=<page>: the Collections pages with a few things in them
             for (int id : {24, 188, 190, 192, 254, 256, 400, 16, 18, 20}) g.shippedEver[id] = 20 + id;
             for (int id : {145, 137, 142, 128, 129}) g.fishCaught[id] = 3;
@@ -792,6 +801,7 @@ int main(int argc, char** argv) {
         }
         if (const char* which = getenv("ARCADE")) {   // ARCADE=1|2: play a few seconds of an arcade game
             g.arcadeStart(atoi(which));
+            if (getenv("BOSS")) { g.arcade.stage = 3; g.arcade.timer = 0.1f; g.arcade.drops.push_back({60, 100, 1, 9.0f}); g.arcade.drops.push_back({130, 110, 5, 9.0f}); }
             Input play; play.mx = 0.6f; play.my = -0.3f; play.sx = 1;
             for (int k = 0; k < 500 && g.arcade.game; k++) {
                 play.action = (k % 37) == 0; play.hold = (k % 37) < 12;

@@ -160,6 +160,8 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
         else if (k == "babydue") babyDue = I(f, 1) > 0 ? I(f, 1) : -1;
         else if (k == "shippedever" && f.size() > 2) shippedEver[I(f, 1)] = I(f, 2);
         else if (k == "fishever" && f.size() > 2) fishCaught[I(f, 1)] = I(f, 2);
+        else if (k == "walnuts" && f.size() > 2) { walnuts = I(f, 1); walnutsFound = I(f, 2); }
+        else if (k == "clubcoins") clubCoins = I(f, 1);
         else if (k == "cookedever" && f.size() > 2) cookedEver[I(f, 1)] = I(f, 2);
         else if (k == "earned") totalEarned = std::max(totalEarned, (long long)I(f, 1));
         else if (k == "backpack") invSlots = I(f, 1) >= 36 ? 36 : I(f, 1) >= 24 ? 24 : 12;

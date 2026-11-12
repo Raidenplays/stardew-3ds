@@ -405,6 +405,7 @@ void Game::giveGift(NpcState& n, int slot) {
     n.giftsToday++;
     n.giftsWeek++;
     n.introduced = true;
+    if (t == 0) orderEvent("gift", 0, 1, n.def->name);   // a loved gift (Qi counts them)
     if (--sl.count <= 0) sl = Slot();
 
     static const char* generic[TASTE_COUNT] = {
@@ -444,7 +445,9 @@ void Game::dialogueChoose(int i) {
         p.choices.clear();
         dialogueNext();
         if (what == "festival" && ch.responseKey == "festival:go") { festivalMain(); return; }
+        if ((what == "festival" || what == "fair") && ch.responseKey.rfind("fair:", 0) == 0) { fairChoice(ch.responseKey); return; }
         if (worldChoice(what, ch.responseKey)) return;
+        if (islandChoice(what, ch.responseKey)) return;
         if (petChoice(what, ch.responseKey)) return;
         if (kidsChoice(what, ch.responseKey)) return;
         if (ordersChoice(what, ch.responseKey)) return;

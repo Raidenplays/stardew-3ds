@@ -18,19 +18,25 @@ void Game::arcadeStart(int which) {
     arcade.stage = 1;
     arcade.timer = which == 1 ? 40.0f : 0.0f;
     arcade.cartY = 0;
-    if (which == 2) {            // lay the track: runs of rail with gaps, a little higher or lower each time
-        int h = 3;
-        arcade.track.assign(12, h);
-        while (arcade.track.size() < 400) {
-            int run = 4 + (int)(rand32() % 7), gap = 2 + (int)(rand32() % 2);
-            h = std::max(1, std::min(6, h + (int)(rand32() % 3) - 1));
-            for (int i = 0; i < run; i++) arcade.track.push_back(h);
-            for (int i = 0; i < gap; i++) arcade.track.push_back(0);
-        }
-        for (int i = 0; i < 14; i++) arcade.track.push_back(3);
-        arcade.cartY = 3 * 16.0f;
-    }
+    if (which == 2) kartTrack();
     sfx("coin");
+}
+
+// Lay a Junimo Kart track: runs of rail with gaps, a little higher or lower each time. Later tracks are
+// longer, with shorter runs and wider gaps.
+void Game::kartTrack() {
+    int h = 3, st = arcade.stage;
+    arcade.track.assign(12, h);
+    arcade.dist = 0;
+    arcade.vy = 0;
+    while ((int)arcade.track.size() < 260 + st * 70) {
+        int run = std::max(3, 5 - st + (int)(rand32() % (8 - st))), gap = 2 + (int)(rand32() % (st >= 3 ? 3 : 2));
+        h = std::max(1, std::min(6, h + (int)(rand32() % 3) - 1));
+        for (int i = 0; i < run; i++) arcade.track.push_back(h);
+        for (int i = 0; i < gap; i++) arcade.track.push_back(0);
+    }
+    for (int i = 0; i < 14; i++) arcade.track.push_back(3);
+    arcade.cartY = 3 * 16.0f;
 }
 
 void Game::arcadeEnd(bool won) {
@@ -42,6 +48,7 @@ void Game::arcadeEnd(bool won) {
     } else {
         if (won) mailReceived.insert("JunimoKart");
         junimoBest = std::max(junimoBest, score);
+        orderEvent("jk", 0, score, "");
         say((won ? "You reached the end of the line! " : "Crash! ") + std::string("Score ") + std::to_string(score));
     }
 }
@@ -54,24 +61,34 @@ void Game::arcadeUpdate(float dt, const Input& in) {
         if (a.pause > 0) { a.pause -= dt; return; }
         // move
         float len = std::sqrt(in.mx * in.mx + in.my * in.my);
+        float walk = a.fast > 0 ? 110.0f : 70.0f;
         if (len > 0.2f) {
-            a.px = std::max(8.0f, std::min(184.0f, a.px + in.mx / std::max(1.0f, len) * 70.0f * dt));
-            a.py = std::max(8.0f, std::min(184.0f, a.py + in.my / std::max(1.0f, len) * 70.0f * dt));
+            a.px = std::max(8.0f, std::min(184.0f, a.px + in.mx / std::max(1.0f, len) * walk * dt));
+            a.py = std::max(8.0f, std::min(184.0f, a.py + in.my / std::max(1.0f, len) * walk * dt));
         }
+        if (a.rapid > 0) a.rapid -= dt;
+        if (a.spread > 0) a.spread -= dt;
+        if (a.fast > 0) a.fast -= dt;
         // shoot
         a.cool -= dt;
         if ((in.sx || in.sy) && a.cool <= 0) {
             Arcade::Shot s;
             s.x = a.px; s.y = a.py; s.vx = in.sx * 190.0f; s.vy = in.sy * 190.0f;
             a.shots.push_back(s);
-            a.cool = 0.22f;
+            if (a.spread > 0)                               // two more, fanned out either side
+                for (int k = -1; k <= 1; k += 2) {
+                    Arcade::Shot e = s;
+                    if (in.sx) e.vy += k * 60.0f; else e.vx += k * 60.0f;
+                    a.shots.push_back(e);
+                }
+            a.cool = a.rapid > 0 ? 0.09f : 0.22f;
             sfx("Cowboy_gunshot");
         }
         for (auto& s : a.shots) { s.x += s.vx * dt; s.y += s.vy * dt; }
         a.shots.erase(std::remove_if(a.shots.begin(), a.shots.end(), [](const Arcade::Shot& s) { return s.x < 0 || s.x > 192 || s.y < 0 || s.y > 192; }), a.shots.end());
         // outlaws pour in from the four gates, faster each stage
         a.spawn -= dt;
-        if (a.spawn <= 0 && a.timer > 2) {
+        if (a.spawn <= 0 && a.timer > 2 && !a.boss) {
             Arcade::Foe f;
             int side = (int)(rand32() % 4);
             float along = 80.0f + (float)(rand32() % 33);
@@ -92,8 +109,58 @@ void Game::arcadeUpdate(float dt, const Input& in) {
             for (auto& f : a.foes)
                 if (f.hp > 0 && s.x > -500 && std::fabs(s.x - f.x) < 9 && std::fabs(s.y - f.y) < 9) {
                     s.x = -1000;
-                    if (--f.hp <= 0) { a.score += f.kind ? 30 : 10; sfx("Cowboy_monsterDie"); }
+                    if (--f.hp <= 0) {
+                        a.score += f.kind ? 30 : 10;
+                        sfx("Cowboy_monsterDie");
+                        if (rand32() % 100 < 9) {           // sometimes they drop something
+                            static const int KINDS[] = {0, 0, 0, 1, 1, 2, 2, 4, 4, 5, 3};
+                            a.drops.push_back({f.x, f.y, KINDS[rand32() % 11], 9.0f});
+                        }
+                    }
                 }
+        for (auto& d : a.drops) {
+            d.life -= dt;
+            if (d.life > 0 && std::fabs(d.x - a.px) < 10 && std::fabs(d.y - a.py) < 10) {
+                d.life = 0;
+                sfx("cowboy_powerup");
+                if (d.kind == 0) a.score += 50;
+                else if (d.kind == 1) a.rapid = 10.0f;
+                else if (d.kind == 2) a.spread = 10.0f;
+                else if (d.kind == 3) a.lives = std::min(5, a.lives + 1);
+                else if (d.kind == 4) a.fast = 10.0f;
+                else { for (auto& f : a.foes) { f.hp = 0; a.score += 10; } }
+            }
+        }
+        a.drops.erase(std::remove_if(a.drops.begin(), a.drops.end(), [](const Arcade::Drop& d) { return d.life <= 0; }), a.drops.end());
+        if (a.boss) {                                       // he paces the top of the field and fires down at you
+            a.bx += a.bvx * dt;
+            if (a.bx < 20 || a.bx > 172) { a.bvx = -a.bvx; a.bx = std::max(20.0f, std::min(172.0f, a.bx)); }
+            a.bcool -= dt;
+            if (a.bcool <= 0) {
+                float dx = a.px - a.bx, dy = a.py - a.by, d = std::sqrt(dx * dx + dy * dy) + 0.01f;
+                a.bossShots.push_back({a.bx, a.by + 8, dx / d * 110.0f, dy / d * 110.0f});
+                a.bcool = a.bhp < 20 ? 0.45f : 0.8f;
+                sfx("Cowboy_gunshot");
+            }
+            for (auto& s : a.shots)
+                if (s.x > -500 && std::fabs(s.x - a.bx) < 14 && std::fabs(s.y - a.by) < 14) {
+                    s.x = -1000;
+                    if (--a.bhp <= 0) { a.score += 1000; sfx("Cowboy_monsterDie"); arcadeEnd(true); return; }
+                }
+            for (auto& s : a.bossShots) { s.x += s.vx * dt; s.y += s.vy * dt; }
+            a.bossShots.erase(std::remove_if(a.bossShots.begin(), a.bossShots.end(), [](const Arcade::Shot& s) { return s.x < 0 || s.x > 192 || s.y < 0 || s.y > 192; }), a.bossShots.end());
+            bool hit = std::fabs(a.bx - a.px) < 14 && std::fabs(a.by - a.py) < 14;
+            for (auto& s : a.bossShots) hit |= std::fabs(s.x - a.px) < 6 && std::fabs(s.y - a.py) < 6;
+            if (hit) {
+                sfx("cowboy_dead");
+                a.bossShots.clear();
+                a.shots.clear();
+                a.px = 96; a.py = 150;
+                a.pause = 1.2f;
+                if (--a.lives <= 0) { arcadeEnd(false); return; }
+            }
+            return;
+        }
         a.foes.erase(std::remove_if(a.foes.begin(), a.foes.end(), [](const Arcade::Foe& f) { return f.hp <= 0; }), a.foes.end());
         for (auto& f : a.foes)
             if (std::fabs(f.x - a.px) < 9 && std::fabs(f.y - a.py) < 9) {   // caught
@@ -107,7 +174,16 @@ void Game::arcadeUpdate(float dt, const Input& in) {
             }
         a.timer -= dt;
         if (a.timer <= 0 && a.foes.empty()) {
-            if (a.stage >= 3) { a.score += 500; arcadeEnd(true); return; }
+            if (a.stage >= 3) {                         // the last stage ends with the outlaw himself
+                a.boss = true;
+                a.bhp = 45;
+                a.px = 96; a.py = 150;
+                a.pause = 1.5f;
+                a.score += 100;
+                a.drops.clear();
+                sfx("cowboy_powerup");
+                return;
+            }
             a.stage++;
             a.timer = 40.0f;
             a.pause = 1.5f;
@@ -133,7 +209,14 @@ void Game::arcadeUpdate(float dt, const Input& in) {
         }
         a.score = (int)(a.dist / 4.0f);
         if (a.cartY < -30.0f) { arcadeEnd(false); return; }               // down the hole
-        if (cell >= (int)a.track.size() - 6) { a.score += 500; arcadeEnd(true); return; }
+        a.score = a.lives * 0 + (a.stage - 1) * 1500 + (int)(a.dist / 4.0f);
+        if (cell >= (int)a.track.size() - 6) {
+            if (a.stage >= 3) { a.score += 500; arcadeEnd(true); return; }
+            a.stage++;                                      // on to the next track
+            kartTrack();
+            a.pause = 0;
+            sfx("cowboy_powerup");
+        }
     }
 }
 

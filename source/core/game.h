@@ -97,6 +97,9 @@ struct Location {
     std::vector<Soil> soils;
     std::vector<uint8_t> debris, debrisVar;
     std::vector<WorldObject> objects;
+    std::vector<std::pair<int, int>> walnutSpots;   // Ginger Island: where golden walnuts lie on this map
+    bool walnutInit = false;
+    std::set<std::string> stamps;                   // overlay maps already laid on this one
     std::vector<Tree> trees;
     // Bushes and grass come from the map's Paths layer markers (24/25/26 =
     // large/medium/small bush, 22 = grass, 36 = blue grass).
@@ -333,9 +336,13 @@ struct Bundle {
 };
 
 struct ShopEntry {
-    int itemId;
+    int itemId;        // the row's key (objects: the object id; other kinds are offset by SHOP_KIND)
     int price;
+    int kind = 0;      // 0 object, 1 big craftable, 2 hat, 3 furniture
+    int realId = 0;
+    int tradeId = -1;  // -1 gold, -2 star tokens, -3 Qi coins, else an object id
 };
+enum { SHOP_KIND = 10000000 };
 
 class Game {
 public:
@@ -700,6 +707,37 @@ public:
     void festivalOutcome();
     void grandpaEvaluation();
     void caveNight();
+    // ---- Ginger Island and the casino (game_island.cpp) ----
+    int walnuts = 0, walnutsFound = 0;
+    int walnutPools[4] = {0, 0, 0, 0};       // crops, fishing, volcano rocks, volcano monsters: five each
+    std::set<std::string> walnutsGot;        // "map:x:y" of the ones picked up
+    int jackBet = 0, jackMine = 0, jackDealer = 0;
+    void gotWalnut(int n, const std::string& why);
+    void walnutChance(int pool, int oneIn);
+    void islandWalnuts();
+    bool pickWalnut(int tx, int ty);
+    void islandStamps();
+    void islandOffer(const std::string& flag);
+    void islandParrot();
+    bool islandGate(const std::string& dest);
+    bool islandChoice(const std::string& what, const std::string& key);
+    bool islandAction(const std::string& verb, const std::string& rest);
+    void calicoJack();
+    bool fairJudged = false;
+    void fairGrange();
+    void fairBooth();
+    void fairChoice(const std::string& key);
+    int starTokens = 0;                  // the fair's own money: gone when the fair ends
+    int clubCoins = 0;                   // Qi coins, for the casino
+    int shopFunds(const std::string& shop, std::string* unit = nullptr) const;   // what you have of the thing this shop takes
+    std::string shopEntryName(const ShopEntry& e) const;
+    // ---- bee houses, tappers, rods, crystalariums, crab pots... (game_machines.cpp) ----
+    bool specialMachine(const Placed& p) const;
+    void specialStart(Placed& p, const std::string& where);
+    void specialMorning(bool stormed);
+    bool specialInteract(Placed& p);
+    void incubatorHatch(Placed& p, const std::string& where);
+    void slimeHutchEnter();
     // ---- the arcade machines (game_arcade.cpp) ----
     struct Arcade {
         int game = 0;              // 0 off, 1 Journey of the Prairie King, 2 Junimo Kart
@@ -709,14 +747,21 @@ public:
         float px = 96, py = 96, cool = 0, spawn = 1, timer = 40;
         struct Shot { float x, y, vx, vy; };
         struct Foe { float x, y; int kind, hp; };
-        std::vector<Shot> shots;
+        std::vector<Shot> shots, bossShots;
         std::vector<Foe> foes;
+        struct Drop { float x, y; int kind; float life; };   // 0 coin, 1 rapid fire, 2 spread shot, 3 life, 4 coffee, 5 nuke
+        std::vector<Drop> drops;
+        float rapid = 0, spread = 0, fast = 0;
+        bool boss = false;         // the outlaw at the end
+        float bx = 96, by = 28, bvx = 45, bcool = 1.5f;
+        int bhp = 0;
         // junimo kart
         std::vector<int> track;    // rail height per 16px (0 = a gap)
         float dist = 0, cartY = 0, vy = 0;
     } arcade;
     int junimoBest = 0;
     void arcadeStart(int which);
+    void kartTrack();
     void arcadeEnd(bool won);
     void arcadeUpdate(float dt, const Input& in);
     // ---- special orders (game_orders.cpp) ----
@@ -735,9 +780,9 @@ public:
     void loadOrders();
     const OrderDef* orderDef(const std::string& key);
     bool ordersUnlocked() const;
-    std::vector<const OrderDef*> ordersOffered();
+    std::vector<const OrderDef*> ordersOffered(bool qi = false);
     std::string orderStatus();
-    void ordersBoard();
+    void ordersBoard(bool qi = false);
     bool ordersChoice(const std::string& what, const std::string& key);
     void orderEvent(const std::string& kind, int item, int count, const std::string& target);
     bool orderWants(const std::string& npc, int item);

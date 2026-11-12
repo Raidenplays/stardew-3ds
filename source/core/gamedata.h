@@ -256,6 +256,10 @@ struct ShopItem {
     int price = 0;
     uint8_t seasonMask = 0;   // 0 = all year
     int minYear = 1;
+    int kind = 0;             // 0 object, 1 big craftable, 2 hat, 3 furniture
+    int tradeId = -1;         // -1 gold, -2 star tokens, -3 Qi coins, else the object you pay with
+    int tradeAmt = 0;
+    std::string noMail;       // sold only until this letter/flag is set
 };
 
 struct Layout {

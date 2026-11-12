@@ -383,6 +383,7 @@ void Game::animalsNight() {
     pondsNight();
     junimosHarvest();
     for (auto& b : buildings) {   // the mill finishes overnight
+        if (b.type == "Slime Hutch") continue;   // (there, "pending" is the slimes themselves)
         for (auto& p : b.pending) {
             bool stacked = false;
             for (auto& it : b.items)

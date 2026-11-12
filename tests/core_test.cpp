@@ -280,11 +280,27 @@ int main(int argc, char** argv) {
         printf("mod pack checks passed (incl. forage, ore, seasonal map)\n");
     }
 
+    // a patch map goes where its ground lines up, and brings its actions with it
+    {
+        TileMap base, patch;
+        assert(base.load(d.vfs.path("maps/Farm.smap"), nullptr) && patch.load(d.vfs.path("maps/Farm.smap"), nullptr));
+        int fx = -1, fy = -1;
+        assert(base.findFit(patch, fx, fy) && fx == 0 && fy == 0);
+        base.setAction(1, 1, "QiDoor");
+        assert(base.action(1, 1) == "QiDoor" && base.stamp(patch, 0, 0));
+    }
+    // golden walnuts, Qi coins and the fair's tokens
+    g.gotWalnut(3, "test");
+    g.clubCoins = 250;
+    g.walnutsGot.insert("IslandSouth:4:5");
+    assert(g.walnuts == 3 && g.walnutsFound == 3);
+    assert(g.shopFunds("NoSuchShop") == g.money);
     // save / load round trip
     assert(g.save("/tmp/sv_test.sav"));
     Game g2(d);
     assert(g2.load("/tmp/sv_test.sav"));
     assert(g2.day == g.day && g2.money == g.money);
+    assert(g2.walnuts == 3 && g2.walnutsFound == 3 && g2.clubCoins == 250 && g2.walnutsGot.count("IslandSouth:4:5"));
     assert(g2.farmLocation().soils[ty * g2.farmLocation().map.width() + tx].seed == 472);
     assert(g2.npcByName("Juniper")->introduced);
     assert(g2.npcByName("Juniper")->friendship == g.npcByName("Juniper")->friendship);
