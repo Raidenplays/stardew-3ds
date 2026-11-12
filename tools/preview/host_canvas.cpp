@@ -259,7 +259,7 @@ bool HostCanvas::writePng(const std::string& path, int scale) const {
     return stbi_write_png(path.c_str(), W * scale, H * scale, 3, out.data(), W * scale * 3) != 0;
 }
 
-void HostCanvas::cacheBegin() {
+void HostCanvas::cacheBegin(int) {
     if (inCache) return;
     const int S = CACHE_SIZE;
     savedFb.swap(fb);
@@ -271,18 +271,18 @@ void HostCanvas::cacheBegin() {
     inCache = true;
 }
 
-void HostCanvas::cacheEnd() {
+void HostCanvas::cacheEnd(int which) {
     if (!inCache) return;
-    cachePx.swap(fb);
+    cachePx[which].swap(fb);
     fb.swap(savedFb);
     W = sW; H = sH; ox = sox; oy = soy; cx = scx; cy = scy; cw = scw; ch = sch;
     inCache = false;
 }
 
-void HostCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) {
+void HostCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy, int which) {
     draws++;
     const int S = CACHE_SIZE;
-    if (cachePx.empty()) return;
+    if (cachePx[which].empty()) return;
     int bx = (int)std::floor(dx), by = (int)std::floor(dy);
     for (int y = 0; y < sh; y++) {
         int ty = cacheFlipY ? sy + sh - 1 - y : sy + y;
@@ -290,7 +290,7 @@ void HostCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) {
         for (int x = 0; x < sw; x++) {
             int tx = sx + x;
             if (tx < 0 || tx >= S) continue;
-            blend(bx + x, by + y, cachePx[(size_t)ty * S + tx]);
+            blend(bx + x, by + y, cachePx[which][(size_t)ty * S + tx]);
         }
     }
 }

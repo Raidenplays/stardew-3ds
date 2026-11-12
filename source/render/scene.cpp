@@ -522,33 +522,39 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             mc.ok = true;
             int cx0 = std::max(0, mc.ox / TILE), cy0 = std::max(0, mc.oy / TILE);
             int cx1 = std::min(m.width() - 1, (mc.ox + CS) / TILE - 1), cy1 = std::min(m.height() - 1, (mc.oy + CS) / TILE - 1);
-            c.cacheBegin();
-            for (int layer : {L_BACK, L_BUILDINGS}) {
-                tileDraws.clear();
-                for (int y = cy0; y <= cy1; y++)
-                    for (int x = cx0; x <= cx1; x++) {
-                        uint16_t t = m.tile(layer, x, y);
-                        if (t == NO_TILE) continue;
-                        int ts = m.tileset(layer, x, y);
-                        int cols = tsCols[ts];
-                        if (cols <= 0 || m.isAnimated(ts, t)) continue;
-                        if (layer == L_BUILDINGS) {   // over a moving Back tile: drawn live with it
-                            uint16_t bt = m.tile(L_BACK, x, y);
-                            if (bt != NO_TILE && m.isAnimated(m.tileset(L_BACK, x, y), bt)) continue;
+            for (int which = 0; which < 2; which++) {     // 0: ground and buildings; 1: what's drawn over everything
+                c.cacheBegin(which);
+                for (int layer : {which ? L_FRONT : L_BACK, which ? L_ALWAYSFRONT : L_BUILDINGS}) {
+                    tileDraws.clear();
+                    for (int y = cy0; y <= cy1; y++)
+                        for (int x = cx0; x <= cx1; x++) {
+                            uint16_t t = m.tile(layer, x, y);
+                            if (t == NO_TILE) continue;
+                            int ts = m.tileset(layer, x, y);
+                            int cols = tsCols[ts];
+                            if (cols <= 0 || m.isAnimated(ts, t)) continue;
+                            if (layer == L_BUILDINGS) {   // over a moving Back tile: drawn live with it
+                                uint16_t bt = m.tile(L_BACK, x, y);
+                                if (bt != NO_TILE && m.isAnimated(m.tileset(L_BACK, x, y), bt)) continue;
+                            }
+                            if (layer == L_ALWAYSFRONT) { // over a moving Front tile: drawn live with it
+                                uint16_t ft = m.tile(L_FRONT, x, y);
+                                if (ft != NO_TILE && m.isAnimated(m.tileset(L_FRONT, x, y), ft)) continue;
+                            }
+                            TileDraw d;
+                            d.sx = (uint16_t)((t % cols) * 16);
+                            d.sy = (uint16_t)((t / cols) * 16);
+                            d.ts = (uint8_t)ts;
+                            d.dx = (int16_t)(x * TILE - mc.ox);
+                            d.dy = (int16_t)(y * TILE - mc.oy);
+                            d.key = ((uint32_t)ts << 24) | ((uint32_t)(d.sy >> 8) << 12) | (uint32_t)(d.sx >> 8);
+                            tileDraws.push_back(d);
                         }
-                        TileDraw d;
-                        d.sx = (uint16_t)((t % cols) * 16);
-                        d.sy = (uint16_t)((t / cols) * 16);
-                        d.ts = (uint8_t)ts;
-                        d.dx = (int16_t)(x * TILE - mc.ox);
-                        d.dy = (int16_t)(y * TILE - mc.oy);
-                        d.key = ((uint32_t)ts << 24) | ((uint32_t)(d.sy >> 8) << 12) | (uint32_t)(d.sx >> 8);
-                        tileDraws.push_back(d);
-                    }
-                std::sort(tileDraws.begin(), tileDraws.end(), [](const TileDraw& a, const TileDraw& b) { return a.key < b.key; });
-                for (const TileDraw& d : tileDraws) c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx, d.dy);
+                    std::sort(tileDraws.begin(), tileDraws.end(), [](const TileDraw& a, const TileDraw& b) { return a.key < b.key; });
+                    for (const TileDraw& d : tileDraws) c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx, d.dy);
+                }
+                c.cacheEnd(which);
             }
-            c.cacheEnd();
         }
         c.cacheDraw((int)camX - mc.ox, (int)camY - mc.oy, TOP_W, TOP_H, c.shift(0.0f), 0);
         // the moving tiles (water...), and Buildings tiles sitting on moving Back tiles
@@ -1155,8 +1161,28 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                            ok ? RGBA(0x40, 0xE0, 0x40, 0x60) : RGBA(0xE0, 0x30, 0x30, 0x60));
         }
     profEnd(PROF_OBJECTS);
-    drawLayer(L_FRONT, 0.0f);
-    drawLayer(L_ALWAYSFRONT, 0.0f);
+    if (cached) {
+        c.cacheDraw((int)camX - mc.ox, (int)camY - mc.oy, TOP_W, TOP_H, c.shift(0.0f), 0, 1);
+        for (int y = y0; y <= y1; y++)                    // the moving ones, and what sits on them
+            for (int x = x0; x <= x1; x++) {
+                bool frontMoves = false;
+                for (int layer : {L_FRONT, L_ALWAYSFRONT}) {
+                    uint16_t t = m.tile(layer, x, y);
+                    if (t == NO_TILE) continue;
+                    int ts = m.tileset(layer, x, y);
+                    int cols = tsCols[ts];
+                    if (cols <= 0) continue;
+                    bool moves = m.isAnimated(ts, t);
+                    if (layer == L_FRONT) frontMoves = moves;
+                    if (!moves && !(layer == L_ALWAYSFRONT && frontMoves)) continue;
+                    t = m.animatedTile(ts, t, timeMs);
+                    c.imageTex(tsHandle[ts], tsTex[ts], (t % cols) * 16, (t / cols) * 16, 16, 16, x * TILE - camX + c.shift(0.0f), y * TILE - camY);
+                }
+            }
+    } else {
+        drawLayer(L_FRONT, 0.0f);
+        drawLayer(L_ALWAYSFRONT, 0.0f);
+    }
     // butterflies on fine spring/summer days (TileSheets/critters: 4-frame flaps, 20 columns)
     if (m.outdoors && !g.raining && !g.windy && (g.season == SPRING || g.season == SUMMER) &&
         g.timeOfDay < 18 * 60 && c.texWidth("TileSheets_critters") >= 320) {

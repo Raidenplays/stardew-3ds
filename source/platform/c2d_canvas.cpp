@@ -116,36 +116,42 @@ bool C2DCanvas::cacheSupported() {
     if (!cacheTried) {
         cacheTried = true;
         const int S = CACHE_SIZE;
-        bool ok = C3D_TexInitVRAM(&cacheTex, S, S, GPU_RGBA8);
-        if (!ok) ok = C3D_TexInit(&cacheTex, S, S, GPU_RGBA8);
-        if (ok) {
-            C3D_TexSetFilter(&cacheTex, GPU_NEAREST, GPU_NEAREST);
-            cacheTarget = C3D_RenderTargetCreateFromTex(&cacheTex, GPU_TEXFACE_2D, 0, -1);
-            if (!cacheTarget) C3D_TexDelete(&cacheTex);
+        for (int k = 0; k < 2; k++) {
+            bool ok = C3D_TexInitVRAM(&cacheTex[k], S, S, GPU_RGBA8);
+            if (!ok) ok = C3D_TexInit(&cacheTex[k], S, S, GPU_RGBA8);
+            if (!ok) break;
+            C3D_TexSetFilter(&cacheTex[k], GPU_NEAREST, GPU_NEAREST);
+            cacheTarget[k] = C3D_RenderTargetCreateFromTex(&cacheTex[k], GPU_TEXFACE_2D, 0, -1);
+            if (!cacheTarget[k]) { C3D_TexDelete(&cacheTex[k]); break; }
+        }
+        if (cacheTarget[0] && !cacheTarget[1]) {      // no room for the second: do without both, the map draws tile by tile
+            C3D_RenderTargetDelete(cacheTarget[0]);
+            C3D_TexDelete(&cacheTex[0]);
+            cacheTarget[0] = nullptr;
         }
     }
-    return cacheTarget && screen;
+    return cacheTarget[0] && cacheTarget[1] && screen;
 }
 
-void C2DCanvas::cacheBegin() {
-    if (!cacheTarget) return;
-    C2D_TargetClear(cacheTarget, 0);
-    C2D_SceneBegin(cacheTarget);
+void C2DCanvas::cacheBegin(int which) {
+    if (!cacheTarget[which]) return;
+    C2D_TargetClear(cacheTarget[which], 0);
+    C2D_SceneBegin(cacheTarget[which]);
 }
 
-void C2DCanvas::cacheEnd() {
-    if (!cacheTarget || !screen) return;
+void C2DCanvas::cacheEnd(int which) {
+    if (!cacheTarget[which] || !screen) return;
     C2D_SceneBegin(screen);
-    cacheFresh = true;
+    cacheFresh[which] = true;
 }
 
-void C2DCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) {
-    if (!cacheTarget) return;
+void C2DCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy, int which) {
+    if (!cacheTarget[which]) return;
     draws++;
-    if (cacheFresh) {   // new contents at the same address: make citro2d bind it again
+    if (cacheFresh[which]) {   // new contents at the same address: make citro2d bind it again
         C2D_Flush();
         C2D_Prepare();
-        cacheFresh = false;
+        cacheFresh[which] = false;
     }
     const float S = (float)CACHE_SIZE;
     Tex3DS_SubTexture sub;
@@ -153,7 +159,7 @@ void C2DCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy) {
     sub.height = (u16)sh;
     sub.left = sx / S;
     sub.right = (sx + sw) / S;
-    C2D_Image img = {&cacheTex, &sub};
+    C2D_Image img = {&cacheTex[which], &sub};
     if (!cacheFlipY) {   // first stored row is the top, like our texture pages
         sub.top = 1.0f - sy / S;
         sub.bottom = 1.0f - (sy + sh) / S;

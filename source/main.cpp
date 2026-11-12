@@ -463,9 +463,12 @@ int main() {
         // The bottom screen mostly shows menus that don't move: redraw it when
         // something was pressed or touched, and otherwise ~12 times a second.
         // A screen that isn't drawn keeps showing its last picture.
+        // (things that move down there by themselves keep the faster rate)
+        bool botLive = game.dialogue.active || game.cutscene.active || game.fishing.state != sv::FS_NONE || game.arcade.game ||
+                       !ui.shop.empty() || ui.statusTime > 0 || game.toastTime > 0;
         static unsigned botTick = 0;
         static u32 lastHeld = 0;
-        bool botDirty = (kDown | (kHeld ^ lastHeld)) != 0 || (kHeld & KEY_TOUCH) || (++botTick % 5) == 0;
+        bool botDirty = (kDown | (kHeld ^ lastHeld)) != 0 || (kHeld & KEY_TOUCH) || (++botTick % (botLive ? 5 : 12)) == 0;
         lastHeld = kHeld;
         {   // a performance log on the SD card (perf.txt): one line every 20 seconds and whenever you change
             // place, so slow spots can be found without watching the readout
