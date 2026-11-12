@@ -192,8 +192,31 @@ class MainActivity : AppCompatActivity() {
         scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 
+    // While converting or sending, the phone must not doze: the screen stays on, and if it's locked by hand
+    // the CPU and Wi-Fi are held awake so the transfer carries on.
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+    private fun stayAwake(on: Boolean) {
+        try {
+            if (on) {
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (wakeLock == null) wakeLock = (getSystemService(Context.POWER_SERVICE) as android.os.PowerManager)
+                    .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "stardew3ds:work")
+                if (wifiLock == null) wifiLock = (applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager)
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "stardew3ds:send")
+                if (wakeLock?.isHeld == false) wakeLock?.acquire(60 * 60 * 1000L)
+                if (wifiLock?.isHeld == false) wifiLock?.acquire()
+            } else {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (wakeLock?.isHeld == true) wakeLock?.release()
+                if (wifiLock?.isHeld == true) wifiLock?.release()
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun setBusy(b: Boolean) { ui.post {
         busy = b
+        stayAwake(b)
         listOf(R.id.convert, R.id.saveTo, R.id.send, R.id.pickContent, R.id.pickMods)
             .forEach { findViewById<Button>(it).isEnabled = !b }
         refresh()
@@ -479,29 +502,54 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString("ip", ip).putString("port", port.toString()).apply()
         setBusy(true)
         thread(name = "ftp") {
-            val ftp = FTPClient()
-            try {
-                say("Connecting to $ip:$port ...")
+            var ftp = FTPClient()
+            fun connect() {
+                try { ftp.disconnect() } catch (_: Exception) {}
+                ftp = FTPClient()
                 ftp.connectTimeout = 8000
                 ftp.connect(ip, port)
                 ftp.login("anonymous", "")
                 ftp.enterLocalPassiveMode()
                 ftp.setFileType(FTP.BINARY_FILE_TYPE)
+                ftp.soTimeout = 20000
+                ftp.setDataTimeout(20000)
+            }
+            try {
+                say("Connecting to $ip:$port ...")
+                connect()
                 val total = File(outDir, "3ds").walkTopDown().count { it.isFile }.coerceAtLeast(1)
                 var n = 0
+                // The link can drop mid-way (phone dozing, 3DS Wi-Fi hiccup): reconnect and carry on from that file.
+                fun <T> retrying(what: String, job: () -> T): T {
+                    var last: Throwable? = null
+                    for (attempt in 1..6) {
+                        try { return job() } catch (e: java.io.IOException) {
+                            last = e
+                            say("Connection dropped ($what). Reconnecting, try $attempt of 6...")
+                            Thread.sleep(1500L * attempt)
+                            try { connect() } catch (_: Exception) {}
+                        }
+                    }
+                    throw last ?: java.io.IOException("gave up")
+                }
                 fun mk(path: String) {
                     var cur = ""
                     for (part in path.trim('/').split('/')) {
                         cur += "/$part"
-                        ftp.makeDirectory(cur)
+                        val dir = cur
+                        retrying(dir) { ftp.makeDirectory(dir) }
                     }
+                }
+                fun store(f: File, remote: String) = retrying(f.name) {
+                    val ok = FileInputStream(f).use { ftp.storeFile(remote, it) }
+                    if (!ok) throw java.io.IOException("3DS refused ${f.name}: ${ftp.replyString.trim()}")
                 }
                 fun put(src: File, remote: String) {
                     mk(remote)
                     for (f in src.listFiles() ?: emptyArray()) {
                         if (f.isDirectory) put(f, "$remote/${f.name}")
                         else {
-                            FileInputStream(f).use { ftp.storeFile("$remote/${f.name}", it) }
+                            store(f, "$remote/${f.name}")
                             ++n
                             if (n % 10 == 0) progress(n * 100 / total, "Sending: $n of $total files")
                         }
@@ -509,7 +557,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 put(File(outDir, "3ds/stardew3ds"), "/3ds/stardew3ds")
                 File(outDir, "3ds/stardew3ds.3dsx").takeIf { it.isFile }?.let { g ->
-                    FileInputStream(g).use { ftp.storeFile("/3ds/${g.name}", it) }
+                    store(g, "/3ds/${g.name}")
                     n++
                 }
                 progress(100, "Sent $n files")
