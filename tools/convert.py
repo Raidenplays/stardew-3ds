@@ -1749,6 +1749,93 @@ def _festival_actors(content, map_name):
     return out
 
 
+def _token_tree(s):
+    """Splits "[Name a [Other b] c]" text into nested lists; plain text stays as strings."""
+    out, stack = [], []
+    cur = out
+    buf = ""
+    for ch in s:
+        if ch == "[":
+            if buf:
+                cur.append(buf)
+                buf = ""
+            stack.append(cur)
+            new = []
+            cur.append(new)
+            cur = new
+        elif ch == "]" and stack:
+            if buf:
+                cur.append(buf)
+                buf = ""
+            cur = stack.pop()
+        else:
+            buf += ch
+    if buf:
+        cur.append(buf)
+    return out
+
+
+def write_wedding(content, out_dir):
+    """The wedding ceremony (Data/Weddings: the game's own event script and guest list) -> data/wedding.dat.
+    The script's text tokens are worked out here, once for a husband and once for a wife; the day,
+    the season, the spouse and the guests are filled in by the game on the day."""
+    p = os.path.join(content, "Data", "Weddings.json")
+    if not os.path.isfile(p):
+        return
+    try:
+        wed = json.load(open(p, encoding="utf-8-sig"))
+        strings = json.load(open(os.path.join(content, "Strings", "StringsFromCSFiles.json"), encoding="utf-8-sig"))
+        chars = json.load(open(os.path.join(content, "Data", "Characters.json"), encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return
+    script = (wed.get("EventScript") or {}).get("default")
+    if not script:
+        return
+
+    def render(nodes, spouse_male):
+        res = ""
+        for n in nodes:
+            if isinstance(n, str):
+                res += n
+                continue
+            # the first plain piece holds the token's name (and perhaps plain arguments)
+            head = n[0] if n and isinstance(n[0], str) else ""
+            name, _, rest = head.partition(" ")
+            args = ([rest] if rest.strip() else []) + n[1:]
+            groups = [a for a in args if isinstance(a, list)]
+            if name == "EscapedText":
+                res += render(args, spouse_male).strip() if args else ""
+            elif name == "LocalizedText":
+                words = render(args, spouse_male).split()
+                text = strings.get(words[0].replace("\\\\", "\\").split(":", 1)[-1], "") if words else ""
+                for i, w in enumerate(words[1:]):
+                    text = text.replace("{%d}" % i, w)
+                res += text
+            elif name == "SpouseFarmerText":      # [for a farmer spouse] [for a villager]: always a villager here
+                res += render([groups[1]], spouse_male) if len(groups) > 1 else ""
+            elif name == "GenderedText":          # the farmer: [male] [female]
+                res += render([groups[0]], spouse_male) if groups else ""
+            elif name == "SpouseGenderedText":
+                res += render([groups[0 if spouse_male else 1]], spouse_male) if len(groups) > 1 else ""
+            elif name in ("DayOfMonth", "Season", "SetupContextualWeddingAttendees", "ContextualWeddingCelebrations"):
+                res += "{" + name + "}"
+            elif name in ("SpouseActor", "FarmerUniqueId"):
+                res += "spouse" if name == "SpouseActor" else ""
+        return res
+
+    tree = _token_tree(script)
+    with open(os.path.join(out_dir, "wedding.dat"), "w", encoding="utf-8") as f:
+        f.write("script\tm\t" + _clean(render(tree, True)) + "\n")
+        f.write("script\tf\t" + _clean(render(tree, False)) + "\n")
+        for a in (wed.get("Attendees") or {}).values():
+            if a.get("Id") and a.get("Setup"):
+                f.write("\t".join(["guest", _clean(a["Id"]), _clean(a.get("Condition") or ""), _clean(a["Setup"]),
+                                   _clean(a.get("Celebration") or "")]) + "\n")
+        for name, ch in chars.items():
+            if isinstance(ch, dict) and ch.get("Gender") in ("Male", "Female"):
+                f.write("gender\t" + _clean(name) + "\t" + ("m" if ch["Gender"] == "Male" else "f") + "\n")
+
+
 def write_world_text(content, out_dir):
     """Signs and shelves (Strings/StringsFromMaps), the library's lost books (Strings/Notes), secret
     notes (Data/SecretNotes) and where the minecarts go (Data/Minecarts)."""
@@ -1768,6 +1855,10 @@ def write_world_text(content, out_dir):
             f.write(f"loc:{_flat(k)}\t{_flat(' '.join(str(v).split()))}\n")
         for k, v in load("Data/ExtraDialogue.json").items():
             f.write(f"xd:{_flat(k)}\t{_flat(v)}\n")
+        # what you're told after being knocked out (the money and items lost)
+        for k, v in load("Strings/StringsFromCSFiles.json").items():
+            if k.startswith("Event.cs.10"):
+                f.write(f"cs:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Strings/Notes.json").items():
             f.write(f"note:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Data/SecretNotes.json").items():
@@ -2592,6 +2683,7 @@ def main():
     write_npcs(content, os.path.join(out_root, "data"), textures)
     write_festivals(content, os.path.join(out_root, "data"))
     write_world_text(content, os.path.join(out_root, "data"))
+    write_wedding(content, os.path.join(out_root, "data"))
     print("Events...")
     write_events(content, os.path.join(out_root, "data"))
     print("Sound...")

@@ -386,7 +386,12 @@ bool Game::lastAction(const std::string& verb, const std::string& rest) {
     if (verb == "SummitBoulder") {
         int p = perfection();
         if (p < 100) { showMessage(L("SummitBoulder", "It seems impossible to budge...") + " (" + std::to_string(p) + "%)"); return true; }
-        return enterMap("Summit");
+        if (!enterMap("Summit")) return false;
+        if (!mailReceived.count("Summit_event")) {   // the first time: someone is waiting at the top
+            mailReceived.insert("Summit_event");
+            startSummit();
+        }
+        return true;
     }
 
     // ---- Emily's sewing machine and dye pots, the Wizard's shrine ----

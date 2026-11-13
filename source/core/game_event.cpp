@@ -414,7 +414,7 @@ void Game::eventUpdate(float dt) {
     }
     if (cs.waitMoves) {
         for (auto& a : cs.actors)
-            if (a.moving) return;
+            if (a.moving && a.route.empty()) return;   // someone pacing a route (advancedMove) never holds the scene up
         cs.waitMoves = false;
     }
     for (int guard = 0; guard < 64 && cs.active && cs.ip < cs.cmds.size(); guard++) {
@@ -430,6 +430,11 @@ bool Game::eventStep(const std::string& raw) {
     Cutscene& cs = cutscene;
     std::vector<std::string> w = tokenize(raw);
     if (w.empty()) return true;
+    // command names are matched whatever their capitals ("Warp", "globalfade", "ShowFrame")
+    if (w[0][0] >= 'A' && w[0][0] <= 'Z') w[0][0] = (char)(w[0][0] - 'A' + 'a');
+    if (w[0] == "globalfade") w[0] = "globalFade";
+    else if (w[0] == "playsound") w[0] = "playSound";
+    else if (w[0] == "advancedmove") w[0] = "advancedMove";
     const std::string& c = w[0];
     auto arg = [&](size_t i) -> std::string { return i < w.size() ? w[i] : ""; };
     auto iarg = [&](size_t i) { return atoi(arg(i).c_str()); };
@@ -691,6 +696,26 @@ bool Game::eventStep(const std::string& raw) {
     }
     if (c == "rustyKey") { mailReceived.insert("HasRustyKey"); return true; }
     if (c == "gainSkill") { gainXp(std::max(0, std::min((int)SK_COUNT - 1, iarg(1))), 200); return true; }
+    if (c == "hospitaldeath" || c == "minedeath") {   // what being knocked out costs, in the game's own words
+        int lost = c == "hospitaldeath" ? std::min(money, 1000) : std::min(money / 10, 15000);
+        money -= lost;
+        std::string msg;
+        if (c == "hospitaldeath")
+            msg = lost > 0 ? gameLine("cs:Event.cs.1068", "Dr. Harvey charged me {0}g for the hospital visit.", std::to_string(lost), "")
+                           : gameLine("cs:Event.cs.1070", "I have no money, but Harvey was obligated to save my life free of charge.", "", "");
+        else if (lost > 0)
+            msg = gameLine("cs:Event.cs.1058", "I seem to have lost {0}g", std::to_string(lost), "");
+        if (!msg.empty()) {
+            dialogue = DialogueBox();
+            dialogue.active = true;
+            DialoguePage pg;
+            pg.text = msg;
+            dialogue.pages.push_back(pg);
+            dialogue.page = 0;
+            return false;
+        }
+        return true;
+    }
     if (c == "grandpaEvaluation" || c == "grandpaEvaluation2") { grandpaEvaluation(); return true; }
     if (c == "splitSpeak") {   // one line or the other, by the answer just given
         std::string text = arg(2);

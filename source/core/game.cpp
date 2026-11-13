@@ -1409,6 +1409,10 @@ void Game::update(float dt, const Input& in) {
     if (packAsk > 0) packAsk -= dt;
     petUpdate(dt);
     kidsUpdate(dt);
+    if (weddingToday && !cutscene.active && !dialogue.active && cur) {
+        weddingToday = false;
+        if (!startWedding()) say("You married " + spouse + "! They've moved into your house.");
+    }
     if (!morningNote.empty() && !cutscene.active && timeOfDay >= DAY_START + 10) { say(morningNote); morningNote.clear(); }
     {   // the shipping bin's lid swings open as you come near
         bool near = binOpen;
@@ -1680,7 +1684,7 @@ bool Game::goToBed() {
         dating.erase(spouse);
         engagedTo.clear();
         weddingDay = -1;
-        say("You married " + spouse + "! They've moved into your house.");
+        weddingToday = true;   // the ceremony in the town square, as soon as you're up
     }
     if (houseUpgradeDays > 0 && --houseUpgradeDays == 0) {
         int ox, oy, nx, ny;

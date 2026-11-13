@@ -911,6 +911,13 @@ public:
     bool farmSpotFree(int x, int y, int w, int h) const;
     bool randomFarmSpot(int w, int h, int& ox, int& oy);
     std::string morningNote;   // what the night left behind: shown when you wake up
+    // Scenes the game starts itself (game_scenes.cpp): the wedding (Data/Weddings), being knocked out,
+    // the summit, leaving the island.
+    bool weddingToday = false;          // the ceremony plays once you're up
+    bool startWedding();
+    bool startNamedEvent(const std::string& loc, const std::string& id);   // an event with a name instead of conditions
+    bool knockedOut();                  // health ran out: the game's own "PlayerKilled" scene for where you are
+    bool startSummit();
     std::vector<std::pair<int, int>> troughTiles(const Location& loc) const;
     int countItem(int id) const;
     bool applyImport(const std::string& path, std::string* summary);   // a PC save via tools/saveimport.py

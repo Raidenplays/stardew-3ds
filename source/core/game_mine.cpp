@@ -240,8 +240,10 @@ void Game::hurtPlayer(int damage, float fromX, float fromY) {
     if (health <= 0) {
         health = maxHealth / 2;
         energy = std::max(energy, 20);
-        say("You were knocked out... and woke up at the mine entrance.");
-        enterMine(0);
+        if (!knockedOut()) {
+            say("You were knocked out... and woke up at the mine entrance.");
+            enterMine(0);
+        }
     }
 }
 

@@ -783,6 +783,15 @@ int main(int argc, char** argv) {
         printf("  host ms/frame: map %.2f obj %.2f front %.2f weather %.2f hud %.2f\n", tot[0] / N, tot[1] / N, tot[2] / N,
                tot[3] / N, tot[4] / N);
         shot(c, g, ui, "where_" + whereMap);
+        if (const char* sp = getenv("WEDDING")) {   // WEDDING=<spouse>: the ceremony, a picture every few seconds
+            g.spouse = sp;
+            g.startWedding();
+            for (int k = 0; k < 60 * 40 && g.cutscene.active; k++) {
+                if (g.dialogue.active && k % 150 == 149) dialogueAdvance(g, ui);
+                step(g, ui, none, 1);
+                if (k == 200 || k == 900 || k == 1500) shot(c, g, ui, "wedding");
+            }
+        }
         if (getenv("FEST")) {   // FEST=1 with --day=N: walk into today's festival
             if (g.visitFestival()) {
                 const Festival* fe = g.festivalToday();
