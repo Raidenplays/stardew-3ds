@@ -696,6 +696,7 @@ bool Game::eventStep(const std::string& raw) {
     }
     if (c == "rustyKey") { mailReceived.insert("HasRustyKey"); return true; }
     if (c == "gainSkill") { gainXp(std::max(0, std::min((int)SK_COUNT - 1, iarg(1))), 200); return true; }
+    if (c == "sVE_BadlandsDeath") w[0] = "minedeath";   // Stardew Valley Expanded's own version of it
     if (c == "hospitaldeath" || c == "minedeath") {   // what being knocked out costs, in the game's own words
         int lost = c == "hospitaldeath" ? std::min(money, 1000) : std::min(money / 10, 15000);
         money -= lost;

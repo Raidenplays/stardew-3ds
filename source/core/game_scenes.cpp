@@ -117,7 +117,15 @@ bool Game::knockedOut() {
     std::string here = cur ? cur->name : "";
     bool mine = here.rfind("Mine", 0) == 0 || here.rfind("UndergroundMine", 0) == 0;
     bool island = here.rfind("Island", 0) == 0 || here.rfind("Volcano", 0) == 0 || here == "Caldera";
-    bool ok = (island && startNamedEvent("IslandSouth", "PlayerKilled")) || (mine && startNamedEvent("Mine", "PlayerKilled")) ||
+    // a mod's own places first: the map you fell in, or the outpost its monsters' lands send you back to
+    bool modded = false;
+    if (here.find("Badlands") != std::string::npos || here.find("CastleVillage") != std::string::npos)
+        modded = startNamedEvent("Custom_CastleVillageOutpost", "PlayerKilled");
+    else if (here.find("Highlands") != std::string::npos)
+        modded = startNamedEvent("Custom_HighlandsOutpost", "PlayerKilled");
+    else if (here.rfind("Custom_", 0) == 0 || here == "DesertFestival")
+        modded = startNamedEvent(here, "PlayerKilled");
+    bool ok = modded || (island && startNamedEvent("IslandSouth", "PlayerKilled")) || (mine && startNamedEvent("Mine", "PlayerKilled")) ||
               startNamedEvent("Hospital", "PlayerKilled");
     if (!ok) return false;
     for (auto& a : cutscene.actors)   // you get up where the scene had you lying
