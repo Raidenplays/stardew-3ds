@@ -113,7 +113,9 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
     return false;
 }
 
-extern unsigned g_sfxDecodes, g_sfxDecodeMs;
+namespace audio { extern unsigned g_sfxDecodes, g_sfxDecodeMs; }
+using audio::g_sfxDecodes;
+using audio::g_sfxDecodeMs;
 static char perfLine1[96], perfLine2[96], perfLine3[96];   // performance readout text
 static double tickMs() { return svcGetSystemTick() / (double)CPU_TICKS_PER_MSEC; }
 
