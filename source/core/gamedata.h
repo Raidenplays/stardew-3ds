@@ -236,6 +236,7 @@ struct Outfit {
     uint8_t pantsR = 46, pantsG = 85, pantsB = 183;
     int hair = 0;
     uint8_t hairR = 138, hairG = 78, hairB = 38;
+    bool female = false;       // which body (farmer_base / farmer_girl_base), and "he"/"she" in what people say
 };
 
 // Daily spawns: vanilla forage (Data/Locations) and Farm Type Manager areas.

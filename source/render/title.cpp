@@ -482,7 +482,7 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     if (!t.draft.farm.empty()) c.text(200, 222, 0.4f, CREAM, t.draft.farm + " Farm", ALIGN_CENTER);
 }
 
-static const float ROW_X = 8, ROW_W = 304, ROW_H = 20, ROW_Y0 = 4;
+static const float ROW_X = 8, ROW_W = 304, ROW_H = 18, ROW_Y0 = 3;
 
 static float rowY(int f) { return ROW_Y0 + f * (ROW_H + 2); }
 
@@ -565,7 +565,7 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
         padProButton(c);
         return;
     }
-    static const char* names[CF_COUNT] = {"Name", "Farm name", "Favourite thing", "Hair", "Hair colour",
+    static const char* names[CF_COUNT] = {"Name", "Farm name", "Favourite thing", "Gender", "Hair", "Hair colour",
                                           "Shirt", "Pants colour", "Farm type", "Pet", ""};
     char buf[64];
     for (int f = 0; f < CF_COUNT; f++) {
@@ -585,6 +585,7 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
             case CF_NAME: val = t.draft.name.empty() ? "tap to type" : t.draft.name; col = t.draft.name.empty() ? SOFT : TXT; break;
             case CF_FARM: val = t.draft.farm.empty() ? "tap to type" : t.draft.farm; col = t.draft.farm.empty() ? SOFT : TXT; break;
             case CF_FAVORITE: val = t.draft.favorite.empty() ? "tap to type" : t.draft.favorite; col = t.draft.favorite.empty() ? SOFT : TXT; break;
+            case CF_GENDER: val = t.draft.outfit.female ? "Female" : "Male"; arrows(c, y, on); break;
             case CF_HAIR: snprintf(buf, sizeof buf, "%d", t.draft.outfit.hair + 1); val = buf; arrows(c, y, on); break;
             case CF_SHIRT: snprintf(buf, sizeof buf, "%d", t.draft.outfit.shirt + 1); val = buf; arrows(c, y, on); break;
             case CF_HAIR_COLOR: {
@@ -617,7 +618,7 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
             default: break;
         }
         if (!val.empty()) {
-            bool centred = f >= CF_HAIR;
+            bool centred = f >= CF_GENDER;
             c.text(centred ? 224 : ROW_X + ROW_W - 6, y + 3, 0.42f, col, val, centred ? ALIGN_CENTER : ALIGN_RIGHT);
         }
     }
@@ -638,6 +639,7 @@ static void change(TitleUi& t, const GameData& data, int dir) {
     Outfit& o = t.draft.outfit;
     auto wrap = [](int v, int n) { return ((v % n) + n) % n; };
     switch (t.field) {
+        case CF_GENDER: o.female = !o.female; break;
         case CF_HAIR: o.hair = wrap(o.hair + dir, N_HAIRSTYLES); break;
         case CF_SHIRT: o.shirt = wrap(o.shirt + dir, N_SHIRTS); break;
         case CF_HAIR_COLOR: t.hairColor = wrap(t.hairColor + dir, N_HAIR_COLORS); break;

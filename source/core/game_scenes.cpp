@@ -57,7 +57,7 @@ bool Game::startWedding() {
         if (r.size() > 2 && r[0] == "gender" && r[1] == spouse) male = r[2] == "m";
     std::string script, guests, party;
     for (auto& r : rows) {
-        if (r.size() > 2 && r[0] == "script" && r[1] == (male ? "m" : "f")) script = r[2];
+        if (r.size() > 2 && r[0] == "script" && r[1] == std::string(me.outfit.female ? "f" : "m") + (male ? "m" : "f")) script = r[2];
         if (r.size() > 3 && r[0] == "guest" && r[1] != spouse && npcByName(r[1])) {
             const std::string& cond = r[2];   // "", "SEASON winter" or "!SEASON winter"
             if (!cond.empty() && !gameQuery(cond)) continue;

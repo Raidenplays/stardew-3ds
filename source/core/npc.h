@@ -54,6 +54,9 @@ struct DialoguePage {
 };
 
 std::vector<DialoguePage> parseDialogue(const std::string& raw, const std::string& farmerName);
+// Lines written two ways ("male text^female text", "${he^she}$") use this to pick. The game keeps it
+// in step with the farmer.
+extern bool g_farmerFemale;
 // %farm%, %spouse%, %pet%... filled into dialogue, events and mail (the game keeps them current)
 void setDialogueToken(const std::string& token, const std::string& value);
 std::string fillTokens(std::string s);

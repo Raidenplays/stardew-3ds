@@ -133,6 +133,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             me.outfit.pantsR = (uint8_t)I(f, 3); me.outfit.pantsG = (uint8_t)I(f, 4); me.outfit.pantsB = (uint8_t)I(f, 5);
             me.outfit.hairR = (uint8_t)I(f, 6); me.outfit.hairG = (uint8_t)I(f, 7); me.outfit.hairB = (uint8_t)I(f, 8);
         } else if (k == "favorite" && f.size() > 1) me.favorite = f[1];
+        else if (k == "gender" && f.size() > 1) me.outfit.female = f[1] == "female";
         else if (k == "maxstamina") {   // Stardrops eaten on the PC
             maxEnergy = std::max((int)MAX_ENERGY, std::min(MAX_ENERGY + STARDROP_ENERGY * MAX_STARDROPS, I(f, 1)));
             energy = maxEnergy;

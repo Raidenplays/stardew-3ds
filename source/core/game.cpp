@@ -1404,6 +1404,7 @@ void Game::updateEffects(float dt) {
 }
 
 void Game::update(float dt, const Input& in) {
+    g_farmerFemale = me.outfit.female;   // for lines written one way for him and another for her
     if (toastTime > 0) toastTime -= dt;
     if (arcade.game) { arcadeUpdate(dt, in); return; }
     if (packAsk > 0) packAsk -= dt;
@@ -1748,7 +1749,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 36;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 37;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1997,6 +1998,7 @@ bool Game::save(const std::string& path) const {
                 if (kv.second->floors[i]) { w.str(kv.first); w.i32((int)(i % lw)); w.i32((int)(i / lw)); w.u8(kv.second->floors[i]); }
         }
     }
+    w.u8(me.outfit.female ? 1 : 0);                           // v37
     w.str(orderKey); w.i32(orderDays);
     w.u32((uint32_t)orderProgress.size());
     for (int v : orderProgress) w.i32(v);
@@ -2431,6 +2433,7 @@ bool Game::load(const std::string& path, std::string* err) {
                     if (L && L->map.inBounds(fx, fy) && kind <= 13) L->floors[(size_t)fy * L->map.width() + fx] = kind;
                 }
             }
+            if (version >= 37) me.outfit.female = r.u8() != 0;
             if (version >= 31) {
                 orderKey = r.str(); orderDays = r.i32();
                 uint32_t n = r.u32();

@@ -233,7 +233,8 @@ static void drawFarmerAs(Canvas& c, const Game& g, const Outfit& o, float sx, fl
     int frame = frameOverride >= 0 ? frameOverride : dirRow[facing & 3] * 6 + step;
     int fx = (frame % 6) * 16, fy = (frame / 6) * 32;
     int bob = g.data.bob(frame);
-    const std::string base = "Characters_Farmer_farmer_base";
+    const std::string base = o.female && c.texWidth("Characters_Farmer_farmer_girl_base") >= 96 ? "Characters_Farmer_farmer_girl_base"
+                                                                                                 : "Characters_Farmer_farmer_base";
     auto img = [&](const std::string& t, int x, int y, int w, int h, float ox, float oy, bool fl, uint32_t tint) {
         if (k == 1.0f) c.image(t, x, y, w, h, dx + ox, dy + oy, fl, tint);
         else c.imageScaled(t, x, y, w, h, dx + ox * k, dy + oy * k, k, fl, tint);

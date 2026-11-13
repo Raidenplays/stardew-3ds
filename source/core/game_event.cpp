@@ -172,7 +172,7 @@ bool Game::eventConditionsMet(const std::string& key) const {
         } else if (code == "N") {          // golden walnuts found
             ok = w.size() > 1 && walnutsFound >= atoi(w[1].c_str());
         } else if (code == "g") {
-            ok = w.size() > 1 && w[1] == "male";   // the farmer sprite is the male base
+            ok = w.size() > 1 && (w[1] == "female") == me.outfit.female;
         } else if (code == "b") {          // reached the bottom of the mines
             ok = mineDeepest >= 120;
         } else if (code == "m") {          // total earnings

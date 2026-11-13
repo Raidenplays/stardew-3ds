@@ -71,6 +71,7 @@ EXTRA_TEXTURES = [
     ("LooseSprites/Fence3", False),
     ("LooseSprites/Fence5", False),
     ("Characters/Farmer/farmer_base", True),
+    ("Characters/Farmer/farmer_girl_base", False),
     ("Characters/Farmer/hairstyles", True),
     ("Characters/Farmer/pants", False),
     ("TileSheets/furniture", False),
@@ -1793,6 +1794,8 @@ def write_wedding(content, out_dir):
     if not script:
         return
 
+    farmer_male = [True]
+
     def render(nodes, spouse_male):
         res = ""
         for n in nodes:
@@ -1815,7 +1818,7 @@ def write_wedding(content, out_dir):
             elif name == "SpouseFarmerText":      # [for a farmer spouse] [for a villager]: always a villager here
                 res += render([groups[1]], spouse_male) if len(groups) > 1 else ""
             elif name == "GenderedText":          # the farmer: [male] [female]
-                res += render([groups[0]], spouse_male) if groups else ""
+                res += render([groups[0 if farmer_male[0] or len(groups) < 2 else 1]], spouse_male) if groups else ""
             elif name == "SpouseGenderedText":
                 res += render([groups[0 if spouse_male else 1]], spouse_male) if len(groups) > 1 else ""
             elif name in ("DayOfMonth", "Season", "SetupContextualWeddingAttendees", "ContextualWeddingCelebrations"):
@@ -1826,8 +1829,10 @@ def write_wedding(content, out_dir):
 
     tree = _token_tree(script)
     with open(os.path.join(out_dir, "wedding.dat"), "w", encoding="utf-8") as f:
-        f.write("script\tm\t" + _clean(render(tree, True)) + "\n")
-        f.write("script\tf\t" + _clean(render(tree, False)) + "\n")
+        for fm in (True, False):            # farmer, then spouse: "mf" = a man marrying a woman
+            for sm in (True, False):
+                farmer_male[0] = fm
+                f.write("script\t" + ("m" if fm else "f") + ("m" if sm else "f") + "\t" + _clean(render(tree, sm)) + "\n")
         for a in (wed.get("Attendees") or {}).values():
             if a.get("Id") and a.get("Setup"):
                 f.write("\t".join(["guest", _clean(a["Id"]), _clean(a.get("Condition") or ""), _clean(a["Setup"]),

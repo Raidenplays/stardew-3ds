@@ -239,11 +239,24 @@ static int emotionCode(const std::string& code) {
     return -1;
 }
 
+bool g_farmerFemale = false;
+
 // Cleans one text segment and pulls out a trailing portrait command.
 static std::string cleanText(std::string s, const std::string& farmer, int* portrait) {
-    // gendered text "male^female": use the first half
+    // gendered words inside a line: "${he^she}$"
+    for (size_t a; (a = s.find("${")) != std::string::npos;) {
+        size_t b = s.find("}$", a);
+        if (b == std::string::npos) break;
+        std::string both = s.substr(a + 2, b - a - 2);
+        size_t mid = both.find('^');
+        std::string pick = mid == std::string::npos ? both : g_farmerFemale ? both.substr(mid + 1) : both.substr(0, mid);
+        size_t third = pick.find('^');           // a third form (neutral) follows the two
+        if (third != std::string::npos) pick = pick.substr(0, third);
+        s.replace(a, b + 2 - a, pick);
+    }
+    // a whole line written twice, "male^female": the half that fits
     size_t caret = s.find('^');
-    if (caret != std::string::npos) s = s.substr(0, caret);
+    if (caret != std::string::npos) s = g_farmerFemale ? s.substr(caret + 1) : s.substr(0, caret);
     // item gift brackets like [433 434]
     for (size_t a; (a = s.find('[')) != std::string::npos;) {
         size_t b = s.find(']', a);
