@@ -134,6 +134,10 @@ jobs:
             yes | "$SDKM" "ndk;26.1.10909125" > /tmp/ndk.log 2>&1 && break
             echo "NDK install attempt $i failed"; tail -3 /tmp/ndk.log; sleep 10
           done
+      - name: The converter must run on the app's Python (3.11), not only on a newer one
+        run: |
+          python --version
+          python -m py_compile tools/*.py android/app/src/main/python/bridge.py web/bridge.py
       - name: Build the converter APK
         run: gradle -p android assembleRelease --stacktrace
       - name: Name it

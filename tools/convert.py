@@ -1623,7 +1623,8 @@ def write_shops(content, out_dir, season_bits):
                     if tid is None or tid < 0:
                         continue
                     trade, amount = tid, int(it.get("TradeItemAmount") or 1)
-                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\t{kind}\t{trade}\t{amount}\t{no_mail or "-"}\t{live_cond}\n")
+                mail_flag = no_mail or "-"
+                f.write(f"{_clean(shop_id)}\t{iid}\t{price}\t{mask}\t{min_year}\t{kind}\t{trade}\t{amount}\t{mail_flag}\t{live_cond}\n")
                 n += 1
     print(f"  shops.dat: {n} shop items ({skipped} the game checks each time you open the shop)")
 
