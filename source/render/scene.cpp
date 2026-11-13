@@ -599,6 +599,28 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                                    // layers (walls/roofs, trunks/leaves) must not come apart in 3D
     }
 
+    // The bus waits at the stop (LooseSprites/Cursors), on the road above the pavement
+    if (g.location().name == "BusStop")
+        c.image("LooseSprites_Cursors", 288, 1247, 128, 64, 20 * TILE - camX + c.shift(0.0f), 6 * TILE + 4 - camY);
+
+    // Paths and floors: each kind is a 4x4 block of pieces that join up with their neighbours
+    if (!g.location().floors.empty()) {
+        float sh = c.shift(0.0f);
+        const char* sheet = g.season == WINTER && c.texWidth("TerrainFeatures_Flooring_winter") >= 256 && g.cropLand()
+                                ? "TerrainFeatures_Flooring_winter" : "TerrainFeatures_Flooring";
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++) {
+                if (!m.inBounds(x, y)) continue;
+                int kind = g.floorAt(x, y);
+                if (kind < 0) continue;
+                bool u = g.floorAt(x, y - 1) == kind, d = g.floorAt(x, y + 1) == kind;
+                bool l = g.floorAt(x - 1, y) == kind, rr = g.floorAt(x + 1, y) == kind;
+                int col = !l && !rr ? 0 : !l ? 1 : rr ? 2 : 3;
+                int row = col == 0 ? (!u && !d ? 0 : !u ? 1 : d ? 2 : 3) : (!u && !d ? 3 : !u ? 0 : d ? 1 : 2);
+                c.image(sheet, (kind % 4) * 64 + col * 16, (kind / 4) * 64 + row * 16, 16, 16, x * TILE - camX + sh, y * TILE - camY);
+            }
+    }
+
     // Tilled soil
     if (g.cropLand()) {
         bool wetHalf = c.texWidth("TerrainFeatures_hoeDirt") >= 128;
@@ -874,6 +896,12 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             case 8: {
                 const Placed& p = g.placedHere()[it.a];
                 float x = p.x * TILE - camX, y = p.y * TILE - camY;
+                if (!p.big && isFenceId(p.id)) {   // a post, with rails to the fences beside it and a stub up to one behind
+                    bool l = g.fenceAt(p.x - 1, p.y), rr = g.fenceAt(p.x + 1, p.y), u = g.fenceAt(p.x, p.y - 1);
+                    int frame = l && rr ? 7 : rr ? (u ? 6 : 0) : l ? (u ? 8 : 2) : (u ? 3 : 5);
+                    c.image(fenceSheet(p.id), (frame % 3) * 16, (frame / 3) * 32, 16, 32, x, y - 16);
+                    break;
+                }
                 if (!p.big) {
                     const ObjectDef* o = g.data.object(p.id);
                     itemIcon(c, o, x, y);

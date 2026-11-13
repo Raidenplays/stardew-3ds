@@ -44,6 +44,20 @@ struct Placed {
     std::vector<Slot> items;
 };
 
+// Paths and floors laid on the ground, in the order of TerrainFeatures/Flooring's blocks.
+static const int FLOOR_ITEMS[13] = {328, 329, 331, 333, 401, 407, 405, 409, 411, 415, 293, 840, 841};
+inline int floorKindOf(int objectId) {   // -1: not a floor
+    for (int k = 0; k < 13; k++)
+        if (FLOOR_ITEMS[k] == objectId) return k;
+    return -1;
+}
+// Fences are placed objects that join up with their neighbours; a gate swings open.
+static const int FENCE_GATE = 325;
+inline bool isFenceId(int id) { return id == 322 || id == 323 || id == 324 || id == 298; }
+inline const char* fenceSheet(int id) {
+    return id == 323 ? "LooseSprites_Fence2" : id == 324 ? "LooseSprites_Fence3" : id == 298 ? "LooseSprites_Fence5" : "LooseSprites_Fence1";
+}
+
 enum DebrisType : uint8_t { DEB_NONE = 0, DEB_WEED, DEB_STONE, DEB_TWIG };
 
 struct Soil {
@@ -125,6 +139,7 @@ struct Location {
     };
     std::vector<Monster> monsters;
     std::vector<uint8_t> grass;        // per tile: tufts 0-4 (low bits), bit 3 = blue grass
+    std::vector<uint8_t> floors;       // per tile: 0 = bare ground, else a path or floor (FLOOR_ITEMS index + 1)
     struct Rustle { int cell; float t; };
     std::vector<Rustle> rustles;       // grass swaying after you walk through it
     bool nightTiles = false;           // NightTiles applied (lit windows)
@@ -424,6 +439,8 @@ public:
     void awardPrize(const std::string& what); // event awardFestivalPrize / gifts
     std::map<std::string, std::vector<Placed>> placed;   // by location name
     const std::vector<Placed>& placedHere() const;
+    int floorAt(int x, int y) const;         // -1 none, else the kind (FLOOR_ITEMS index)
+    bool fenceAt(int x, int y) const;        // a fence or gate there (for joining up)
     Placed* placedAt(int x, int y);
     const Placed* placedAt(int x, int y) const;
     bool isChest(const Placed& p) const;

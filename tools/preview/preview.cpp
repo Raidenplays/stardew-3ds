@@ -546,6 +546,36 @@ int main(int argc, char** argv) {
                 step(g, ui, none, 1);
             }
         };
+        if (const char* tour = getenv("IMPORT_TOUR")) {   // IMPORT_TOUR="Farm@64,32;in:Barn@8,8;Town@30,60": look around the imported farm
+            for (auto& b : g.buildings) printf("  building %s at %d,%d (inside: %s)\n", b.type.c_str(), b.x, b.y, g.interiorName(b).c_str());
+            printf("  house level %d, spouse '%s', kids %d, farm '%s', money %d, energy %d/%d, health %d\n", g.houseLevel, g.spouse.c_str(),
+                   (int)g.kids.size(), g.me.farm.c_str(), g.money, g.energy, g.maxEnergy, g.maxHealth);
+            std::string t = tour;
+            size_t pos = 0;
+            int n = 0;
+            while (pos <= t.size()) {
+                size_t semi = t.find(';', pos);
+                std::string item = t.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
+                pos = semi == std::string::npos ? t.size() + 1 : semi + 1;
+                size_t at = item.find('@');
+                std::string where = item.substr(0, at);
+                int x = 10, y = 10;
+                if (at != std::string::npos) sscanf(item.c_str() + at + 1, "%d,%d", &x, &y);
+                if (where.rfind("in:", 0) == 0) {
+                    std::string type = where.substr(3);
+                    where.clear();
+                    for (auto& b : g.buildings)
+                        if (b.type == type) { where = g.interiorName(b); break; }
+                    if (where.empty()) { printf("  ! no %s on this farm\n", type.c_str()); continue; }
+                }
+                g.teleport(where, x, y);
+                settle();
+                char nm[64];
+                snprintf(nm, sizeof nm, "tour%02d", n++);
+                shot(c, g, ui, nm);
+            }
+            return 0;
+        }
         g.teleport("Farm", 64, 32);
         settle();
         printf("  at %s %.0f,%.0f cutscene %d\n", g.location().name.c_str(), g.px / 16, g.py / 16, g.cutscene.active);

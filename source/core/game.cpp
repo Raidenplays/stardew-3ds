@@ -29,6 +29,7 @@ void Location::initState() {
     debris.assign(cells, DEB_NONE);
     debrisVar.assign(cells, 0);
     grass.assign(cells, 0);
+    floors.assign(cells, 0);
     bushes.clear();
     rustles.clear();
 }
@@ -589,7 +590,8 @@ bool Game::tileSolid(int tx, int ty) const {
     if (cur->debris[i] != DEB_NONE) return true;
     for (auto& o : cur->objects)
         if (o.x == tx && o.y == ty) return true;
-    if (placedAt(tx, ty)) return true;
+    if (const Placed* p = placedAt(tx, ty))
+        if (!(!p->big && p->id == FENCE_GATE && p->input == 1)) return true;   // an open gate lets you through
     for (auto& t : cur->trees)
         if (t.x == tx && t.y == ty && (t.stage > 0 || t.stump)) return true;
     if (bushAt(tx, ty) >= 0) return true;
@@ -1057,8 +1059,14 @@ bool Game::tryInteract(int tx, int ty) {
         else talkTo(*n);
         return true;
     }
-    if (Placed* p = placedAt(tx, ty))
+    if (Placed* p = placedAt(tx, ty)) {
+        if (!p->big && p->id == FENCE_GATE) {   // swing the gate
+            p->input = p->input == 1 ? -1 : 1;
+            sfx("doorClose");
+            return true;
+        }
         if (interactPlaced(*p)) return true;
+    }
     if (shakeBush(tx, ty)) return true;
     if (pickWalnut(tx, ty)) return true;
     if (WorldObject* o = objectAt(tx, ty)) {
@@ -1177,6 +1185,13 @@ void Game::useSelected(int tx, int ty) {
         if (t->kind == TOOL_WEAPON) { swingWeapon(*t); return; }
         if (!inMap) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE) && pickUpPlaced(tx, ty)) return;
+        if (t->kind == TOOL_PICKAXE && floorAt(tx, ty) >= 0) {   // lift a path or floor
+            int kind = floorAt(tx, ty);
+            cur->floors[(size_t)ty * cur->map.width() + tx] = 0;
+            addItem(FLOOR_ITEMS[kind], 1);
+            sfx("hammer");
+            return;
+        }
         if (t->kind == TOOL_AXE && !cur->fruitTrees.empty() && chopFruitTree(tx, ty)) return;
         if ((t->kind == TOOL_PICKAXE || t->kind == TOOL_AXE || t->kind == TOOL_HOE) && !cur->clumps.empty() &&
             clumpAt(tx, ty) >= 0) {
@@ -1729,7 +1744,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 35;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 36;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1967,6 +1982,17 @@ bool Game::save(const std::string& path) const {
     w.u32((uint32_t)stats.size());                            // v34
     for (auto& kv : stats) { w.str(kv.first); w.i32(kv.second); }
     w.i32(maxEnergy); w.i32(maxHealth);                       // v35
+    {                                                         // v36: paths and floors, per location
+        uint32_t nf = 0;
+        for (auto& kv : locations)
+            for (uint8_t f : kv.second->floors) nf += f != 0;
+        w.u32(nf);
+        for (auto& kv : locations) {
+            int lw = kv.second->map.width();
+            for (size_t i = 0; i < kv.second->floors.size(); i++)
+                if (kv.second->floors[i]) { w.str(kv.first); w.i32((int)(i % lw)); w.i32((int)(i / lw)); w.u8(kv.second->floors[i]); }
+        }
+    }
     w.str(orderKey); w.i32(orderDays);
     w.u32((uint32_t)orderProgress.size());
     for (int v : orderProgress) w.i32(v);
@@ -2390,6 +2416,16 @@ bool Game::load(const std::string& path, std::string* err) {
                 maxEnergy = std::max((int)MAX_ENERGY, std::min(MAX_ENERGY + STARDROP_ENERGY * MAX_STARDROPS, (int)r.i32()));
                 maxHealth = std::max(100, std::min(250, (int)r.i32()));
                 energy = std::min(energy, maxEnergy);
+            }
+            if (version >= 36) {
+                uint32_t nf = r.u32();
+                for (uint32_t k = 0; k < nf && r.ok && k < 200000; k++) {
+                    std::string ln = r.str();
+                    int fx = r.i32(), fy = r.i32();
+                    uint8_t kind = r.u8();
+                    Location* L = hasMap(ln) ? loadLocation(ln) : nullptr;
+                    if (L && L->map.inBounds(fx, fy) && kind <= 13) L->floors[(size_t)fy * L->map.width() + fx] = kind;
+                }
             }
             if (version >= 31) {
                 orderKey = r.str(); orderDays = r.i32();

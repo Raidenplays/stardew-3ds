@@ -196,7 +196,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
         else if (k == "cookedever" && f.size() > 2) cookedEver[I(f, 1)] = I(f, 2);
         else if (k == "earned") totalEarned = std::max(totalEarned, (long long)I(f, 1));
         else if (k == "backpack") invSlots = I(f, 1) >= 36 ? 36 : I(f, 1) >= 24 ? 24 : 12;
-        else if (k == "house") { houseLevel = std::max(0, std::min(2, I(f, 1))); locations.erase("FarmHouse"); }
+        else if (k == "house") { houseLevel = std::max(0, std::min(3, I(f, 1))); locations.erase("FarmHouse"); }
         else if (k == "craftrecipe" && f.size() > 1) mailReceived.insert("craft:" + f[1]);
         else if (k == "cookrecipe" && f.size() > 1) mailReceived.insert("cook:" + f[1]);
         else if (k == "building" && f.size() > 5 && data.buildingType(f[1])) {
@@ -275,8 +275,15 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             p.big = f[4] == "B";
             p.id = I(f, 5);
             if (p.big ? !data.big(p.id) : !data.object(p.id)) continue;
-            placed[L->name].push_back(p);
+            auto& there = placed[L->name];   // whatever the fresh game put on that tile makes way (the cellar's casks)
+            for (size_t q = there.size(); q-- > 0;)
+                if (there[q].x == p.x && there[q].y == p.y) there.erase(there.begin() + q);
+            there.push_back(p);
             counts[5]++;
+        } else if (k == "floor" && f.size() > 4) {   // paths and floors
+            Location* L = locFor(f[1]);
+            int fx = I(f, 2), fy = I(f, 3), kind = I(f, 4);
+            if (L && L->map.inBounds(fx, fy) && kind >= 0 && kind < 13) L->floors[(size_t)fy * L->map.width() + fx] = (uint8_t)(kind + 1);
         } else if (k == "fruittree" && f.size() > 5) {
             Location* L = locFor(f[1]);
             if (!L || !data.fruitTreeForSapling(I(f, 4))) continue;

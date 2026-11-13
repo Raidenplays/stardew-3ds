@@ -173,6 +173,13 @@ def location_lines(loc, name, ids, out, extras):
         oname = txt(o, "name") or txt(o, "Name")
         big = truthy(o, "bigCraftable")
         sid = txt(o, "itemId") or txt(o, "ParentSheetIndex")
+        if xtype(o) == "Fence":   # a fence or gate (before 1.6 only "whichType" says which)
+            fid = 325 if truthy(o, "isGate") else {"1": 322, "2": 323, "3": 324, "5": 298}.get(txt(o, "whichType"))
+            if fid is None:
+                fid = ids.o(sid)
+            if fid in (322, 323, 324, 298, 325):
+                out.append(["place", name, x, y, "O", fid])
+            continue
         if not big and oname in ("Weeds", "Stone", "Twig") or (not big and oname.startswith("Weeds")):
             out.append(["debris", name, x, y, "W" if oname.startswith("Weeds") else "S" if oname == "Stone" else "T"])
             continue
@@ -226,8 +233,16 @@ def location_lines(loc, name, ids, out, extras):
             out.append(["tree", name, x, y, tt if tt.isdigit() else "1", num(tf, "growthStage", 5), 1 if truthy(tf, "stump") else 0])
         elif t == "Grass":
             out.append(["grass", name, x, y, max(1, num(tf, "numberOfWeeds", 1)), 1 if num(tf, "grassType", 1) == 7 else 0])
+        elif t == "Flooring":
+            which = txt(tf, "whichFloor", "0")
+            if which.lstrip("-").isdigit() and 0 <= int(which) < 13:
+                out.append(["floor", name, x, y, int(which)])
         elif t == "FruitTree":
-            sap = ids.o(txt(tf, "treeId") or txt(tf, "treeType"))
+            tid = txt(tf, "treeId")
+            if not tid and txt(tf, "treeType").isdigit() and int(txt(tf, "treeType")) < 8:
+                # before 1.6 the kind was a number: cherry, apricot, orange, peach, pomegranate, apple, banana, mango
+                tid = str((628, 629, 630, 631, 632, 633, 69, 835)[int(txt(tf, "treeType"))])
+            sap = ids.o(tid or txt(tf, "treeType"))
             fr = tf.find("fruit")
             nfruit = len([c for c in fr if c.get(XSI_NIL) != "true"]) if fr is not None else num(tf, "fruitsOnTree")
             if sap is not None:
@@ -399,7 +414,7 @@ def import_save(save_path, root):
     if locs is not None:
         for loc in locs:
             name = txt(loc, "name")
-            if name in ("Farm", "FarmHouse", "Greenhouse"):
+            if name in ("Farm", "FarmHouse", "Greenhouse", "Cellar", "FarmCave"):
                 location_lines(loc, name, ids, out, extras)
             if name == "Farm":
                 b_el = loc.find("buildings")

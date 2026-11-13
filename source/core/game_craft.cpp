@@ -268,6 +268,16 @@ const std::vector<Placed>& Game::placedHere() const {
     return it == placed.end() ? NONE_PLACED : it->second;
 }
 
+int Game::floorAt(int x, int y) const {
+    if (!cur || !cur->map.inBounds(x, y) || cur->floors.empty()) return -1;
+    return (int)cur->floors[(size_t)y * cur->map.width() + x] - 1;
+}
+
+bool Game::fenceAt(int x, int y) const {
+    const Placed* p = placedAt(x, y);
+    return p && !p->big && (isFenceId(p->id) || p->id == FENCE_GATE);
+}
+
 Placed* Game::placedAt(int x, int y) {
     auto it = placed.find(cur->name);
     if (it == placed.end()) return nullptr;
@@ -300,7 +310,25 @@ bool Game::placeSelected(int tx, int ty) {
     bool big = sl.type == SLOT_BIG;
     if (!big) {
         const ObjectDef* o = sl.type == SLOT_OBJECT ? data.object(sl.id) : nullptr;
-        if (!o || (!sprinklerRadius(o->name) && sl.id != 710)) return false;
+        if (!o) return false;
+        int floor = floorKindOf(sl.id);
+        if (floor >= 0) {   // a path or floor goes on the ground itself; things can stand on it
+            const TileMap& fm = cur->map;
+            if (!fm.inBounds(tx, ty)) return false;
+            size_t fi = (size_t)ty * fm.width() + tx;
+            if ((tileSolid(tx, ty) && !placedAt(tx, ty)) || (fm.flags(tx, ty) & CF_WATER) || cur->debris[fi] || cur->floors[fi] ||
+                (cur->isFarm && cur->soils[fi].seed >= 0)) {
+                say("Can't place that here");
+                return true;
+            }
+            if (cur->isFarm && cur->soils[fi].tilled) cur->soils[fi] = Soil();
+            cur->grass[fi] = 0;
+            cur->floors[fi] = (uint8_t)(floor + 1);
+            sfx("woodyStep");
+            if (--sl.count <= 0) sl = Slot();
+            return true;
+        }
+        if (!sprinklerRadius(o->name) && sl.id != 710 && !isFenceId(sl.id) && sl.id != FENCE_GATE) return false;
     }
     bool crabPot = !big && sl.id == 710;   // goes in the water, by the shore
     const TileMap& m = cur->map;

@@ -297,9 +297,17 @@ int main(int argc, char** argv) {
     assert(g.walnuts == 3 && g.walnutsFound == 3);
     assert(g.shopFunds("NoSuchShop") == g.money);
     // save / load round trip
+    {   // a path laid on the farm, and max energy from Stardrops, survive a save
+        Location& fl = const_cast<Location&>(g.farmLocation());
+        fl.floors[(size_t)3 * fl.map.width() + 2] = (uint8_t)(floorKindOf(411) + 1);   // cobblestone at 2,3
+        g.maxEnergy = MAX_ENERGY + 2 * STARDROP_ENERGY;
+        assert(floorKindOf(405) == 6 && floorKindOf(24) == -1 && isFenceId(324) && !isFenceId(325));
+    }
     assert(g.save("/tmp/sv_test.sav"));
     Game g2(d);
     assert(g2.load("/tmp/sv_test.sav"));
+    assert(g2.farmLocation().floors[(size_t)3 * g2.farmLocation().map.width() + 2] == floorKindOf(411) + 1);
+    assert(g2.maxEnergy == MAX_ENERGY + 2 * STARDROP_ENERGY);
     assert(g2.day == g.day && g2.money == g.money);
     assert(g2.walnuts == 3 && g2.walnutsFound == 3 && g2.clubCoins == 250 && g2.walnutsGot.count("IslandSouth:4:5"));
     assert(g2.farmLocation().soils[ty * g2.farmLocation().map.width() + tx].seed == 472);
