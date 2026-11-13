@@ -161,6 +161,10 @@ bool GameData::load(const std::string& root, std::string* err) {
     }
     }
     lines.clear();
+    lines.clear();
+    readLines(root + "data/repeatevents.dat", lines);   // scenes that play every time (Ridgeside's cable car rides)
+    for (auto& l : lines) if (!l.empty()) repeatEvents.insert(l.substr(0, l.find('\t')));
+    lines.clear();
     readLines(root + "data/trees.dat", lines);
     for (auto& l : lines) {
         auto f = splitTabs(l);

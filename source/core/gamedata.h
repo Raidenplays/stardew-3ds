@@ -1,6 +1,7 @@
 // Game data loaded from the converted SD-card files (data/*.dat, layout.txt).
 // Pure C++ -- no 3DS dependencies, so it can be unit-tested on a PC.
 #pragma once
+#include <set>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -377,6 +378,7 @@ public:
     std::unordered_map<std::string, std::string> mail;   // key -> letter text
     std::vector<MailTrigger> mailTriggers;
     std::vector<ProfessionDef> professions;   // 30, by id
+    std::set<std::string> repeatEvents;       // events that aren't marked seen: they play whenever their conditions hold
     std::vector<FarmType> farmTypes;          // Standard first
     Layout baseLayout;                        // layout.txt as written (the standard farm's places)
     void useFarm(int type) const;             // move the house, bin and mailbox to where this farm has them

@@ -162,6 +162,12 @@ class Content:
         if a not in self.data:
             p = self.index.get(a)
             if not p or not p.lower().endswith(".json"):
+                # A location's event list exists for every location, empty until something adds to it:
+                # mods add their own maps' events straight onto it (Ridgeside's cable car rides).
+                if a.startswith("data/events/"):
+                    self.names.setdefault(a, norm_asset(asset))   # written under the name as the mod spells it
+                    self.data[a] = {}
+                    return self.data[a]
                 return None
             self.data[a] = sjson.load(p)
         return self.data[a]
@@ -304,13 +310,18 @@ class Pack:
             return ""
         if low == "query":
             return _query(arg)
+        if "/" in low:   # another mod's setting
+            mod, _, key = low.partition("/")
+            v = MOD_CONFIGS.get(mod.strip(), {}).get(key.strip())
+            if v is not None:
+                return v
         return None   # unknown
 
     def render(self, s, target=None):
         """Replace {{tokens}} (innermost first). Unknown tokens become ''."""
         if not isinstance(s, str) or "{{" not in s:
             return s
-        for _ in range(12):
+        for _ in range(5000):   # a long event can hold a hundred lines, each its own token
             m = re.search(r"\{\{([^{}]*)\}\}", s)
             if not m:
                 break
@@ -639,14 +650,29 @@ def find_packs(mods_dir):
     return sorted(packs)
 
 
+MOD_CONFIGS = {}   # "some.mod" -> its config.json settings (lower-case keys): read as "Some.Mod/Setting" tokens
+
+
 def installed_mod_ids(mods_dir):
     ids = {"Pathoschild.ContentPatcher"}
+    MOD_CONFIGS.clear()
     for dirpath, dirs, files in os.walk(mods_dir):
         if "manifest.json" in files:
             try:
-                ids.add(str(sjson.load(os.path.join(dirpath, "manifest.json")).get("UniqueID")))
+                uid = str(sjson.load(os.path.join(dirpath, "manifest.json")).get("UniqueID"))
             except ValueError:
-                pass
+                continue
+            ids.add(uid)
+            # A code mod's own settings: Content Patcher packs that go with it ask for them as tokens
+            # ("Rafseazz.RidgesideVillage/RepeatCableCarCutscene").
+            if "config.json" in files and "content.json" not in files:
+                try:
+                    cfg = sjson.load(os.path.join(dirpath, "config.json"))
+                except ValueError:
+                    cfg = None
+                if isinstance(cfg, dict):
+                    MOD_CONFIGS[uid.lower()] = {str(k).lower(): ("true" if v is True else "false" if v is False else str(v))
+                                                for k, v in cfg.items() if not isinstance(v, (dict, list))}
     return ids
 
 

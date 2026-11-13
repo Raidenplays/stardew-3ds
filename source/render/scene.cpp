@@ -835,6 +835,21 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                                    // layers (walls/roofs, trunks/leaves) must not come apart in 3D
     }
 
+    // The junimos' golden scrolls on the Community Center walls (townInterior tiles 1824-1833, shimmering)
+    if (g.location().name == "CommunityCenter") {
+        auto notes = g.ccNotes();
+        if (!notes.empty())
+            for (size_t i = 0; i < m.tilesets.size(); i++) {
+                if (tsTex[i].find("townInterior") == std::string::npos || tsTex[i].find("_2") != std::string::npos) continue;
+                int cols = tsCols[i] > 0 ? tsCols[i] : 32;
+                uint32_t t = timeMs % 2400;
+                int tile = t < 1000 ? 1824 + (int)(t / 100) : 1833;
+                for (auto& n : notes)
+                    c.image(tsTex[i], (tile % cols) * 16, (tile / cols) * 16, 16, 16, n.x * TILE - camX + c.shift(0.0f), n.y * TILE - camY);
+                break;
+            }
+    }
+
     // The bus waits at the stop (LooseSprites/Cursors), on the road above the pavement
     if (g.location().name == "BusStop")
         c.image("LooseSprites_Cursors", 288, 1247, 128, 64, 20 * TILE - camX + c.shift(0.0f), 6 * TILE + 4 - camY);
@@ -1053,8 +1068,19 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     drawFarmer(c, g, ax, ay, a.facing, a.moving, a.walkTime, frame);
                 } else {
                     int f = frame >= 0 ? frame : (a.facing & 3) * 4 + (a.moving ? ((int)(a.walkTime * 6)) & 3 : 0);
-                    c.image("Characters_" + a.name, (f % 4) * 16, (f / 4) * 32, 16, 32, std::floor(ax - 8),
-                            std::floor(ay - 30));
+                    const std::string tex = a.sheet.empty() ? "Characters_" + a.name : a.sheet;
+                    if (a.name == "Junimo") {   // 16x16 frames, eight to a row, grey on the sheet: tinted green
+                        int jf = frame >= 0 ? frame
+                                 : (a.facing == FACE_UP ? 16 : a.facing == FACE_DOWN ? 0 : 8) + (a.moving ? ((int)(a.walkTime * 10)) & 7 : 0);
+                        c.image(tex, (jf % 8) * 16, (jf / 8) * 16, 16, 16, std::floor(ax - 8), std::floor(ay - 14),
+                                a.facing == FACE_LEFT, RGBA(0x88, 0xE0, 0x50));
+                    } else if (a.sw == 16 && a.sh == 32) {
+                        c.image(tex, (f % 4) * 16, (f / 4) * 32, 16, 32, std::floor(ax - 8), std::floor(ay - 30));
+                    } else {   // a bigger (or smaller) sprite: it starts at its tile's left edge, feet a quarter up from its bottom
+                        int cols = std::max(1, c.texWidth(tex) / a.sw);
+                        c.image(tex, (f % cols) * a.sw, (f / cols) * a.sh, a.sw, a.sh, std::floor(ax - 8),
+                                std::floor(ay - 6 - a.sh * 0.75f));
+                    }
                 }
                 if (a.emoteT > 0 && a.emote >= 0) {
                     int ef = a.emote + ((int)((1.0f - a.emoteT) * 8) & 3);
@@ -1955,6 +1981,13 @@ void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
     if (g.sleepFade >= 0)   // in bed: the room goes dark
         c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(255 * std::max(0.0f, std::min(1.0f, 1.0f - g.sleepFade)))));
     if (g.cutscene.active) {
+        for (auto& p : g.cutscene.poofs) {   // puffs and sparkles (64x64 frames, a tile across here)
+            int f = std::min(p.len - 1, (int)(p.t * 1000 / p.ms));
+            c.imageScaled("TileSheets_animations", f * 64 % 640, p.row * 64 + (f * 64 / 640) * 64, 64, 64,
+                          std::floor(p.x - g_camX), std::floor(p.y - g_camY), 0.25f, p.flip);
+        }
+        if (g.cutscene.flash > 0)
+            c.rect(0, 0, TOP_W, TOP_H, RGBA(255, 255, 255, (uint8_t)(std::min(1.0f, g.cutscene.flash) * 255)));
         if (g.cutscene.fade > 0)
             c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(std::min(1.0f, g.cutscene.fade) * 255)));
         // letterbox bars, so it reads as a cutscene

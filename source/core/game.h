@@ -223,6 +223,8 @@ struct EventActor {
     float bubbleT = 0;
     float speed = 40;            // px/s
     float shakeT = 0;            // seconds of shaking left
+    int sw = 16, sh = 32;        // sprite size (temporary actors can be bigger: the cable car is 62x110)
+    std::string sheet;           // texture, if not Characters_<name> (an Animal or Monster actor)
     std::vector<std::pair<int, int>> route;   // advancedMove: tile steps still to walk
     bool routeLoop = false;
     size_t routeAt = 0;
@@ -240,6 +242,9 @@ struct Cutscene {
     float panVX = 0, panVY = 0, panT = 0;
     float fade = 0;                  // 0 clear .. 1 black
     float fadeTarget = 0, fadeSpeed = 1.5f;
+    struct Poof { float x, y; int row, len, ms; bool flip; float t; };   // temporarySprite: a row of TileSheets/animations
+    std::vector<Poof> poofs;
+    float flash = 0;                 // screenFlash: white, fading
     bool skippable = false;
     bool forkFlag = false;
     int forkWant = -1;               // question forkN: which answer arms the fork
@@ -934,6 +939,9 @@ public:
     std::map<int, std::vector<uint8_t>> bundleGiven;                // bundle index -> each item slot given
     std::vector<Bundle> bundles() const;
     static std::vector<std::string> bundleRooms();
+    struct CcNote { std::string room; int x, y; };
+    std::vector<CcNote> ccNotes() const;            // the scrolls on the Community Center walls
+    static const char* roomFlagOf(const std::string& room);
     int bundleGivenCount(const Bundle& b) const;
     bool bundleDone(const Bundle& b) const { return bundleGivenCount(b) >= b.needed; }
     bool roomDone(const std::string& room) const;

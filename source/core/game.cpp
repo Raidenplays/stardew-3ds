@@ -1154,7 +1154,8 @@ bool Game::tryInteract(int tx, int ty) {
         }
     }
     if (lastInteract(tx, ty)) return true;
-    if (cur->name.rfind("CommunityCenter", 0) == 0) {   // the junimos' bundles
+    for (auto& note : ccNotes()) {   // a junimo scroll on the wall: that room's bundles
+        if (!(tx == note.x && (ty == note.y || ty == note.y + 1))) continue;
         bool can = mailReceived.count("canReadJunimoText") || eventsSeen.count("112");
         for (auto& kv : bundleGiven) can |= !kv.second.empty();   // an older save already working on them
         if (!can && hasEvent("WizardHouse", "112")) {
@@ -1165,7 +1166,8 @@ bool Game::tryInteract(int tx, int ty) {
             }
             return true;
         }
-        bundleView = 0;
+        bundleRoom = note.room;
+        bundleView = 1;
         sfx("bigSelect");
         return true;
     }

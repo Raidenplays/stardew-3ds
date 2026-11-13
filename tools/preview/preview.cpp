@@ -518,12 +518,12 @@ int main(int argc, char** argv) {
             step(g, ui, none, 1);
             frames++;
             sinceShot += 1.0f / 60;
-            if (sinceShot > 2.5f && g.cutscene.active && g.cutscene.fade < 0.5f) {
+            if (sinceShot > (getenv("EVSHOT") ? atof(getenv("EVSHOT")) : 2.5f) && g.cutscene.active && g.cutscene.fade < 0.5f) {
                 shot(c, g, ui, "event_" + std::to_string(g_shot + 1));
                 sinceShot = 0;
             }
             if (!g.cutscene.aboveHead.empty() && !heldShot) { heldShot = true; shot(c, g, ui, "event_item_above_head"); }
-            if (g_shot >= 14 || frames > 60 * 400) break;
+            if (g_shot >= (getenv("EVMAX") ? atoi(getenv("EVMAX")) : 14) || frames > 60 * 400) break;
         }
         for (const Slot& s : g.inv)
             if (s.type == SLOT_TOOL && data.tool(s.id)) printf("  has tool: %s\n", data.tool(s.id)->name.c_str());

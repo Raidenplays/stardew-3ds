@@ -12,6 +12,29 @@ std::vector<std::string> Game::bundleRooms() {
     return {"Pantry", "Crafts Room", "Fish Tank", "Boiler Room", "Bulletin Board", "Vault"};
 }
 
+// The golden scroll on the wall of each room, while its bundles are unfinished (the Crafts Room's from
+// the first visit; the rest once the Wizard has taught you to read them).
+std::vector<Game::CcNote> Game::ccNotes() const {
+    static const struct { const char* room; int x, y; } SPOTS[6] = {
+        {"Pantry", 14, 5}, {"Crafts Room", 14, 23}, {"Fish Tank", 40, 10},
+        {"Boiler Room", 63, 14}, {"Vault", 55, 6}, {"Bulletin Board", 46, 11}};
+    std::vector<CcNote> out;
+    if (!cur || cur->name != "CommunityCenter" || mailReceived.count("JojaMember")) return out;
+    bool canRead = mailReceived.count("canReadJunimoText") || eventsSeen.count("112");
+    for (auto& kv : bundleGiven) canRead |= !kv.second.empty();
+    for (auto& sp : SPOTS) {
+        std::string room = sp.room;
+        if (mailReceived.count(roomFlagOf(room))) continue;   // that room is done
+        if (!canRead && room != "Crafts Room") continue;
+        if (room == "Bulletin Board" && !canRead) continue;
+        out.push_back({room, sp.x, sp.y});
+    }
+    return out;
+}
+
+static const char* roomFlag(const std::string& room);
+const char* Game::roomFlagOf(const std::string& room) { return roomFlag(room); }
+
 static const char* roomFlag(const std::string& room) {
     if (room == "Pantry") return "ccPantry";
     if (room == "Crafts Room") return "ccCraftsRoom";

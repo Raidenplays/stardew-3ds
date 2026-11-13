@@ -323,7 +323,7 @@ void Game::endEvent() {
         festivalAfterScene();
         return;
     }
-    eventsSeen.insert(cs.id);
+    if (!data.repeatEvents.count(cs.id)) eventsSeen.insert(cs.id);
     if (cs.id == "112") mailReceived.insert("canReadJunimoText");      // the Wizard's forest magic
     if (cs.id == "611439") mailReceived.insert("ccDoorUnlock");
     if (cs.after == "beginGame") {   // the arrival is over: wake up at home, day 1
@@ -377,6 +377,11 @@ void Game::skipEvent() {
 
 void Game::eventUpdate(float dt) {
     Cutscene& cs = cutscene;
+    if (cs.flash > 0) cs.flash = std::max(0.0f, cs.flash - dt * 1.5f);
+    for (size_t i = cs.poofs.size(); i-- > 0;) {
+        cs.poofs[i].t += dt;
+        if (cs.poofs[i].t * 1000 >= cs.poofs[i].len * cs.poofs[i].ms) cs.poofs.erase(cs.poofs.begin() + i);
+    }
     for (auto& a : cs.actors) {
         if (a.moving) {
             float dx = a.tx - a.x, dy = a.ty - a.y, d = std::sqrt(dx * dx + dy * dy), st = a.speed * dt;
@@ -582,6 +587,12 @@ bool Game::eventStep(const std::string& raw) {
             cs.camX = iarg(1) * TILE + TILE / 2.0f;
             cs.camY = iarg(2) * TILE + TILE / 2.0f;
             cs.panT = 0;
+            // pointing the camera at the map after a "fade" brings the picture back (the cable car
+            // rides: "fade/viewport 44 17" and then the whole ride is watched)
+            if (iarg(1) >= 0 && iarg(2) >= 0 && iarg(1) < cur->map.width() && iarg(2) < cur->map.height() && cs.fadeTarget > 0) {
+                cs.fadeTarget = 0;
+                cs.wait = 0;
+            }
         } else if (EventActor* a = eventActor(arg(1))) {
             cs.camX = a->x;
             cs.camY = a->y - 16;
@@ -796,11 +807,20 @@ bool Game::eventStep(const std::string& raw) {
     }
     if (c == "money") { money = std::max(0, money + iarg(1)); return true; }
     if (c == "addObject" || c == "addBigProp" || c == "addLantern" || c == "addConversationTopic" || c == "makeInvisible" ||
-        c == "screenFlash" || c == "eyes" || c == "glow" || c == "ambientLight" || c == "farmerEat" || c == "playPetSound" ||
-        c == "specificTemporarySprite" || c == "temporarySprite" || c == "removeSprite" || c == "stopSwimming" ||
+        c == "eyes" || c == "glow" || c == "ambientLight" || c == "farmerEat" || c == "playPetSound" ||
+        c == "specificTemporarySprite" || c == "removeSprite" || c == "stopSwimming" ||
         c == "swimming" || c == "changeYSourceRectOffset" || c == "resetVariable" || c == "addWorldState" || c == "dump" ||
         c == "broadcastEvent" || c == "removeTile" || c == "null" || c == "doAction" || c == "updateMinigame" || c == "cutscene")
         return true;   // set dressing the 3DS scene does without
+    if (c == "screenFlash") { cs.flash = std::max(0.1f, std::min(1.0f, (float)atof(arg(1).c_str()))); return true; }
+    if (c == "temporarySprite") {   // <x> <y> <row in TileSheets/animations> <frames> <ms a frame> [flip] [depth]
+        Cutscene::Poof p;
+        p.x = iarg(1) * (float)TILE; p.y = iarg(2) * (float)TILE;
+        p.row = iarg(3); p.len = std::max(1, iarg(4)); p.ms = std::max(10, iarg(5));
+        p.flip = arg(6) == "true"; p.t = 0;
+        cs.poofs.push_back(p);
+        return true;
+    }
     if (c == "changeToTemporaryMap") {
         std::string loc = arg(1);
         if (!loc.empty() && hasMap(loc)) {
@@ -828,6 +848,13 @@ bool Game::eventStep(const std::string& raw) {
         a.x = tx * TILE + TILE / 2.0f;
         a.y = ty * TILE + TILE - 2.0f;
         a.facing = toOurFacing(c == "addActor" ? iarg(4) : iarg(6));
+        if (c == "addTemporaryActor") {   // <name> <sprite w> <sprite h> <x> <y> <facing> [breather] [Character|Animal|Monster]
+            a.sw = std::max(1, iarg(2));
+            a.sh = std::max(1, iarg(3));
+            std::string kind = arg(8);
+            if (kind == "Animal") a.sheet = "Animals_" + a.name;
+            else if (kind == "Monster") a.sheet = "Characters_Monsters_" + a.name;
+        }
         cs.actors.push_back(a);
         return true;
     }

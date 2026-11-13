@@ -83,6 +83,8 @@ EXTRA_TEXTURES = [
     ("Buildings/Shipping Bin", False),
     ("LooseSprites/Cursors", False),
     ("TileSheets/emotes", False),
+    ("TileSheets/animations", False),
+    ("Characters/Junimo", False),
     ("Minigames/jojacorps", False),
     ("Minigames/Intro", False),
     ("LooseSprites/Fence1", False),
@@ -1783,8 +1785,30 @@ def write_events(content, out_dir):
             for k, v in ev.items():
                 f.write(f"{_flat(k)}\t{_flat(v)}\n")
                 n += 1
+                # the sheets of actors brought on for one scene (the cable car, a horse, a monster)
+                for m in re.finditer(r"addTemporaryActor\s+(\S+)(?:\s+\S+){5}(?:\s+\S+)?(?:\s+(Character|Animal|Monster))?", str(v)):
+                    name, kind = m.group(1).replace("_", " ") if False else m.group(1), m.group(2) or "Character"
+                    folder = {"Animal": "Animals", "Monster": "Characters/Monsters"}.get(kind, "Characters")
+                    if find_png(content, f"{folder}/{name}"):
+                        TEXTURES_FROM_DATA.add(f"{folder}/{name}")
         files += 1
     print(f"  {n} events in {files} locations")
+    # Scenes a code mod plays again every time (it forgets it showed them): Ridgeside's cable car rides
+    rep = []
+    if MODS_DIR[0]:
+        for dirpath, dirs, fnames in os.walk(MODS_DIR[0]):
+            for fn2 in fnames:
+                if fn2.lower() == "repeatableevents.json":
+                    try:
+                        rj = json.load(open(os.path.join(dirpath, fn2), encoding="utf-8-sig"))
+                        rep += [str(x) for x in rj.get("RepeatEvents", [])]
+                    except (ValueError, AttributeError):
+                        pass
+    with open(os.path.join(out_dir, "repeatevents.dat"), "w", encoding="utf-8") as f:
+        for r in rep:
+            f.write(r + "\n")
+    if rep:
+        print(f"  {len(rep)} events that play every time")
 
 
 def _festival_actors(content, map_name):
