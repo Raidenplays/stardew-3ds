@@ -447,6 +447,8 @@ void Game::dialogueChoose(int i) {
     DialoguePage& p = dialogue.pages[dialogue.page];
     if (i < 0 || i >= (int)p.choices.size()) return;
     DialogueChoice ch = p.choices[i];
+    if (ch.responseKey.rfind("Event_band", 0) == 0)   // Sam asks what music you like: his band plays it at the show
+        stats["band"] = atoi(ch.responseKey.c_str() + 10);
     if (!pendingChoice.empty()) {   // a question the game asked (the elevator)
         std::string what = pendingChoice;
         pendingChoice.clear();

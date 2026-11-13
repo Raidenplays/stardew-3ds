@@ -199,6 +199,8 @@ bool Game::eventConditionsMet(const std::string& key) const {
                 if (s.type == SLOT_OBJECT && w.size() > 1 && std::to_string(s.id) == w[1]) ok = true;
         } else if (code == "r") {
             ok = w.size() > 1 && (rngState % 1000) / 1000.0 < atof(w[1].c_str());
+        } else if (code == "x") {
+            ok = true;   // "send this letter instead of playing a scene": checkEvents does the sending
         } else {
             ok = false;  // not supported yet: never fire early
         }
@@ -234,6 +236,16 @@ bool Game::checkEvents() {
         if (!isNum(id) && e.first.find('/') == std::string::npos) continue;   // fork targets
         if (eventsSeen.count(id)) continue;
         if (!eventConditionsMet(e.first)) continue;
+        // ".../x <letter>": not a scene at all. The letter is in tomorrow's post, and that's that.
+        size_t xat = e.first.find("/x ");
+        if (xat != std::string::npos) {
+            std::string letter = e.first.substr(xat + 3);
+            letter = letter.substr(0, letter.find('/'));
+            while (!letter.empty() && letter.back() == ' ') letter.pop_back();
+            if (!letter.empty() && !mailReceived.count(letter)) mailTomorrow.insert(letter);
+            eventsSeen.insert(id);
+            continue;
+        }
         return startEvent(cur->name, e.first, e.second);
     }
     return false;
@@ -654,13 +666,33 @@ bool Game::eventStep(const std::string& raw) {
         bool go = c == "switchEvent" || cs.forkFlag ||
                   (w.size() > 2 && (mailReceived.count(arg(1)) || eventsSeen.count(arg(1))));
         if (!go) return true;
+        // the branch is in this place's own events, or among the shared ones (Data/Events/Temp)
+        for (const std::string& where : {cs.location, std::string("Temp")}) {
+            g_forkCache.clear();
+            readEventFile(data.vfs, where, g_forkCache);
+            for (auto& e : g_forkCache)
+                if (e.first == target || e.first.rfind(target + "/", 0) == 0) {
+                    cs.cmds = splitSlash(e.second);
+                    cs.ip = 0;
+                    cs.forkFlag = false;
+                    return true;
+                }
+        }
+        return true;
+    }
+    if (c == "cutscene" && arg(1) == "bandFork") {   // Sam's show: the kind of music you told him you like
+        static const char* const BANDS[4] = {"poppy", "heavy", "techno", "honkytonk"};
+        auto it = stats.find("band");
+        int k = it == stats.end() ? 0 : std::max(1, std::min(4, it->second)) - 1;
         g_forkCache.clear();
-        readEventFile(data.vfs, cs.location, g_forkCache);
+        readEventFile(data.vfs, "Temp", g_forkCache);
         for (auto& e : g_forkCache)
-            if (e.first == target || e.first.rfind(target + "/", 0) == 0) {
+            if (e.first == BANDS[k]) {
+                // the band plays, then the scene carries on from where it was
+                std::vector<std::string> rest(cs.cmds.begin() + (long)cs.ip, cs.cmds.end());
                 cs.cmds = splitSlash(e.second);
+                cs.cmds.insert(cs.cmds.end(), rest.begin(), rest.end());
                 cs.ip = 0;
-                cs.forkFlag = false;
                 return true;
             }
         return true;
