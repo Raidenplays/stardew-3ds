@@ -767,7 +767,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 float dx = b.tileX * TILE + (b.footW * TILE - b.srcW) / 2.0f - camX;
                 float dy = (b.tileY + b.footH) * TILE - b.srcH - camY;
                 if (b.name == "farmhouse") { dx -= 8; dy += 2; }   // where the game draws it: 16 px left of its footprint, 2 down
-                if (b.name == "mailbox") { dx -= 14; dy += 2; }    // tucked against the house's stone corner
+                if (b.name == "mailbox") dy += 2;   // beside the house's corner post, level with it
                 if (c.texWidth(b.texture) > 0) {
                     c.image(b.texture, b.srcX, b.srcY, b.srcW, b.srcH, dx, dy);
                     if (b.name == "shippingbin" && c.texWidth("LooseSprites_Cursors") > 0)   // its lid, 13 frames
