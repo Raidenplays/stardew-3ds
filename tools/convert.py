@@ -2357,10 +2357,12 @@ ALEAS_LINES = [
     "Nope. I have the next 11 games paid for.$h",
     "Hold on, I'm on a streak. Also I have the next 11 games paid for.",
 ]
-SIEPERT_LINES = [
-    "Oh! Hi!$h",
-    "Hi! Sorry, I'm in the middle of something.",
-    "Just one more paragraph...",
+SIEPERT_LINES = [                         # she's coding a Minecraft mod, in Java
+    "Hi! Sorry, Gradle's still building...",
+    "It compiled on the first try. Something is definitely wrong.",
+    "Shh, I'm so close. Just one more NullPointerException to squash.",
+    "I'm making a Minecraft mod. In Java. Don't ask how it's going.",
+    "Do you think creepers would look cute with cat ears?$h",
 ]
 
 
