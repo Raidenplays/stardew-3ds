@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- The whole page scrolls (small screens don't fit it); the log scrolls on its own inside it. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:padding="14dp" android:background="#2A1A10">
+    android:fillViewport="true" android:background="#2A1A10">
+<LinearLayout
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="14dp">
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="stardew3ds converter" android:textSize="22sp" android:textStyle="bold"
@@ -59,9 +63,10 @@
     <TextView android:id="@+id/barText" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:textColor="#E0C8A0" android:textSize="12sp" android:text="Ready" />
 
-    <ScrollView android:id="@+id/scroll" android:focusable="false" android:descendantFocusability="blocksDescendants" android:layout_width="match_parent" android:layout_height="0dp"
-        android:layout_weight="1" android:layout_marginTop="8dp" android:background="#1A100A" android:padding="6dp">
+    <ScrollView android:id="@+id/scroll" android:focusable="false" android:descendantFocusability="blocksDescendants" android:layout_width="match_parent" android:layout_height="260dp"
+        android:nestedScrollingEnabled="true" android:layout_marginTop="8dp" android:background="#1A100A" android:padding="6dp">
         <TextView android:id="@+id/log" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:textColor="#D8E8C8" android:textSize="11sp" android:fontFamily="monospace" android:textIsSelectable="true" />
     </ScrollView>
 </LinearLayout>
+</ScrollView>
