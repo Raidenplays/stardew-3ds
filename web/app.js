@@ -148,14 +148,26 @@
   function findFarms() {
     const off = new Set([...document.querySelectorAll("#farm input")].filter((t) => !t.checked).map((t) => t.value));
     farms = [];
+    // The save file is named <farmer>_<number> and has no extension. Its folder usually has the same
+    // name, but people rename folders, and backup mods keep older copies in sub-folders: the copy
+    // nearest the top is the farm itself.
+    const best = new Map();
     for (const kind of ["save", "game", "mods"]) {
       for (const e of picked[kind]) {
         const parts = e.path.split("/");
         const name = parts[parts.length - 1];
-        if (parts.length < 2 || name !== parts[parts.length - 2] || !/_\d+$/.test(name)) continue;
-        const dir = parts.slice(0, -1).join("/") + "/";
-        farms.push({ name, files: picked[kind].filter((x) => x.path.startsWith(dir)).map((x) => ({ path: x.path.slice(dir.length - name.length - 1), file: x.file })), when: e.file.lastModified || 0 });
+        if (parts.length < 2 || !/^[^.]*_\d+$/.test(name)) continue;
+        const had = best.get(name);
+        if (!had || parts.length < had.depth) best.set(name, { kind, e, depth: parts.length });
       }
+    }
+    for (const [name, b] of best) {
+      const dir = b.e.path.slice(0, b.e.path.length - name.length);
+      // just the save itself and its SaveGameInfo, under a folder named like the save
+      const files = picked[b.kind].filter((x) => x.path.startsWith(dir) && x.path.indexOf("/", dir.length) < 0
+        && (x.path.endsWith("/" + name) || x.path.endsWith("/SaveGameInfo")))
+        .map((x) => ({ path: name + "/" + x.path.slice(dir.length), file: x.file }));
+      farms.push({ name, files, when: b.e.file.lastModified || 0 });
     }
     farms.sort((x, y) => y.when - x.when);   // most recently played first
     if (farms.length > 12) farms.length = 12;   // the game keeps up to 12 farms

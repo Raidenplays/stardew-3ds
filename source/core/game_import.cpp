@@ -37,6 +37,14 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     fclose(fp);
     if (lines.empty() || lines[0][0] != "version") return false;
 
+    // the right kind of farm first (Riverland, Forest, ...): the world is started again on that map
+    for (auto& f : lines)
+        if (f[0] == "farmtype" && I(f, 1) != me.farmType && I(f, 1) >= 0 && I(f, 1) < (int)data.farmTypes.size()) {
+            Character who = me;
+            who.farmType = I(f, 1);
+            if (!newGame(rngState, who)) return false;
+        }
+
     // the PC farm replaces the starting one
     int fw = farm->map.width();
     for (auto& d : farm->debris) d = DEB_NONE;
@@ -117,6 +125,29 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
                 int kind = equipKind(sl);
                 if (kind == e || (kind == EQ_RING1 && e == EQ_RING2)) { sl.count = 1; equip[e] = sl; }
             }
+        }
+        else if (k == "look" && f.size() > 8) {
+            me.outfit.hair = I(f, 1) % 32;
+            me.outfit.shirt = I(f, 2) % 112;
+            me.outfit.pantsR = (uint8_t)I(f, 3); me.outfit.pantsG = (uint8_t)I(f, 4); me.outfit.pantsB = (uint8_t)I(f, 5);
+            me.outfit.hairR = (uint8_t)I(f, 6); me.outfit.hairG = (uint8_t)I(f, 7); me.outfit.hairB = (uint8_t)I(f, 8);
+        } else if (k == "favorite" && f.size() > 1) me.favorite = f[1];
+        else if (k == "maxstamina") {   // Stardrops eaten on the PC
+            maxEnergy = std::max((int)MAX_ENERGY, std::min(MAX_ENERGY + STARDROP_ENERGY * MAX_STARDROPS, I(f, 1)));
+            energy = maxEnergy;
+        } else if (k == "maxhealth") {
+            maxHealth = std::max(100, std::min(250, I(f, 1)));
+            health = maxHealth;
+        } else if (k == "houseupgrade") houseUpgradeDays = std::max(1, I(f, 1));
+        else if (k == "toolupgrade") {   // a tool left with Clint
+            Slot s;
+            if (slotFrom(f, 2, s) && s.type == SLOT_TOOL) { upgradeTool = s.id; upgradeReadyDay = absoluteDay() + std::max(1, I(f, 1)); }
+        } else if (k == "quest" && f.size() > 1) {
+            bool have = questsFinished.count(f[1]) > 0;
+            for (auto& q : quests) have = have || q.id == f[1];
+            if (!have && data.quest(f[1])) { QuestState st; st.id = f[1]; quests.push_back(st); }
+        } else if (k == "mailbox" && f.size() > 1) {
+            if (data.mail.count(f[1])) mailbox.push_back(f[1]);
         }
         else if (k == "money") money = I(f, 1);
         else if (k == "date") {

@@ -1437,7 +1437,7 @@ static void drawHud(Canvas& c, Game& g) {
     float ex = TOP_W - 16 + hs, ey = TOP_H - 74;
     box(c, ex - 2, ey - 2, 14, 72, COL_PANEL, COL_BORDER);
     c.rect(ex + 1, ey + 1, 8, 66, COL_ENERGY_BG);
-    float k = (float)g.energy / MAX_ENERGY;
+    float k = (float)g.energy / std::max(1, g.maxEnergy);
     uint32_t ec = k > 0.5f ? COL_ENERGY : (k > 0.2f ? RGBA(0xF0, 0xC0, 0x20) : RGBA(0xE0, 0x30, 0x20));
     c.rect(ex + 1, ey + 1 + 66 * (1 - k), 8, 66 * k, ec);
     c.text(ex + 5, ey + 66, 0.4f, COL_TEXT, "E", ALIGN_CENTER);
@@ -1761,7 +1761,7 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
     }
     char buf[80];
     snprintf(buf, sizeof buf, "%s %d, Year %d   %dg   Energy %d/%d", seasonShort(g.season), g.day,
-             g.year, g.money, g.energy, MAX_ENERGY);
+             g.year, g.money, g.energy, g.maxEnergy);
     c.text(BOT_W / 2, iy + 76, 0.4f, COL_TEXT_SOFT, buf, ALIGN_CENTER);
     static const char* sk[SK_COUNT] = {"Farm", "Fish", "Forage", "Mine", "Combat"};
     std::string skills;

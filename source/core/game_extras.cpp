@@ -492,7 +492,7 @@ bool Game::extraChoice(const std::string& what, const std::string& key) {
         int cost = atoi(key.c_str() + 12);
         if (money < cost) { say("Not enough money"); return true; }
         money -= cost;
-        energy = std::min((int)MAX_ENERGY, energy + cost / 4);
+        energy = std::min(maxEnergy, energy + cost / 4);
         sfx("eat");
         say("Tasty.");
     } else if (key == "extra:crane") {

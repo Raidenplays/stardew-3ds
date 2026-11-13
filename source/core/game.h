@@ -286,7 +286,8 @@ enum Facing : int { FACE_DOWN = 0, FACE_RIGHT = 1, FACE_UP = 2, FACE_LEFT = 3 };
 static const int INV_SIZE = 36;
 static const int CHEST_SIZE = 36;
 static const int HOTBAR = 12;
-static const int MAX_ENERGY = 270;
+static const int MAX_ENERGY = 270;       // to start with (see Game::maxEnergy)
+static const int STARDROP_ENERGY = 34, MAX_STARDROPS = 7;
 static const int CAN_CAPACITY = 40;
 static const int DAY_START = 6 * 60;     // 6:00 am
 static const int DAY_END = 26 * 60;      // 2:00 am -> pass out
@@ -537,6 +538,7 @@ public:
     float clockAcc = 0;
     int money = 500;
     int energy = MAX_ENERGY;
+    int maxEnergy = MAX_ENERGY;   // 34 more for every Stardrop eaten
     int water = CAN_CAPACITY;
     bool raining = false;
     bool windy = false;

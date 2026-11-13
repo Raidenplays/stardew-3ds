@@ -291,7 +291,7 @@ void Game::swingWeapon(const ToolDef& w) {
         if (FarmBuilding* hutch = buildingForInterior(cur->name))   // a hutch slime: one fewer lives there now
             if (hutch->type == "Slime Hutch" && !hutch->pending.empty()) hutch->pending.pop_back();
         if (wearing("Vampire Ring")) health = std::min(maxHealth, health + 2);
-        if (wearing("Soul Sapper Ring")) energy = std::min(MAX_ENERGY, energy + 4);
+        if (wearing("Soul Sapper Ring")) energy = std::min(maxEnergy, energy + 4);
         if (wearing("Savage Ring")) speedBoost = 3.0f;
         if (wearing("Warrior Ring") && rand32() % 10 == 0) warriorBoost = 5.0f;
         if (d) {

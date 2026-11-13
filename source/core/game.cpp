@@ -337,6 +337,8 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 
 bool Game::newGame(uint32_t seed, std::string* err) {
     rngState = seed ? seed : 1;
+    maxEnergy = MAX_ENERGY;
+    maxHealth = 100;
     houseLevel = houseUpgradeDays = 0;
     furniture = data.layout.furniture;
     museumDonated.clear();
@@ -516,7 +518,7 @@ void Game::startDay() {
         }
     timeOfDay = DAY_START;
     clockAcc = 0;
-    energy = MAX_ENERGY;
+    energy = maxEnergy;
     health = maxHealth;
     invuln = 0;
     toolTimer = 0;
@@ -787,9 +789,17 @@ bool Game::eatSlot(int i) {
     Slot& sl = inv[i];
     const ObjectDef* o = sl.type == SLOT_OBJECT ? data.object(sl.id) : nullptr;
     if (o && sl.id == 79) return readSecretNote(i);
+    if (o && sl.id == 434) {   // a Stardrop: more energy for good, and a full bar
+        maxEnergy = std::min(MAX_ENERGY + STARDROP_ENERGY * MAX_STARDROPS, maxEnergy + STARDROP_ENERGY);
+        energy = maxEnergy;
+        say("Your maximum energy level has increased.");
+        sfx("stardrop");
+        if (--sl.count <= 0) sl = Slot();
+        return true;
+    }
     if (!o || o->edibility <= 0 || o->edibility == -300) return false;
     int gain = (int)std::ceil(o->edibility * 2.5f);
-    energy = std::min(MAX_ENERGY, energy + gain);
+    energy = std::min(maxEnergy, energy + gain);
     say("Ate " + o->name + " (+" + std::to_string(gain) + ")");
     sfx("eat");
     if (--sl.count <= 0) sl = Slot();
@@ -1712,14 +1722,14 @@ bool Game::goToBed() {
     deliverMorningMail();
     startDay();
     wakeUp();
-    if (passedOut) energy = MAX_ENERGY / 2;
+    if (passedOut) energy = maxEnergy / 2;
     return true;
 }
 
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 34;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 35;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -1956,6 +1966,7 @@ bool Game::save(const std::string& path) const {
     for (auto& k : walnutsGot) w.str(k);
     w.u32((uint32_t)stats.size());                            // v34
     for (auto& kv : stats) { w.str(kv.first); w.i32(kv.second); }
+    w.i32(maxEnergy); w.i32(maxHealth);                       // v35
     w.str(orderKey); w.i32(orderDays);
     w.u32((uint32_t)orderProgress.size());
     for (int v : orderProgress) w.i32(v);
@@ -2007,6 +2018,8 @@ bool Game::load(const std::string& path, std::string* err) {
         fclose(f);
         return false;
     }
+    maxEnergy = MAX_ENERGY;
+    maxHealth = 100;
     me = Character();
     me.name = data.layout.farmerName;
     me.outfit = data.layout.outfit;
@@ -2372,6 +2385,11 @@ bool Game::load(const std::string& path, std::string* err) {
             if (version >= 34) {
                 uint32_t ns2 = r.u32();
                 for (uint32_t k = 0; k < ns2 && r.ok && k < 500; k++) { std::string key = r.str(); stats[key] = r.i32(); }
+            }
+            if (version >= 35) {
+                maxEnergy = std::max((int)MAX_ENERGY, std::min(MAX_ENERGY + STARDROP_ENERGY * MAX_STARDROPS, (int)r.i32()));
+                maxHealth = std::max(100, std::min(250, (int)r.i32()));
+                energy = std::min(energy, maxEnergy);
             }
             if (version >= 31) {
                 orderKey = r.str(); orderDays = r.i32();

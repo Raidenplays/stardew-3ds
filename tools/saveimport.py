@@ -266,6 +266,53 @@ def import_save(save_path, root):
             out.append(["profession", int(v.text or 0)])
     out.append(["maxstamina", num(p, "maxStamina", 270)])
     out.append(["maxhealth", num(p, "maxHealth", 100)])
+    # how the farmer looks
+    def rgb(tag, default):
+        e = p.find(tag)
+        if e is None or e.find("R") is None:
+            return list(default)
+        return [num(e, "R"), num(e, "G"), num(e, "B")]
+    shirt = num(p, "shirt", -1)
+    si = p.find("shirtItem")            # 1.4+: the shirt is an item ("1004" = shirt 4)
+    if si is not None and len(si):
+        sid = (txt(si, "itemId") or txt(si, "ParentSheetIndex") or "").replace("(S)", "")
+        if sid.isdigit():
+            shirt = int(sid) - 1000 if int(sid) >= 1000 else int(sid)
+    pants = rgb("pantsColor", (46, 85, 183))
+    pi = p.find("pantsItem")            # ... and dyed trousers carry their own colour
+    if pi is not None and pi.find("clothesColor") is not None and truthy(pi, "dyeable"):
+        c = pi.find("clothesColor")
+        pants = [num(c, "R"), num(c, "G"), num(c, "B")]
+    out.append(["look", max(0, num(p, "hair")), max(0, shirt)] + pants + rgb("hairstyleColor", (193, 90, 50)))
+    if txt(p, "favoriteThing"):
+        out.append(["favorite", clean(txt(p, "favoriteThing"))])
+    # wallet items: flags on the farmer before 1.6, letters received since
+    for tag, flag in (("hasRustyKey", "HasRustyKey"), ("hasSkullKey", "HasSkullKey"), ("hasClubCard", "HasClubCard"),
+                      ("hasSpecialCharm", "HasSpecialCharm"), ("canUnderstandDwarves", "HasDwarvishTranslationGuide"),
+                      ("hasMagnifyingGlass", "HasMagnifyingGlass"), ("hasDarkTalisman", "HasDarkTalisman"),
+                      ("hasMagicInk", "HasMagicInk"), ("HasTownKey", "HasTownKey")):
+        if truthy(p, tag):
+            out.append(["mail", flag])
+    cave = num(p, "caveChoice")          # Demetrius's cave: 1 fruit bats, 2 mushrooms
+    if cave in (1, 2):
+        out.append(["mail", "caveBats" if cave == 1 else "caveMushrooms"])
+    if num(p, "daysUntilHouseUpgrade", -1) > 0:
+        out.append(["houseupgrade", num(p, "daysUntilHouseUpgrade")])
+    tool = p.find("toolBeingUpgraded")
+    if tool is not None and len(tool):
+        il = item_line(tool, ids)
+        if il:
+            out.append(["toolupgrade", max(1, num(p, "daysLeftForToolUpgrade", 1))] + il)
+    ql = p.find("questLog")
+    if ql is not None:
+        for q in ql:
+            if txt(q, "id") and not truthy(q, "completed"):
+                out.append(["quest", clean(txt(q, "id"))])
+    for box in (p.find("mailbox"), sg.find("mailbox")):   # unread letters (kept on the farmer since 1.3)
+        if box is not None:
+            for s in box:
+                if s.text:
+                    out.append(["mailbox", clean(s.text)])
     out.append(["backpack", num(p, "maxItems", 12)])
     items = p.find("items")
     if items is not None:
