@@ -83,6 +83,8 @@ public:
     void setAction(int x, int y, const std::string& a);
     // Lay a smaller map over this one at (dx, dy): tiles, walls, actions and warps. Returns false if it doesn't fit.
     bool stamp(const TileMap& patch, int dx, int dy);
+    // An extra tile on a layer group (0 Back, 1 Buildings, 2 Front, 3 AlwaysFront), over what's there.
+    void addOverlay(int x, int y, uint16_t tile, int ts, int group);
     // Take over the cells marked in `mask` (w*h, nonzero = take) from a map of the same size: every layer,
     // walls, actions and numbered-layer tiles (a room of the Community Center restored from its refurbished map).
     bool copyCells(const TileMap& src, const std::vector<uint8_t>& mask);

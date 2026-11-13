@@ -637,6 +637,7 @@ bool GameData::load(const std::string& root, std::string* err) {
                     p = end;
                 }
             }
+            if (f.size() > 4) sscanf(f[4].c_str(), "%d %d", &a.ox, &a.oy);
             if (!a.loop.empty() || !a.intro.empty()) npcAnims[f[0]] = std::move(a);
         }
     lines.clear();

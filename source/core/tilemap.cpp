@@ -437,4 +437,15 @@ TileMap TileMap::trimmed(int& ox, int& oy) const {
     }
     return t;
 }
+void TileMap::addOverlay(int x, int y, uint16_t tile, int ts, int group) {
+    if (!inBounds(x, y) || group < 0 || group > 3 || ts < 0 || ts >= (int)tilesets.size()) return;
+    overlays.push_back({(uint16_t)x, (uint16_t)y, tile, (uint8_t)ts, (uint8_t)group});
+    std::stable_sort(overlays.begin(), overlays.end(), [](const Overlay& a, const Overlay& b) {
+        if (a.group != b.group) return a.group < b.group;
+        if (a.y != b.y) return a.y < b.y;
+        return a.x < b.x;
+    });
+    rowRuns();
+    rev++;
+}
 } // namespace sv

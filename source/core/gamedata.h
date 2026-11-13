@@ -215,6 +215,7 @@ struct NpcDef {
 // frame numbers on their 16x32 sheet, 4 per row.
 struct NpcAnim {
     std::vector<int> intro, loop, outro;
+    int ox = 0, oy = 0;   // pixels to draw the frames off the tile by (a prop leaning into its cabinet)
 };
 
 // A way from one map to another (map-edge warp or door).

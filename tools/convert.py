@@ -2324,7 +2324,7 @@ RAIDEN_FACTS = [
 ]
 
 
-def write_prop(data_dir, name, spot, anim, lines, intro=None, busy=None):
+def write_prop(data_dir, name, spot, anim, lines, intro=None, busy=None, offset=None):
     """A talking prop: stands at one spot all day playing its animation (frames 16-19 of its
     sheet) and says one of `lines` when you talk to it. No friendship, gifts or birthday."""
     loc, x, y, d = spot
@@ -2338,7 +2338,7 @@ def write_prop(data_dir, name, spot, anim, lines, intro=None, busy=None):
         if intro is not None: f.write(f"prop_intro\t{intro or '-'}\n")
         if busy: f.write(f"prop_busy\t{busy}\n")
     with open(os.path.join(data_dir, "animations.dat"), "a", encoding="utf-8") as f:
-        f.write(f"{anim}\t16\t16 17 18 19\t16\n")
+        f.write(f"{anim}\t16\t16 17 18 19\t16" + (f"\t{offset[0]} {offset[1]}" if offset else "") + "\n")
     print(f"  {name} is at the {loc}")
 
 
@@ -2350,7 +2350,7 @@ def write_raiden(data_dir):
 # art/friends/); their sprites are made here from the player's own villager sheets, recoloured:
 # aleas from Shane's (green hoodie), Siepert from Emily's (black dress, white apron, cat ears).
 ALEAS_SPOT = ("Saloon", 36, 18, 0)        # at his own arcade cabinet (36,17), back to you
-SIEPERT_SPOT = ("Saloon", 23, 22, 0)      # at her own table (23-24,21), typing on her laptop
+SIEPERT_SPOT = ("Saloon", 22, 21, 1)      # at the left of her own table (23-24,21), side-on, typing
 ALEAS_LINES = [
     "I have the next 11 games paid for.",
     "Sorry, I have the next 11 games paid for.",
@@ -2373,7 +2373,7 @@ def _remap(img, table):
                 px[x, y] = table[(r, g, b)] + (a,)
 
 
-def _aleas_sheet(src):
+def _aleas_sheet(src, stool_png=None):
     im = Image.open(src).convert("RGBA").crop((0, 0, 64, 128))
     _remap(im, {(4, 41, 73): (18, 52, 28), (1, 73, 170): (44, 110, 50), (4, 112, 221): (78, 156, 66),
                 (0, 123, 224): (78, 156, 66), (33, 56, 93): (38, 34, 46), (52, 86, 128): (56, 50, 64),
@@ -2381,24 +2381,68 @@ def _aleas_sheet(src):
                 (96, 62, 89): (70, 122, 62)})
     out = Image.new("RGBA", (64, 160))
     out.paste(im, (0, 0))
-    back = im.crop((0, 64, 16, 96))
-    for i in range(4):                     # mashing buttons: the shoulders bob a pixel
-        f = back.copy()
-        if i % 2:
-            f = Image.new("RGBA", (16, 32))
-            f.paste(back.crop((0, 0, 16, 20)), (0, 1))
-            low = back.crop((0, 20, 16, 32))
-            f.paste(low, (0, 20), low)
+    # frames 16-19: at his cabinet, back to you, both hands up on its controls (drawn 5px up, by
+    # the animations.dat offset, so his hands land on the cabinet's panel).
+    pal = {"b": (22, 7, 19), "a": (40, 30, 28), "c": (62, 46, 40), "H": (92, 70, 58),
+           "G": (70, 140, 70), "P": (206, 116, 136), "d": (18, 52, 28), "e": (44, 110, 50),
+           "f": (78, 156, 66), "h": (255, 189, 132), "j": (216, 99, 101), "i": (38, 34, 46),
+           "k": (56, 50, 64), "l": (74, 68, 84), "s": (30, 22, 26)}
+    art = [
+        "................",
+        "................",
+        "................",
+        "......bbbb......",
+        ".....bacaHb.....",
+        "....bacHcacb....",
+        "...bacGcaHcab...",
+        "...bacGcacacb...",
+        ".bbbacaHcGacbbb.",
+        "bhhbaacacaPabhhb",
+        "bjhbaaaaaaaabhjb",
+        "bfebbaaaaaabbefb",
+        "bedb.bbaabb.bdeb",
+        "bedbbdddddddbdeb",
+        "bedbdeddddedbdeb",
+        ".bdeeeeeffeeedb.",
+        ".bddeeeeffeeddb.",
+        ".bddeffeeeeeddb.",
+        "..bdeffeeeeedb..",
+        "..bdeeeeeeeedb..",
+        "..bddeeeeeeddb..",
+        "..bdddeeeedddb..",
+        "..bbiiiiiiiibb..",
+        "...bikkllkkib...",
+        "...bikiiiikib...",
+        "...bikkbbkkib...",
+        "...bkkib.bikkb..",
+        "....bkib.bikb...",
+        "....bkkb.bkkb...",
+        "....bikb.bkib...",
+        "....bssb.bssb...",
+        "....bbbb.bbbb...",
+    ]
+    for i in range(4):
+        f = Image.new("RGBA", (16, 32))
+        fx = f.load()
+        for y, row in enumerate(art):
+            for x, ch in enumerate(row):
+                if ch in pal: fx[x, y] = pal[ch] + (255,)
+        if i in (1, 3):                    # mashing: one hand presses down a pixel, then the other
+            xs = (0, 1, 2) if i == 1 else (13, 14, 15)
+            for y in range(12, 7, -1):
+                for x in xs:
+                    fx[x, y] = fx[x, y - 1]
+            for x in xs:
+                fx[x, 7] = (0, 0, 0, 0)
         out.paste(f, (i * 16, 128))
     return out
 
 
-def _siepert_sheet(src):
+def _siepert_sheet(src, stool_png=None):
     hair = {(0, 0, 65): (14, 10, 14), (23, 8, 63): (18, 12, 16), (39, 14, 104): (26, 18, 22),
             (0, 11, 126): (30, 22, 26), (2, 48, 139): (38, 28, 30), (20, 84, 200): (52, 40, 40),
             (27, 142, 246): (74, 58, 56), (113, 220, 251): (100, 80, 76)}
-    dress = {(249, 128, 114): (58, 54, 68), (242, 102, 81): (42, 38, 50), (198, 54, 43): (24, 20, 28),
-             (93, 0, 40): (16, 14, 20), (122, 0, 74): (24, 20, 28), (151, 0, 25): (30, 27, 36),
+    dress = {(249, 128, 114): (42, 38, 50), (198, 54, 43): (24, 20, 28), (93, 0, 40): (16, 14, 20), (122, 0, 74): (24, 20, 28), (151, 0, 25): (30, 27, 36),
              (200, 7, 24): (42, 38, 50), (226, 46, 30): (58, 54, 68)}
     WHITE, SHADE = (236, 232, 240, 255), (178, 172, 190, 255)
     PINK, OUT = (240, 150, 170, 255), (40, 24, 34, 255)
@@ -2412,8 +2456,10 @@ def _siepert_sheet(src):
         top = next(y for y in range(32) if any(px[x, y][3] for x in range(16)))
         xs = [x for x in range(16) if px[x, top + 3][3]]
         x0, x1 = min(xs), max(xs)
-        for x in range(x0 + 1, x1):        # the frilly headband
-            if px[x, top + 3][3]: px[x, top + 3] = WHITE if x % 2 == 0 else SHADE
+        hb = top + 1 if facing in (1, 3) else top + 2   # the frilly headband, over the crown
+        hx = [x for x in range(16) if px[x, hb][3]]
+        for x in range(min(hx) + 1, max(hx)):
+            px[x, hb] = WHITE if x % 2 == 0 else SHADE
         cols = [x0, x1 - 2] if facing in (0, 2) else ([x0 + 2] if facing == 3 else [x1 - 4])
         for cx in cols:                    # cat ears
             for dx, dy, c in [(0, -2, OUT), (1, -2, OUT), (0, -1, OUT), (1, -1, PINK), (2, -1, OUT),
@@ -2456,14 +2502,53 @@ def _siepert_sheet(src):
             f = im.crop((col * 16, row * 32, col * 16 + 16, row * 32 + 32))
             deck(f, row)
             out.paste(f, (col * 16, row * 32))
-    back = out.crop((0, 64, 16, 96))
-    for i in range(4):                     # sitting at her table, typing; the screen glows past her
+    # frames 16-19: sitting side-on at the left of her table, typing on her laptop. Her head is
+    # Emily's (recoloured, with the ears and headband); the rest is drawn here, on a Saloon stool.
+    head = out.crop((0, 32 + 2, 16, 32 + 15))         # right-facing frame, rows 2-14
+    stool = None
+    if stool_png:
+        t = Image.open(stool_png).convert("RGBA")
+        stool = t.crop(((886 % 32) * 16, (886 // 32) * 16, (886 % 32) * 16 + 16, (886 // 32) * 16 + 16))
+    body = [
+        "......KSSK......",
+        "....KDWWDK......",
+        "...KDDEWDDK.....",
+        "...KDDEDDSSSSSK.",
+        "...KDDEDKsSSsK..",
+        "...KDDDWWWWWWK..",
+        "...KDDDwwwwwwwK.",
+        "..KKDDDDDDDDDDK.",
+        "...KKKKKKKKSSK..",
+        "..........KSSK..",
+        "..........KSsK..",
+        "..........KWWK..",
+        "..........KWWK..",
+        "..........KWwK..",
+        "..........KWwK..",
+        "..........KWwK..",
+        "..........KWwK..",
+        "..........KKKKK.",
+        "..........KKKKKK",
+    ]
+    pal = {"K": (24, 16, 24, 255), "D": (30, 27, 36, 255), "E": (46, 42, 56, 255), "W": WHITE, "w": SHADE,
+           "S": (252, 178, 131, 255), "s": (242, 102, 81, 255)}
+    LID, LIDHI, GLOW = (88, 84, 98, 255), (122, 118, 134, 255), [(130, 205, 255, 255), (175, 232, 255, 255)]
+    for i in range(4):
         f = Image.new("RGBA", (16, 32))
-        f.paste(back.crop((0, 0, 16, 27)), (0, 4))
-        px = f.load()
-        glow = [(120, 200, 255, 255), (170, 230, 255, 255)][i % 2]
-        for x, y in [(0, 13), (0, 14), (15, 13), (15, 14), (1, 12), (14, 12), (1, 15), (14, 15)]:
-            if not px[x, y][3]: px[x, y] = glow
+        if stool: f.paste(stool, (-3, 16), stool)
+        fx = f.load()
+        for y, row in enumerate(body):
+            for x, ch in enumerate(row):
+                if ch in pal: fx[x, 13 + y] = pal[ch]
+        f.alpha_composite(head, (0, 0))
+        for x in range(12, 16):            # the laptop: keyboard under her hands, screen facing her
+            fx[x, 17] = LIDHI if x < 15 else LID
+        for y in range(9, 17):
+            fx[15, y] = LID
+            fx[14, y] = GLOW[i % 2] if 10 <= y <= 15 else LID
+        hx = 12 + (i % 2)                  # typing: a hand taps, then the other
+        fx[hx, 16] = pal["S"]
+        fx[25 - hx, 16] = pal["s"]
         out.paste(f, (i * 16, 128))
     return out
 
@@ -2478,10 +2563,11 @@ def write_friends(content, data_dir, tex_dir):
             print(f"  ! {base}.png missing: {name} stays home")
             continue
         tmp = os.path.join(tex_dir, f"_{name}.png")
-        make(src).save(tmp)
+        make(src, find_png(src_root, "Maps/townInterior") or find_png(content, "Maps/townInterior")).save(tmp)
         convert_texture(tmp, os.path.join(tex_dir, f"Characters_{name}.s3t"))
         os.remove(tmp)
-        write_prop(data_dir, name, spot, name.lower() + "_3ds", lines, intro="", busy=busy)
+        write_prop(data_dir, name, spot, name.lower() + "_3ds", lines, intro="", busy=busy,
+                   offset=(0, -5) if name == "aleas" else (8, 0))   # aleas leans into his cabinet; Siepert pulls her stool up to the table
 
 
 DEFAULT_LAYOUT = """\

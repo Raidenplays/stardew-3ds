@@ -129,7 +129,9 @@ void Game::lastMapFixes() {
             for (int x = 0; x < m.width(); x++)
                 if (m.action(x, y) == "Arcade_Prairie" && empty(36, 17)) {   // aleas's cabinet: a Prairie King
                     copy(L_BUILDINGS, x, y, 36, 17);
-                    copy(L_FRONT, x, y - 1, 36, 16);
+                    // its top goes on the Buildings layer, not Front, so aleas can stand right up against it
+                    if (m.tile(L_FRONT, x, y - 1) != NO_TILE)
+                        m.addOverlay(36, 16, m.tile(L_FRONT, x, y - 1), m.tileset(L_FRONT, x, y - 1), 1);
                     m.setFlags(36, 17, m.flags(36, 17) | CF_BLOCKED);
                     y = m.height(); break;
                 }
@@ -140,8 +142,11 @@ void Game::lastMapFixes() {
                     m.tile(L_FRONT, x, y - 1) == 1297 && empty(23, 21) && empty(24, 21)) {
                     for (int k = 0; k < 2; k++) {
                         copy(L_BUILDINGS, x + k, y, 23 + k, 21);
-                        copy(L_FRONT, x + k, y - 1, 23 + k, 20);
+                        // the top on the Buildings layer, under Siepert, so her laptop sits on it
+                        if (m.tile(L_FRONT, x + k, y - 1) != NO_TILE)
+                            m.addOverlay(23 + k, 20, m.tile(L_FRONT, x + k, y - 1), m.tileset(L_FRONT, x + k, y - 1), 1);
                         m.setFlags(23 + k, 21, m.flags(23 + k, 21) | CF_BLOCKED);
+                        m.setFlags(23 + k, 20, m.flags(23 + k, 20) | CF_BLOCKED);
                     }
                     tabled = true;
                 }
