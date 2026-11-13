@@ -525,6 +525,33 @@ class MainActivity : AppCompatActivity() {
                 say("Saving to ${root.name}/3ds/stardew3ds ...")
                 val total = File(outDir, "3ds").walkTopDown().count { it.isFile }.coerceAtLeast(1)
                 var n = 0
+                var skipped = 0
+                // What this phone sent to this 3DS last time (path, size, checksum): files that are still
+                // the same there are not sent again. Most of a new conversion is the same as the last one
+                // (all of the sound, which is over half of it).
+                val sentFile = File(filesDir, "sent_" + ip.replace(Regex("[^0-9A-Za-z.]"), "_") + ".txt")
+                val sent = HashMap<String, String>()
+                try {
+                    if (sentFile.isFile) for (line in sentFile.readLines()) {
+                        val t = line.split('\t')
+                        if (t.size == 3) sent[t[0]] = t[1] + "\t" + t[2]
+                    }
+                } catch (_: Exception) {}
+                fun stamp(f: File): String {
+                    val crc = java.util.zip.CRC32()
+                    val buf = ByteArray(1 shl 16)
+                    FileInputStream(f).use { ins ->
+                        while (true) {
+                            val k = ins.read(buf)
+                            if (k <= 0) break
+                            crc.update(buf, 0, k)
+                        }
+                    }
+                    return f.length().toString() + "\t" + crc.value.toString(16)
+                }
+                fun saveSent() {
+                    try { sentFile.writeText(sent.entries.joinToString("\n") { it.key + "\t" + it.value }) } catch (_: Exception) {}
+                }
                 fun put(src: File, into: DocumentFile) {
                     for (f in src.listFiles() ?: emptyArray()) {
                         if (f.isDirectory) {
@@ -580,12 +607,41 @@ class MainActivity : AppCompatActivity() {
                 ftp.setFileType(FTP.BINARY_FILE_TYPE)
                 ftp.soTimeout = 20000
                 ftp.setDataTimeout(20000)
+                ftp.bufferSize = 1 shl 16          // send in 64K pieces (the library's default is 1K at a time)
+                ftp.setSendDataSocketBufferSize(1 shl 17)
             }
             try {
                 say("Connecting to $ip:$port ...")
                 connect()
                 val total = File(outDir, "3ds").walkTopDown().count { it.isFile }.coerceAtLeast(1)
                 var n = 0
+                var skipped = 0
+                // What this phone sent to this 3DS last time (path, size, checksum): files that are still
+                // the same there are not sent again. Most of a new conversion is the same as the last one
+                // (all of the sound, which is over half of it).
+                val sentFile = File(filesDir, "sent_" + ip.replace(Regex("[^0-9A-Za-z.]"), "_") + ".txt")
+                val sent = HashMap<String, String>()
+                try {
+                    if (sentFile.isFile) for (line in sentFile.readLines()) {
+                        val t = line.split('\t')
+                        if (t.size == 3) sent[t[0]] = t[1] + "\t" + t[2]
+                    }
+                } catch (_: Exception) {}
+                fun stamp(f: File): String {
+                    val crc = java.util.zip.CRC32()
+                    val buf = ByteArray(1 shl 16)
+                    FileInputStream(f).use { ins ->
+                        while (true) {
+                            val k = ins.read(buf)
+                            if (k <= 0) break
+                            crc.update(buf, 0, k)
+                        }
+                    }
+                    return f.length().toString() + "\t" + crc.value.toString(16)
+                }
+                fun saveSent() {
+                    try { sentFile.writeText(sent.entries.joinToString("\n") { it.key + "\t" + it.value }) } catch (_: Exception) {}
+                }
                 // The link can drop mid-way (phone dozing, 3DS Wi-Fi hiccup): reconnect and carry on from that file.
                 fun <T> retrying(what: String, job: () -> T): T {
                     var last: Throwable? = null
@@ -613,12 +669,30 @@ class MainActivity : AppCompatActivity() {
                 }
                 fun put(src: File, remote: String) {
                     mk(remote)
+                    // what is in this folder on the 3DS already, by size
+                    val there = HashMap<String, Long>()
+                    try {
+                        for (r in ftp.listFiles(remote)) if (r != null && r.isFile) there[r.name] = r.size
+                    } catch (_: Exception) {
+                        try { connect() } catch (_: Exception) {}
+                    }
                     for (f in src.listFiles() ?: emptyArray()) {
                         if (f.isDirectory) put(f, "$remote/${f.name}")
                         else {
-                            store(f, "$remote/${f.name}")
+                            val path = "$remote/${f.name}"
+                            val now = stamp(f)
+                            val sameAsSent = sent[path] == now
+                            // sound files never change between conversions: the same name and size is the same file
+                            val sound = remote.endsWith("/audio") || remote.contains("/audio/")
+                            if (there[f.name] == f.length() && (sameAsSent || (sound && !sent.containsKey(path)))) {
+                                skipped++
+                            } else {
+                                store(f, path)
+                            }
+                            sent[path] = now
                             ++n
-                            if (n % 10 == 0) progress(n * 100 / total, "Sending: $n of $total files")
+                            if (n % 10 == 0) progress(n * 100 / total, "Sending: $n of $total files" + if (skipped > 0) " ($skipped already there)" else "")
+                            if (n % 100 == 0) saveSent()
                         }
                     }
                 }
@@ -627,8 +701,9 @@ class MainActivity : AppCompatActivity() {
                     store(g, "/3ds/${g.name}")
                     n++
                 }
-                progress(100, "Sent $n files")
-                say("Sent $n files to your 3DS (game included).")
+                saveSent()
+                progress(100, "Sent ${n - skipped} files")
+                say("Sent ${n - skipped} files to your 3DS (game included)." + if (skipped > 0) " $skipped were already there and unchanged." else "")
             } catch (e: Throwable) {
                 say("! Couldn't send: ${e.message}. Is ftpd running and on the same Wi-Fi?")
             } finally {
