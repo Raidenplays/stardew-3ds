@@ -178,6 +178,22 @@ void Game::lastMapFixes() {
             cur->map.setAction(doorX, doorY, "Warp 9 12 AbandonedJojaMart");
             cur->map.setAction(doorX + 1, doorY, "Warp 9 12 AbandonedJojaMart");
         }
+        // Closed down: the town tilesheet has JojaMart's front twice, open (columns 0-11 of rows 52-61)
+        // and boarded up with "Terminated" and CLOSED signs (20 columns to the right).
+        if (!mailReceived.count("ccMovieTheater") && !cur->stamps.count("jojaClosed")) {
+            cur->stamps.insert("jojaClosed");
+            TileMap& m = cur->map;
+            for (int l = 0; l < 5; l++)
+                for (int y = 0; y < m.height(); y++)
+                    for (int x = 0; x < m.width(); x++) {
+                        int t = m.tile(l, x, y);
+                        if (t == NO_TILE) continue;
+                        int ts = m.tileset(l, x, y);
+                        const std::string& tex = m.tilesets[ts].texture;
+                        if (m.tilesets[ts].columns != 32 || tex.size() < 5 || tex.compare(tex.size() - 5, 5, "_town") != 0) continue;
+                        if (t / 32 >= 52 && t / 32 <= 61 && t % 32 <= 11) m.setTile(l, x, y, t + 20, ts);
+                    }
+        }
     }
     if (cur->name == "AbandonedJojaMart" && !cur->map.warpTo("Town")) {   // its way out isn't in the map data
         int doorX = 95, doorY = 50;
