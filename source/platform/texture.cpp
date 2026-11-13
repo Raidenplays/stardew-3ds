@@ -52,14 +52,14 @@ bool Texture::load(const std::string& path_) {
     if (!f) return false;
     char magic[4];
     u16 hdr[4];
-    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) != 0 && memcmp(magic, "S3T2", 4) != 0 && memcmp(magic, "S3T3", 4) != 0) ||
+    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) != 0 && memcmp(magic, "S3T2", 4) != 0 && memcmp(magic, "S3T3", 4) != 0 && memcmp(magic, "S3T4", 4) != 0) ||
         fread(hdr, 2, 4, f) != 4) {
         fclose(f);
         return false;
     }
     path = path_;
     v2 = magic[3] >= '2';
-    packed = magic[3] == '3';   // S3T3: each page deflated
+    packed = magic[3] >= '3';   // S3T3: each page deflated; S3T4: and stored as a palette when it has few colours
     width = hdr[0];
     height = hdr[1];
     int count = hdr[2];
@@ -112,6 +112,7 @@ bool Texture::evictOne() {
     return true;
 }
 
+static const size_t TEX_RESERVE = 6u << 20;   // linear memory always left free
 static u32 g_allocFailFrame = 0;   // out of GPU memory this frame: stop trying until the next
 
 bool Texture::ensure(TexPage& p) const {
@@ -121,6 +122,12 @@ bool Texture::ensure(TexPage& p) const {
     // citro2d remembers the last bound C3D_Tex by address; a page reloaded
     // into the same struct must not be mistaken for what was bound before.
     C2D_Flush();
+    u64 t0 = svcGetSystemTick();
+    // Pages stay loaded from one area to the next (the outdoor sheets, the farmer, the HUD are the same
+    // everywhere). When memory gets short the pages not drawn for longest make room, always leaving
+    // some spare for sound and everything else that lives in the same memory.
+    size_t need = (size_t)p.pw * p.ph * 4 + TEX_RESERVE;
+    while (linearSpaceFree() < need && evictOne()) {}
     while (!C3D_TexInit(&p.tex, p.pw, p.ph, GPU_RGBA8))
         if (!evictOne()) {   // out of GPU memory even after evicting
             g_stats.failed++;
@@ -129,17 +136,46 @@ bool Texture::ensure(TexPage& p) const {
         }
     size_t bytes = (size_t)p.pw * p.ph * 4;
     bool ok = false;
-    FILE* f = fopen(path.c_str(), "rb");
+    // pages of one sheet load in a burst: the file stays open between them (finding a file among
+    // a thousand in one folder is slow on the card)
+    static std::string openPath;
+    static FILE* openFile = nullptr;
+    if (openPath != path) {
+        if (openFile) fclose(openFile);
+        openFile = fopen(path.c_str(), "rb");
+        openPath = openFile ? path : std::string();
+    }
+    FILE* f = openFile;
     if (f && fseek(f, p.fileOff, SEEK_SET) == 0) {
         if (packed) {
-            std::vector<char> comp(p.compLen);
-            ok = fread(comp.data(), 1, p.compLen, f) == p.compLen &&
-                 s3d_inflate((char*)p.tex.data, (int)bytes, comp.data(), (int)p.compLen) == (int)bytes;
+            static std::vector<char> comp, raw;   // reused from page to page
+            comp.resize(p.compLen);
+            raw.resize(bytes);
+            if (fread(comp.data(), 1, p.compLen, f) == p.compLen) {
+                int got = s3d_inflate(raw.data(), (int)bytes, comp.data(), (int)p.compLen);
+                size_t px = (size_t)p.pw * p.ph;
+                if (got == (int)bytes) {            // plain RGBA
+                    memcpy(p.tex.data, raw.data(), bytes);
+                    ok = true;
+                } else if (got >= 2) {              // a palette, then one byte per pixel
+                    unsigned n = (unsigned char)raw[0] | ((unsigned)(unsigned char)raw[1] << 8);
+                    if (n >= 1 && n <= 256 && (size_t)got == 2 + n * 4 + px) {
+                        u32 pal[256];
+                        memcpy(pal, raw.data() + 2, n * 4);
+                        const unsigned char* idx = (const unsigned char*)raw.data() + 2 + n * 4;
+                        u32* out = (u32*)p.tex.data;
+                        ok = true;
+                        for (size_t i = 0; i < px; i++) {
+                            if (idx[i] >= n) { ok = false; break; }
+                            out[i] = pal[idx[i]];
+                        }
+                    }
+                }
+            }
         } else {
             ok = fread(p.tex.data, 1, bytes, f) == bytes;
         }
     }
-    if (f) fclose(f);
     if (!ok) {
         C3D_TexDelete(&p.tex);
         p.bad = true;
@@ -152,6 +188,7 @@ bool Texture::ensure(TexPage& p) const {
     C3D_TexSetWrap(&p.tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
     p.loaded = true;
     g_stats.loads++;
+    g_stats.loadMs += (unsigned)((svcGetSystemTick() - t0) / CPU_TICKS_PER_MSEC);
     C2D_Prepare();   // forgets the cached texture binding
     return true;
 }

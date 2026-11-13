@@ -191,12 +191,17 @@ def convert_texture(src_png, dst_s3t):
             pages.append((x, y, pw_real, ph_real, pw, ph, swizzle(page)))
     os.makedirs(os.path.dirname(dst_s3t), exist_ok=True)
     with open(dst_s3t, "wb") as f:
-        # S3T3: like S3T2 but each page is deflated (zlib); the padding to
-        # power-of-two sizes is mostly empty, so files shrink to ~6%
-        f.write(b"S3T3")
+        # S3T4: each page is deflated (zlib). A page with 256 colours or fewer (nearly all of them:
+        # it's pixel art) is stored as a palette and one byte per pixel, so the 3DS has a quarter
+        # as much to unpack when the page is first drawn. Other pages are plain RGBA.
+        f.write(b"S3T4")
         f.write(struct.pack("<HHHH", w, h, len(pages), 0))
         for (x0, y0, ww, hh, pw, ph, data) in pages:
             f.write(struct.pack("<HHHHHH", x0, y0, ww, hh, pw, ph))
+            words = np.frombuffer(data, dtype="<u4")
+            colours, index = np.unique(words, return_inverse=True)
+            if len(colours) <= 256:
+                data = struct.pack("<H", len(colours)) + colours.astype("<u4").tobytes() + index.astype(np.uint8).tobytes()
             packed = zlib.compress(data, 6)
             f.write(struct.pack("<I", len(packed)))
             f.write(packed)
@@ -409,7 +414,33 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
                         vals[yy * w + xx] = raw[k]
             layers[lname] = vals
 
+    # Numbered layers (Back2, Buildings3, AlwaysFront2...: maps from 1.6 and most mod maps stack tiles
+    # this way). They are drawn on top of the layer they are named after, lowest number first, and never
+    # block the way. Kept as a short list of tiles instead of whole layers.
+    overlays = []          # (group 0 Back / 1 Buildings / 2 Front / 3 AlwaysFront, order, cell, tileset, tile)
+    for lay in root.findall("layer"):
+        lname = lay.get("name") or ""
+        mo = re.match(r"^(Back|Buildings|Front|AlwaysFront)(-?\d+)$", lname)
+        if not mo:
+            continue
+        group = ("Back", "Buildings", "Front", "AlwaysFront").index(mo.group(1))
+        order = int(mo.group(2))
+        lw = int(lay.get("width", w))
+        lh = int(lay.get("height", h))
+        try:
+            raw = _decode_layer_data(lay.find("data"), lw, lh)
+        except ValueError:
+            continue
+        for yy in range(min(h, lh)):
+            for xx in range(min(w, lw)):
+                k = yy * lw + xx
+                r = gid_lookup(raw[k]) if k < len(raw) else None
+                if r is not None:
+                    overlays.append((group, order, yy * w + xx, r[0], r[1]))
+    overlays.sort(key=lambda o: (o[0], o[2], o[1]))   # by group, then cell, then stacking order
+
     flags = bytearray(w * h)
+    ground_blocked = set()
     actions = {}          # cell -> action string
     ts_arr = {L: bytearray(w * h) for L in LAYERS}
     tile_arr = {L: [0xFFFF] * (w * h) for L in LAYERS}
@@ -430,8 +461,11 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
                     flags[i] |= F_DIGGABLE
                 if props.get("Water", "").upper().startswith("T"):
                     flags[i] |= F_WATER | F_BLOCKED
-                if props.get("Passable", "").upper().startswith("F"):
+                if "Passable" in props:
+                    # the ground itself says no (a bridge's parapet, a cliff edge): nothing laid on
+                    # top of it can make it walkable again
                     flags[i] |= F_BLOCKED
+                    ground_blocked.add(i)
                 if "NoSpawn" in props:
                     flags[i] |= F_NOSPAWN
                 ttype = props.get("Type", "").lower()
@@ -445,10 +479,12 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
                 actions.setdefault(i, props["Action"])
             if L == "Buildings":
                 if "Passable" in props:
-                    flags[i] |= F_PASSABLE_OVERRIDE
+                    if i not in ground_blocked:
+                        flags[i] |= F_PASSABLE_OVERRIDE
                 else:
                     flags[i] |= F_BLOCKED
 
+    touch_warps = []
     # Per-cell properties (Tiled object layers with TileData / tile objects)
     for og in root.findall("objectgroup"):
         lname = og.get("name", "")
@@ -467,6 +503,13 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
                 flags[i] |= F_WATER | F_BLOCKED
             if "NoSpawn" in pr:
                 flags[i] |= F_NOSPAWN
+            touch = (pr.get("TouchAction") or "").split()
+            if len(touch) >= 4 and touch[0] in ("LoadMap", "Warp", "MagicWarp"):
+                # stepping here takes you somewhere (most mod areas are joined on this way)
+                try:
+                    touch_warps.append((x, y, touch[1], int(touch[2]), int(touch[3])))
+                except ValueError:
+                    pass
             if "Passable" in pr and lname.startswith("Buildings"):
                 flags[i] |= F_PASSABLE_OVERRIDE
                 flags[i] &= ~F_BLOCKED & 0xFF
@@ -488,6 +531,7 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
                           int(toks[k + 3]), int(toks[k + 4])))
         except ValueError:
             pass
+    warps += touch_warps
 
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, name + ".smap")
@@ -530,6 +574,11 @@ def convert_map(content, name, out_dir, textures_needed, tmx=None):
             f.write(kb)
             f.write(struct.pack("<H", len(vb)))
             f.write(vb)
+        if overlays:   # optional trailer: the stacked tiles of numbered layers
+            f.write(b"OVL1")
+            f.write(struct.pack("<I", len(overlays)))
+            for (group, order, cell, tsi, tid) in overlays:
+                f.write(struct.pack("<BIBH", group, cell, tsi, tid))
     nd = sum(1 for b in flags if b & F_DIGGABLE)
     print(f"  map {name}: {w}x{h}, {len(tilesets)} sheets, {len(warps)} warps, "
           f"{len(actions)} actions, {nd} diggable")
@@ -2238,13 +2287,16 @@ DEFAULT_LAYOUT = """\
 # building <name> <texture> <srcX> <srcY> <srcW> <srcH> <tileX> <tileY> <footW> <footH>
 #   Sprite is drawn bottom-aligned to the footprint and centred on it.
 #   The footprint blocks movement.
-building farmhouse Buildings_houses 0 0 160 144 59 12 9 6
+building farmhouse Buildings_houses 0 0 160 144 59 12 9 5
+# open <tileX> <tileY> <w> <h>   tiles inside a footprint you can walk on: the porch and its steps
+open 60 15 7 1
+open 63 16 3 1
 building shippingbin Buildings_Shipping_Bin 0 0 32 32 71 14 2 1
 #
 # door <tileX> <tileY>        A on this tile (walking into it from below) = go to bed
-door 64 17
+door 64 14
 # spawn <tileX> <tileY>       where you wake up each morning
-spawn 64 18
+spawn 64 15
 # mailbox <tileX> <tileY>     the farmhouse mailbox (A on it reads your mail)
 mailbox 68 16
 # bin <tileX> <tileY>         tiles that open the shipping bin

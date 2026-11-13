@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <unordered_map>
 #include <dirent.h>
 
 #include "core/vfs.h"
@@ -97,8 +98,16 @@ bool Engine::resolve(const std::string& cue, std::string& bankPath, WaveEntry& e
     return false;
 }
 
+// Decoded sound effects, by the wave they came from. A cue with several takes (footsteps, the hoe,
+// the watering can) picks one each time: every take is decoded once and kept, instead of being read
+// off the card and decoded again on each use.
+static std::unordered_map<std::string, std::shared_ptr<Pcm>> g_waves;
+static size_t g_waveBytes = 0;
+static const size_t WAVE_CACHE_MAX = 3u << 20;
+
 std::shared_ptr<Pcm> Engine::loadSfx(const std::string& cue, float& vol) {
     std::unique_ptr<Decoder> d;
+    std::string waveKey;
     vol = 1;
     auto cu = custom_.find(cue);
     if (cu != custom_.end()) {
@@ -108,7 +117,9 @@ std::shared_ptr<Pcm> Engine::loadSfx(const std::string& cue, float& vol) {
         WaveEntry e;
         bool loop;
         if (!resolve(cue, path, e, loop, vol)) return nullptr;
-        // cues with variations get a different wave each time: don't cache those
+        waveKey = path + "#" + std::to_string(e.offset);
+        auto have = g_waves.find(waveKey);
+        if (have != g_waves.end()) return have->second;
         d = openWave(path, e);
     }
     if (!d) return nullptr;
@@ -121,7 +132,16 @@ std::shared_ptr<Pcm> Engine::loadSfx(const std::string& cue, float& vol) {
         p->data.insert(p->data.end(), buf, buf + got * p->channels);
         if (p->data.size() > (size_t)p->rate * p->channels * 20) break;   // sanity: 20 s max
     }
-    return p->data.empty() ? nullptr : p;
+    if (p->data.empty()) return nullptr;
+    if (!waveKey.empty()) {
+        if (g_waveBytes > WAVE_CACHE_MAX) {   // plenty kept: start again (anything still playing keeps its own copy)
+            g_waves.clear();
+            g_waveBytes = 0;
+        }
+        g_waves[waveKey] = p;
+        g_waveBytes += p->data.size() * sizeof(int16_t);
+    }
+    return p;
 }
 
 void Engine::play(const std::string& cue, float volume) {

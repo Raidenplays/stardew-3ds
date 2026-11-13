@@ -266,8 +266,15 @@ struct ShopItem {
 
 struct Layout {
     std::vector<BuildingDef> buildings;   // drawn on the Farm
-    int doorX = 64, doorY = 17;           // farmhouse door on the Farm
-    int spawnX = 64, spawnY = 18;         // Farm wake-up spot if there's no house map
+    int doorX = 64, doorY = 14;           // farmhouse door on the Farm
+    int spawnX = 64, spawnY = 15;         // Farm wake-up spot if there's no house map
+    struct Open { int x, y, w, h; };
+    std::vector<Open> open;               // walkable tiles inside a footprint (the porch and its steps)
+    bool walkable(int x, int y) const {
+        for (auto& o : open)
+            if (x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h) return true;
+        return false;
+    }
     std::vector<std::pair<int, int>> bins;
     int mailX = 68, mailY = 16;           // the farmhouse mailbox (house tile 9,4 in Data/Buildings)
     std::string bedMap = "FarmHouse";

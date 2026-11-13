@@ -19,6 +19,16 @@ struct Ui {
     int mapCache = 1;         // 0 off, 1 on, 2 on + flipped: the map drawn as two pictures instead of tile by tile
     bool showPerf = false;    // performance readout (Options tab, or L + SELECT)
     bool padPro = false;      // look for a Circle Pad Pro (old 3DS)
+    // lighter drawing for the old 3DS (Options tab)
+    int fxWeather = 2;        // rain, snow, petals: 2 all of it, 1 half, 0 none
+    bool fxCritters = true;   // butterflies
+    bool fps30 = false;       // hold a steady 30 frames a second instead of chasing 60
+    // A pointer for the bottom screen while a box, shop or letter is open: the D-pad or Circle Pad moves
+    // it and A taps where it points, so those screens work without the stylus.
+    float ptrX = 160, ptrY = 120;
+    bool ptrOn = false;
+    float quitAsk = 0;        // "tap again to quit" is showing (seconds left)
+    bool quitNoSave = false;  // leaving by "Quit without saving"
     int padProState = 0;      // 0 off, 1 looking, 2 connected (set by the platform)
     int padCal[4] = {0, 0, 0, 0};   // centre x, y and range x, y from the title screen's calibration (0 = none)
     std::string status;
@@ -51,6 +61,9 @@ struct Ui {
 // Call once per frame after game.update(): reacts to game events.
 // Returns true if textures should be dropped (map or season changed).
 bool sceneAfterUpdate(sv::Game& g, Ui& ui, const std::string& savePath);
+// A screen that takes over the bottom screen is open (chest, shipping bin, shop, letter, bundles,
+// museum): you stand still, and the pad drives the pointer.
+bool uiModal(const sv::Game& g, const Ui& ui);
 
 void drawTop(Canvas& c, sv::Game& g, Ui& ui, uint32_t timeMs);
 

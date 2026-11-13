@@ -150,6 +150,31 @@ bool TileMap::load(const std::string& path, std::string* err) {
             props[k] = v;
         }
     }
+    overlays.clear();
+    for (auto& v : overlayRow) v.assign((size_t)h + 1, 0);
+    if (r.ok && r.pos + 8 <= data.size() && memcmp(&data[r.pos], "OVL1", 4) == 0) {
+        r.pos += 4;
+        uint32_t n = (uint32_t)r.u16() | ((uint32_t)r.u16() << 16);
+        for (uint32_t i = 0; i < n && r.ok; i++) {
+            Overlay o;
+            o.group = r.u8();
+            uint32_t cell = (uint32_t)r.u16() | ((uint32_t)r.u16() << 16);
+            o.ts = r.u8();
+            o.tile = r.u16();
+            if (o.group > 3 || cell >= (uint32_t)w * h || o.ts >= tilesets.size()) continue;
+            o.x = (uint16_t)(cell % w);
+            o.y = (uint16_t)(cell / w);
+            overlays.push_back(o);
+        }
+        // the converter writes them in order (group, cell, stacking), so each group's rows are runs
+        size_t at = 0;
+        for (int gidx = 0; gidx < 4; gidx++) {
+            for (int y = 0; y <= h; y++) {
+                while (at < overlays.size() && (overlays[at].group < gidx || (overlays[at].group == gidx && overlays[at].y < y))) at++;
+                overlayRow[gidx][(size_t)y] = (uint32_t)at;
+            }
+        }
+    }
     if (!r.ok) {
         if (err) *err = "truncated map file " + path;
         return false;

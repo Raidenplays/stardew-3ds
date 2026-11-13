@@ -41,12 +41,12 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
     if (!f) return false;
     char magic[4];
     uint16_t hdr[4];
-    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) && memcmp(magic, "S3T2", 4) && memcmp(magic, "S3T3", 4)) ||
+    if (fread(magic, 1, 4, f) != 4 || (memcmp(magic, "S3T1", 4) && memcmp(magic, "S3T2", 4) && memcmp(magic, "S3T3", 4) && memcmp(magic, "S3T4", 4)) ||
         fread(hdr, 2, 4, f) != 4) {
         fclose(f);
         return false;
     }
-    bool v2 = magic[3] >= '2', packed = magic[3] == '3';
+    bool v2 = magic[3] >= '2', packed = magic[3] >= '3';
     out.w = hdr[0];
     out.h = hdr[1];
     out.px.assign((size_t)out.w * out.h, 0);
@@ -66,7 +66,14 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
             if (fread(&n, 4, 1, f) != 1) break;
             std::vector<char> comp(n);
             if (fread(comp.data(), 1, n, f) != n) break;
-            if (s3d_inflate((char*)data.data(), (int)data.size(), comp.data(), (int)n) != (int)data.size()) break;
+            int got = s3d_inflate((char*)data.data(), (int)data.size(), comp.data(), (int)n);
+            if (got != (int)data.size()) {   // S3T4: a palette, then one byte per pixel
+                size_t npx = (size_t)pw * pgh;
+                unsigned nc = got >= 2 ? (data[0] | (data[1] << 8)) : 0;
+                if (nc < 1 || nc > 256 || (size_t)got != 2 + nc * 4 + npx) break;
+                std::vector<uint8_t> pal(data.begin() + 2, data.begin() + 2 + nc * 4), idx(data.begin() + 2 + nc * 4, data.begin() + got);
+                for (size_t i = 0; i < npx; i++) memcpy(&data[i * 4], &pal[(size_t)(idx[i] < nc ? idx[i] : 0) * 4], 4);
+            }
         } else if (fread(data.data(), 1, data.size(), f) != data.size()) break;
         for (int gy = 0; gy < pgh; gy++)
             for (int x = 0; x < pw; x++) {

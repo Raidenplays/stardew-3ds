@@ -94,6 +94,12 @@ public:
     // apply "Layer x y index ..." (DayTiles / NightTiles)
     void applyTileSwaps(const std::string& list);
 
+    // Tiles from numbered layers (Back2, AlwaysFront3...), drawn over the layer they belong to.
+    // Sorted by group (0 Back, 1 Buildings, 2 Front, 3 AlwaysFront), then row, then column.
+    struct Overlay { uint16_t x, y, tile; uint8_t ts, group; };
+    std::vector<Overlay> overlays;
+    std::vector<uint32_t> overlayRow[4];   // per group: index of each row's first overlay (h + 1 entries)
+
     std::vector<Tileset> tilesets;
     std::vector<Warp> warps;
     std::map<std::string, std::string> props;

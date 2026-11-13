@@ -769,6 +769,9 @@ bool GameData::load(const std::string& root, std::string* err) {
                     b.texture = tex;
                     layout.buildings.push_back(b);
                 }
+            } else if (!strcmp(kw, "open")) {
+                Layout::Open o{0, 0, 1, 1};
+                if (sscanf(l.c_str(), "open %d %d %d %d", &o.x, &o.y, &o.w, &o.h) >= 2) layout.open.push_back(o);
             } else if (!strcmp(kw, "door")) {
                 sscanf(l.c_str(), "door %d %d", &layout.doorX, &layout.doorY);
             } else if (!strcmp(kw, "spawn")) {
@@ -809,6 +812,17 @@ bool GameData::load(const std::string& root, std::string* err) {
             }
         }
     }
+    // A layout from before the porch could be walked on had the house one row too tall, with its door
+    // at the bottom of the steps. Put it where the game has it: five rows, the door at the top of the
+    // steps, and the porch and steps open.
+    for (auto& b : layout.buildings)
+        if (b.name == "farmhouse" && b.tileX == 59 && b.tileY == 12 && b.footW == 9 && b.footH == 6 && layout.open.empty()) {
+            b.footH = 5;
+            layout.open.push_back({60, 15, 7, 1});
+            layout.open.push_back({63, 16, 3, 1});
+            if (layout.doorX == 64 && layout.doorY == 17) layout.doorY = 14;
+            if (layout.spawnX == 64 && layout.spawnY == 18) layout.spawnY = 15;
+        }
     // older layout.txt files have no mailbox: add the game's (Buildings/Mailbox, 16x32)
     bool haveMailbox = false;
     for (auto& b : layout.buildings) haveMailbox |= b.name == "mailbox";

@@ -5,6 +5,7 @@
 #include <citro2d.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 #include "core/game.h"
@@ -472,6 +473,26 @@ int main() {
         bool aDown = kDown & (KEY_A | KEY_Y);
         if (kHeld & (KEY_A | KEY_Y)) holdA += dt; else holdA = 0;
         in.action = aDown || (holdA > 0.45f && game.toolTimer <= 0);
+        if (uiModal(game, ui)) {
+            // a box, shop or letter is open: stand still; the pad moves a pointer and A taps with it
+            static float held = 0;
+            float px = in.mx, py = in.my;
+            bool pad = (kHeld & (KEY_DLEFT | KEY_DRIGHT | KEY_DUP | KEY_DDOWN)) != 0;
+            if (kDown & KEY_DLEFT) ui.ptrX -= 13;
+            if (kDown & KEY_DRIGHT) ui.ptrX += 13;
+            if (kDown & KEY_DUP) ui.ptrY -= 13;
+            if (kDown & KEY_DDOWN) ui.ptrY += 13;
+            held = pad ? held + dt : 0;
+            if (pad && held > 0.3f) { ui.ptrX += px * 170 * dt; ui.ptrY += py * 170 * dt; }
+            else if (!pad && (std::fabs(px) > 0.25f || std::fabs(py) > 0.25f)) { ui.ptrX += px * 200 * dt; ui.ptrY += py * 200 * dt; }
+            if (pad || std::fabs(px) > 0.25f || std::fabs(py) > 0.25f) ui.ptrOn = true;
+            ui.ptrX = std::max(2.0f, std::min(316.0f, ui.ptrX));
+            ui.ptrY = std::max(2.0f, std::min(236.0f, ui.ptrY));
+            if (aDown && ui.ptrOn) touchBottom(game, ui, (int)ui.ptrX + 1, (int)ui.ptrY + 1, savePath);
+            in.mx = in.my = 0;
+            in.action = false;
+            holdA = 0;
+        }
 
         if (kDown & KEY_START) {
             if (game.cutscene.active) game.skipEvent();
@@ -508,6 +529,7 @@ int main() {
         } else if (kDown & KEY_TOUCH) {
             touchPosition tp;
             hidTouchRead(&tp);
+            ui.ptrOn = false;   // the stylus is in hand: put the pointer away
             touchBottom(game, ui, tp.px, tp.py, savePath);
         }
 
@@ -527,7 +549,9 @@ int main() {
             lastLoads = loads;
         }
         float updMs = (svcGetSystemTick() - tUpd) / (float)CPU_TICKS_PER_MSEC;
-        if (sceneAfterUpdate(game, ui, savePath)) canvas.dropTextures();
+        // Textures are kept from one area to the next: dropping them all meant reloading the same
+        // outdoor sheets, farmer and HUD on every screen change (15 to 20 seconds on the console).
+        sceneAfterUpdate(game, ui, savePath);
 
         // music for where you are, then this frame's sound effects
         std::string want = chooseMusic(game, musicState, sound.currentMusic(), soundOut.musicPlaying());
@@ -537,6 +561,11 @@ int main() {
         sound.update(dt);
 
         uint32_t timeMs = (uint32_t)(now & 0xFFFFFFFF);
+        {   // Options: a steady 30 frames a second, for places the old 3DS can't hold 60
+            static int rate = 60;
+            int want = ui.fps30 ? 30 : 60;
+            if (want != rate) { C3D_FrameRate((float)want); rate = want; }
+        }
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         texNewFrame();
         canvas.beginFrame();
@@ -572,6 +601,7 @@ int main() {
             for (int k = 0; k < game.invSlots; k++) sig = sig * 16777619u ^ (uint32_t)(game.inv[k].id * 64 + game.inv[k].count + game.inv[k].type * 7919);
             for (char ch : ui.status) sig = sig * 16777619u ^ (uint8_t)ch;
             if (ui.showPerf) for (const char* p = perfLine1; *p; p++) sig = sig * 16777619u ^ (uint8_t)*p;
+            if (ui.ptrOn && uiModal(game, ui)) sig = sig * 16777619u ^ ((uint32_t)ui.ptrX * 400u + (uint32_t)ui.ptrY);
             if (sig != lastSig) botDirty = true;
             lastSig = sig;
         }
@@ -627,8 +657,8 @@ int main() {
                 TexStats st = texStats();
                 float fps = frames * 1000.0f / (float)(nowT - since);
                 snprintf(perfLine1, sizeof perfLine1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
-                snprintf(perfLine2, sizeof perfLine2, "vram %uK  pages +%u -%u !%u  draws %u", (unsigned)(linearSpaceFree() / 1024),
-                         st.loads - last.loads, st.evictions - last.evictions, st.failed - last.failed, topDraws);
+                snprintf(perfLine2, sizeof perfLine2, "free %uK pg +%u %ums -%u !%u dr %u", (unsigned)(linearSpaceFree() / 1024),
+                         st.loads - last.loads, st.loadMs - last.loadMs, st.evictions - last.evictions, st.failed - last.failed, topDraws);
                 snprintf(perfLine3, sizeof perfLine3, "map %.0f obj %.0f front %.0f wthr %.0f hud %.0f ms rd %d", prof[PROF_MAP],
                          prof[PROF_OBJECTS], prof[PROF_FRONT], prof[PROF_WEATHER], prof[PROF_HUD], g_mapRedraws);
                 g_mapRedraws = 0;
@@ -656,7 +686,8 @@ int main() {
         C3D_FrameEnd(0);
     }
 
-    game.save(savePath);
+    // Leaving does not save: the day is kept when you go to bed, like the game on other machines.
+
     canvas.dropTextures();
     C2D_Fini();
     C3D_Fini();

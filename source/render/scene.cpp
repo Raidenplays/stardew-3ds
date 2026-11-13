@@ -194,26 +194,16 @@ std::string shopTitle(const std::string& id) {
 
 // ---------------------------------------------------------- hoe dirt edges
 // Neighbour sum (up=100, right=10, down=500, left=1000) -> cell in hoeDirt.
-static int hoeDirtIndex(int sum) {
-    switch (sum) {
-        case 0: return 0;
-        case 10: return 15;
-        case 100: return 13;
-        case 1000: return 12;
-        case 500: return 4;
-        case 1010: return 11;
-        case 1100: return 9;
-        case 1500: return 8;
-        case 600: return 1;
-        case 1600: return 2;
-        case 610: return 5;
-        case 1610: return 6;
-        case 510: return 3;
-        case 1110: return 10;
-        case 110: return 14;
-        case 1510: return 7;
-    }
-    return 0;
+static int g_fxWeather = 2;      // Options: 2 full, 1 light, 0 off
+static bool g_fxCritters = true;
+
+// TerrainFeatures/hoeDirt is laid out like the paths: the left column is a strip running up and down
+// (alone, top end, middle, bottom end), the bottom row a strip running left to right, and the 3x3 block
+// between them the corners, edges and middle of a patch.
+static int hoeDirtIndex(bool u, bool r, bool d, bool l) {
+    int col = !l && !r ? 0 : !l ? 1 : r ? 2 : 3;
+    int row = col == 0 ? (!u && !d ? 0 : !u ? 1 : d ? 2 : 3) : (!u && !d ? 3 : !u ? 0 : d ? 1 : 2);
+    return row * 4 + col;
 }
 
 
@@ -506,6 +496,22 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx + sh, d.dy);
     };
 
+    // The stacked tiles of numbered layers, over the layer they are named after (0 Back ... 3 AlwaysFront)
+    auto drawOverlays = [&](int group, int tx0, int ty0, int tx1, int ty1, float ox, float oy, float depth) {
+        if (m.overlays.empty()) return;
+        float sh = c.shift(depth);
+        const auto& rows = m.overlayRow[group];
+        for (int y = std::max(0, ty0); y <= ty1 && y < m.height(); y++)
+            for (uint32_t i = rows[(size_t)y]; i < rows[(size_t)y + 1]; i++) {
+                const TileMap::Overlay& o = m.overlays[i];
+                if (o.x < tx0 || o.x > tx1) continue;
+                int cols = tsCols[o.ts];
+                if (cols <= 0) continue;
+                uint16_t t = m.animatedTile(o.ts, o.tile, timeMs);
+                c.imageTex(tsHandle[o.ts], tsTex[o.ts], (t % cols) * 16, (t / cols) * 16, 16, 16, o.x * TILE - ox + sh, o.y * TILE - oy);
+            }
+    };
+
     // Map cache: Back + Buildings drawn once into an offscreen picture around the
     // camera; each frame shows it as one image, plus the animated tiles live.
     // Two pictures: [0] the ground and buildings, [1] the tiles drawn over everything. Each keeps its own window
@@ -572,6 +578,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                         }
                     std::sort(tileDraws.begin(), tileDraws.end(), [](const TileDraw& a, const TileDraw& b) { return a.key < b.key; });
                     for (const TileDraw& d : tileDraws) c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx, d.dy);
+                    drawOverlays(layer == L_BACK ? 0 : layer == L_BUILDINGS ? 1 : layer == L_FRONT ? 2 : 3, cx0, cy0, cx1, cy1, (float)k.ox, (float)k.oy, 0.0f);
                 }
                 c.cacheEnd(which);
             }
@@ -631,9 +638,7 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             for (int x = x0; x <= x1; x++) {
                 const Soil& s = g.soil(x, y);
                 if (!s.tilled) continue;
-                int sum = (tilled(x, y - 1) ? 100 : 0) + (tilled(x + 1, y) ? 10 : 0) +
-                          (tilled(x, y + 1) ? 500 : 0) + (tilled(x - 1, y) ? 1000 : 0);
-                int idx = hoeDirtIndex(sum);
+                int idx = hoeDirtIndex(tilled(x, y - 1), tilled(x + 1, y), tilled(x, y + 1), tilled(x - 1, y));
                 int sx = (idx % 4) * 16, sy = (idx / 4) * 16;
                 float dx = x * TILE - camX + sh, dy = y * TILE - camY;
                 c.image("TerrainFeatures_hoeDirt", sx, sy, 16, 16, dx, dy);
@@ -644,7 +649,11 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
     }
 
-    if (!cached) drawLayer(L_BUILDINGS, 0.0f);
+    if (!cached) {
+        drawOverlays(0, x0, y0, x1, y1, camX, camY, 0.0f);
+        drawLayer(L_BUILDINGS, 0.0f);
+        drawOverlays(1, x0, y0, x1, y1, camX, camY, 0.0f);
+    }
     profEnd(PROF_MAP);
 
     static std::vector<DrawItem> items;
@@ -695,7 +704,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     if (g.location().isFarm)
         for (size_t i = 0; i < g.data.layout.buildings.size(); i++) {
             auto& b = g.data.layout.buildings[i];
-            items.push_back({(float)((b.tileY + b.footH) * TILE), 2, (int)i, 0});
+            // the house sorts two tiles up from its foot, so anyone on the porch or the steps is in front of it
+            items.push_back({(float)((b.tileY + b.footH - (b.name == "farmhouse" ? 2 : 0)) * TILE), 2, (int)i, 0});
         }
     for (size_t i = 0; i < g.location().objects.size(); i++) {
         const WorldObject& o = g.location().objects[i];
@@ -756,7 +766,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 auto& b = g.data.layout.buildings[it.a];
                 float dx = b.tileX * TILE + (b.footW * TILE - b.srcW) / 2.0f - camX;
                 float dy = (b.tileY + b.footH) * TILE - b.srcH - camY;
-                if (b.name == "mailbox") dx += 8;   // out from behind the house's eave
+                if (b.name == "farmhouse") { dx -= 8; dy += 2; }   // where the game draws it: 16 px left of its footprint, 2 down
+                if (b.name == "mailbox") { dx -= 14; dy += 2; }    // tucked against the house's stone corner
                 if (c.texWidth(b.texture) > 0) {
                     c.image(b.texture, b.srcX, b.srcY, b.srcW, b.srcH, dx, dy);
                     if (b.name == "shippingbin" && c.texWidth("LooseSprites_Cursors") > 0)   // its lid, 13 frames
@@ -1229,11 +1240,13 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
     } else {
         drawLayer(L_FRONT, 0.0f);
+        drawOverlays(2, x0, y0, x1, y1, camX, camY, 0.0f);
         drawLayer(L_ALWAYSFRONT, 0.0f);
+        drawOverlays(3, x0, y0, x1, y1, camX, camY, 0.0f);
     }
     // butterflies on fine spring/summer days (TileSheets/critters: 4-frame flaps, 20 columns)
     if (m.outdoors && !g.raining && !g.windy && (g.season == SPRING || g.season == SUMMER) &&
-        g.timeOfDay < 18 * 60 && c.texWidth("TileSheets_critters") >= 320) {
+        g.timeOfDay < 18 * 60 && g_fxCritters && c.texWidth("TileSheets_critters") >= 320) {
         static const int kinds[6] = {128, 132, 136, 148, 152, 156};
         int n = std::min(16, m.width() * m.height() / 350);
         for (int i = 0; i < n; i++) {
@@ -1316,10 +1329,10 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
 
 static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     if (!g.map().outdoors) return;
-    if (g.raining) {
+    if (g.raining && g_fxWeather > 0) {
         // the game's raindrops (TileSheets/rain): a falling streak, then a 3-frame splash
         bool sprite = c.texWidth("TileSheets_rain") >= 64;
-        const int N = g.stormy ? 90 : 60;
+        const int N = (g.stormy ? 90 : 60) * g_fxWeather / 2;
         for (int i = 0; i < N; i++) {
             uint32_t h0 = (uint32_t)(i + 1) * 2654435761u;
             uint32_t period = 520 + (h0 >> 20) % 360;               // ms per drop cycle
@@ -1345,7 +1358,7 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
     }
     if (g.snowing) {
         // soft flakes drifting down and swaying
-        for (int i = 0; i < 70; i++) {
+        for (int i = 0; i < 70 * g_fxWeather / 2; i++) {
             uint32_t h = (uint32_t)(i + 1) * 2654435761u;
             float sh = c.shift(1.5f + (float)((h >> 9) % 3) * 0.75f);   // flakes at three depths in front of the screen
             float speed = 0.012f + ((h >> 22) & 63) * 0.0002f;
@@ -1360,7 +1373,7 @@ static void drawWeatherAndLight(Canvas& c, Game& g, uint32_t timeMs) {
             if (sz > 1) c.rect(x + sh - 1, y + 1, (float)sz + 3, (float)sz - 1, RGBA(0xFF, 0xFF, 0xFF, 0x70));
         }
     }
-    if (g.windy && g.season != WINTER) {
+    if (g.windy && g.season != WINTER && g_fxWeather > 0) {
         // blowing petals (spring) / leaves (fall): Cursors row 1184/1200/1216, 4-frame flutter
         int row = g.season == SPRING ? 1184 : g.season == SUMMER ? 1200 : 1216;
         float camX = g.px, camY = g.py;
@@ -2043,21 +2056,35 @@ static void drawMapTab(Canvas& c, Game& g) {
     if (!here.empty()) c.text(10, ay + ah + 19, 0.38f, COL_PICK, "Here: " + here);
 }
 
+// Options: six switches in two columns (most of them trade a little polish for speed on the old
+// 3DS), then the way out. The game saves when you go to bed; closing the lid pauses it.
+static const int OPT_N = 6;
+static const float OPT_X0 = 10, OPT_W = 148, OPT_H = 26, OPT_GAP = 4;
+static void optRect(int k, float& x, float& y) {
+    x = OPT_X0 + (k % 2) * (OPT_W + OPT_GAP);
+    y = PANEL_Y + 8 + (k / 2) * (OPT_H + OPT_GAP);
+}
+static const float QUIT_Y = PANEL_Y + 8 + 3 * (OPT_H + OPT_GAP) + 4;
+
 static void drawOptionsTab(Canvas& c, Game& g, Ui& ui) {
-    const char* labels[3] = {"Save", "Sleep (ends the day)", "Save & quit"};
-    for (int i = 0; i < 3; i++) {
-        box(c, 40, PANEL_Y + 10 + i * 40, 240, 32, COL_PANEL_DARK, COL_BORDER);
-        c.text(160, PANEL_Y + 17 + i * 40, 0.55f, COL_TEXT, labels[i], ALIGN_CENTER);
-    }
     static const char* mcText[3] = {"Fast map: off", "Fast map: on", "Fast map: flip"};
-    const char* labels3[3] = {ui.showPerf ? "Perf: on" : "Perf: off", mcText[ui.mapCache % 3],
-                              !ui.padPro ? "Pad Pro: off" : ui.padProState == 2 ? "Pad Pro: found" : "Pad Pro: looking"};
-    for (int k = 0; k < 3; k++) {
-        box(c, 12 + k * 100, PANEL_Y + 130, 96, 22, COL_PANEL_DARK, COL_BORDER);
-        c.text(60 + k * 100, PANEL_Y + 135, 0.38f, COL_TEXT, labels3[k], ALIGN_CENTER);
+    static const char* wxText[3] = {"Weather: off", "Weather: light", "Weather: full"};
+    const char* labels[OPT_N] = {mcText[ui.mapCache % 3],
+                                 ui.fps30 ? "Frame rate: 30" : "Frame rate: 60",
+                                 wxText[std::max(0, std::min(2, ui.fxWeather))],
+                                 ui.fxCritters ? "Butterflies: on" : "Butterflies: off",
+                                 ui.showPerf ? "Perf readout: on" : "Perf readout: off",
+                                 !ui.padPro ? "Pad Pro: off" : ui.padProState == 2 ? "Pad Pro: found" : "Pad Pro: looking"};
+    for (int k = 0; k < OPT_N; k++) {
+        float x, y;
+        optRect(k, x, y);
+        box(c, x, y, OPT_W, OPT_H, COL_PANEL_DARK, COL_BORDER);
+        c.text(x + OPT_W / 2, y + 7, 0.42f, COL_TEXT, labels[k], ALIGN_CENTER);
     }
-    if (ui.statusTime > 0) c.text(160, PANEL_Y + 156, 0.5f, COL_TEXT, ui.status, ALIGN_CENTER);
-    c.text(160, PANEL_Y + 172, 0.38f, COL_TEXT_SOFT, "The game also saves every time you sleep.", ALIGN_CENTER);
+    box(c, 40, QUIT_Y, 240, 30, COL_PANEL_DARK, ui.quitAsk > 0 ? COL_SEL : COL_BORDER);
+    c.text(160, QUIT_Y + 7, 0.5f, COL_TEXT, ui.quitAsk > 0 ? "Tap again: today is lost" : "Quit without saving", ALIGN_CENTER);
+    if (ui.statusTime > 0) c.text(160, QUIT_Y + 36, 0.45f, COL_TEXT, ui.status, ALIGN_CENTER);
+    else c.text(160, QUIT_Y + 38, 0.36f, COL_TEXT_SOFT, "The game saves when you go to bed. Close the lid to pause.", ALIGN_CENTER);
     (void)g;
 }
 
@@ -2070,6 +2097,9 @@ void loadUiSettings(Ui& ui, const std::string& path) {
         if (sscanf(line, "fastMap=%d", &v) == 1) ui.mapCache = std::max(0, std::min(2, v));
         if (sscanf(line, "perfInfo=%d", &v) == 1) ui.showPerf = v != 0;
         if (sscanf(line, "padPro=%d", &v) == 1) ui.padPro = v != 0;
+        if (sscanf(line, "weather=%d", &v) == 1) ui.fxWeather = std::max(0, std::min(2, v));
+        if (sscanf(line, "butterflies=%d", &v) == 1) ui.fxCritters = v != 0;
+        if (sscanf(line, "fps30=%d", &v) == 1) ui.fps30 = v != 0;
         int a, b, cc, d;
         if (sscanf(line, "padCal=%d,%d,%d,%d", &a, &b, &cc, &d) == 4) { ui.padCal[0] = a; ui.padCal[1] = b; ui.padCal[2] = cc; ui.padCal[3] = d; }
     }
@@ -2081,6 +2111,7 @@ void saveUiSettings(const Ui& ui, const std::string& path) {
     if (!f) return;
     fprintf(f, "fastMap=%d\nperfInfo=%d\npadPro=%d\npadCal=%d,%d,%d,%d\n", ui.mapCache, ui.showPerf ? 1 : 0, ui.padPro ? 1 : 0, ui.padCal[0],
             ui.padCal[1], ui.padCal[2], ui.padCal[3]);
+    fprintf(f, "weather=%d\nbutterflies=%d\nfps30=%d\n", ui.fxWeather, ui.fxCritters ? 1 : 0, ui.fps30 ? 1 : 0);
     fclose(f);
 }
 
@@ -2090,24 +2121,25 @@ static std::string settingsPath(const std::string& savePath) {
 }
 
 static void touchOptionsTab(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
-    for (int k = 0; k < 3; k++)
-        if (hit(tx, ty, 12 + k * 100, PANEL_Y + 130, 96, 22)) {
-            if (k == 0) ui.showPerf = !ui.showPerf;
-            else if (k == 1) ui.mapCache = (ui.mapCache + 1) % 3;
-            else ui.padPro = !ui.padPro;
-            saveUiSettings(ui, settingsPath(savePath));
-            return;
-        }
-    for (int i = 0; i < 3; i++)
-        if (hit(tx, ty, 40, PANEL_Y + 10 + i * 40, 240, 32)) {
-            if (i == 1) {
-                g.goToBed();
-            } else {
-                ui.status = g.save(savePath) ? "Saved." : "Save FAILED (SD card?)";
-                ui.statusTime = 3;
-                if (i == 2) ui.quit = true;
-            }
-        }
+    for (int k = 0; k < OPT_N; k++) {
+        float x, y;
+        optRect(k, x, y);
+        if (!hit(tx, ty, x, y, OPT_W, OPT_H)) continue;
+        if (k == 0) ui.mapCache = (ui.mapCache + 1) % 3;
+        else if (k == 1) ui.fps30 = !ui.fps30;
+        else if (k == 2) ui.fxWeather = (ui.fxWeather + 2) % 3;   // full, light, off
+        else if (k == 3) ui.fxCritters = !ui.fxCritters;
+        else if (k == 4) ui.showPerf = !ui.showPerf;
+        else ui.padPro = !ui.padPro;
+        ui.quitAsk = 0;
+        saveUiSettings(ui, settingsPath(savePath));
+        return;
+    }
+    if (hit(tx, ty, 40, QUIT_Y, 240, 30)) {
+        if (ui.quitAsk > 0) { ui.quitNoSave = true; ui.quit = true; }
+        else ui.quitAsk = 4;
+    }
+    (void)g;
 }
 
 
@@ -2280,7 +2312,8 @@ static void drawDialogue(Canvas& c, Game& g, Ui& ui) {
     const DialoguePage& p = d.pages[d.page];
     const NpcDef* def = g.data.npc(d.npc);
 
-    float boxW = def ? 210 : 312;
+    bool bigFace = def && p.choices.empty() && c.texWidth("Portraits_" + def->name) >= 64;   // the portrait at twice its size
+    float boxW = !def ? 312 : bigFace ? 172 : 210;
     box(c, 4, 4, boxW, 132, COL_PANEL, COL_BORDER, 3);
     auto lines = wrapText(c, p.text, 0.5f, boxW - 18);
     ui.dlgLines = (int)lines.size();
@@ -2288,7 +2321,13 @@ static void drawDialogue(Canvas& c, Game& g, Ui& ui) {
         c.text(12, 10 + i * 16, 0.5f, COL_TEXT, lines[ui.dlgLine + i]);
     bool lastPart = ui.dlgLine + DLG_LINES >= (int)lines.size();
 
-    if (def) {
+    if (bigFace) {
+        box(c, 180, 4, 136, 136, RGBA(0xE7, 0xC3, 0x83), COL_BORDER, 3);
+        int idx = std::max(0, p.portrait);
+        c.imageScaled("Portraits_" + def->name, (idx % 2) * 64, (idx / 2) * 64, 64, 64, 184, 8, 2.0f);
+        box(c, 180, 144, 136, 28, COL_PANEL_DARK, COL_BORDER, 3);
+        c.text(248, 150, 0.5f, COL_TEXT, def->display, ALIGN_CENTER);
+    } else if (def) {
         box(c, 218, 4, 98, 98, RGBA(0xE7, 0xC3, 0x83), COL_BORDER, 3);
         int idx = std::max(0, p.portrait);
         c.image("Portraits_" + def->name, (idx % 2) * 64, (idx / 2) * 64, 64, 64, 235, 21);
@@ -2791,7 +2830,7 @@ static void drawLetter(Canvas& c, Game& g) {
     const Game::Letter& L = g.letter;
     c.rect(0, 0, BOT_W, BOT_H, COL_BG);
     if (c.texWidth("LooseSprites_letterBG") > 0)
-        c.image("LooseSprites_letterBG", 0, 0, 312, 196, 4, 4);   // the paper from your files
+        c.image("LooseSprites_letterBG", 4, 0, 312, 180, 4, 4);   // the paper from your files (each sheet is 320x180)
     else
         box(c, 4, 4, 312, 196, RGBA(0xFA, 0xEE, 0xD2), COL_BORDER, 2);
     // body: '^' is a line break in letters
@@ -3197,7 +3236,22 @@ static void touchMuseum(Game& g, int tx, int ty) {
         if (hit(tx, ty, 236, 40 + r * 27 + 3, 72, 19)) { g.museumDonate(slots[r]); return; }
 }
 
+bool uiModal(const Game& g, const Ui& ui) {
+    if (ui.showSummary || g.dialogue.active || g.cutscene.active) return false;
+    return !ui.shop.empty() || g.bundleView >= 0 || g.museumOpen || g.letterOpen || g.chestOpen;
+}
+
+static void drawBottomScreen(Canvas& c, Game& g, Ui& ui);
+
 void drawBottom(Canvas& c, Game& g, Ui& ui) {
+    drawBottomScreen(c, g, ui);
+    if (ui.ptrOn && uiModal(g, ui)) {   // the pointer (the game's own arrow, or a plain one without it)
+        if (c.texWidth("LooseSprites_Cursors") > 0) c.image("LooseSprites_Cursors", 0, 0, 16, 16, std::floor(ui.ptrX), std::floor(ui.ptrY));
+        else { c.rect(ui.ptrX, ui.ptrY, 6, 2, COL_SEL); c.rect(ui.ptrX, ui.ptrY, 2, 6, COL_SEL); }
+    }
+}
+
+static void drawBottomScreen(Canvas& c, Game& g, Ui& ui) {
     if (ui.showSummary) {
         if (!g.levelUps.empty()) drawLevelUp(c, g, ui);
         else drawSummary(c, g);
@@ -3269,6 +3323,9 @@ void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
 
 bool sceneAfterUpdate(Game& g, Ui& ui, const std::string& savePath) {
     if (ui.statusTime > 0) ui.statusTime -= 1.0f / 60;
+    if (ui.quitAsk > 0) ui.quitAsk -= 1.0f / 60;
+    g_fxWeather = ui.fxWeather;
+    g_fxCritters = ui.fxCritters;
     if (!g.openShop.empty()) {
         ui.shop = g.openShop;
         ui.shopSell = false;

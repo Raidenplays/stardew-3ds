@@ -23,7 +23,7 @@ struct TexPage {
 // then be evicted when GPU memory runs out.
 void texNewFrame();
 // counters for the on-screen performance readout
-struct TexStats { unsigned loads = 0, evictions = 0, failed = 0; };
+struct TexStats { unsigned loads = 0, evictions = 0, failed = 0, loadMs = 0; };
 TexStats& texStats();
 
 class Texture {

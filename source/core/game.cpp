@@ -576,7 +576,7 @@ bool Game::buildingAt(int x, int y) const {
     if (const_cast<Game*>(this)->buildingAtTile(x, y)) return true;
     for (auto& b : data.layout.buildings)
         if (x >= b.tileX && x < b.tileX + b.footW && y >= b.tileY && y < b.tileY + b.footH)
-            return true;
+            return !data.layout.walkable(x, y);   // the porch and its steps are part of the house, but you walk on them
     return false;
 }
 
