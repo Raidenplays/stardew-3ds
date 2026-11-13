@@ -878,6 +878,15 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         drawLayer(L_BUILDINGS, 0.0f);
         drawOverlays(1, x0, y0, x1, y1, camX, camY, 0.0f);
     }
+
+    // The glittering boulder in the stream (LooseSprites/Cursors), till the Fish Tank is restored.
+    // Centred on the spot so it sits in the water, over the bank's edge and under the leaves
+    if (g.location().name == "Mountain") {
+        int bx, by;
+        if (g.glitteringBoulder(bx, by))
+            c.image("LooseSprites_Cursors", 477, 1385, 46, 55, bx * TILE + TILE / 2 - 23 - camX + c.shift(0.0f), by * TILE + TILE / 2 - 28 - camY);
+    }
+
     profEnd(PROF_MAP);
 
     static std::vector<DrawItem> items;

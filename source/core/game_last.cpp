@@ -639,4 +639,28 @@ bool Game::lastInteract(int tx, int ty) {
     return false;
 }
 
+// Where the glittering boulder sits. Your Mountain map may be a mod's, so the spot comes from the
+// event where Willy finds it gone (404798): a mod's version shows the water shimmering where it was
+// (an actor "ShimmeringWater w h x y"); the game's own has Willy look up at it from where he stands.
+bool Game::glitteringBoulder(int& tx, int& ty) const {
+    if (mailReceived.count("ccFishTank") || mailReceived.count("jojaFishTank")) return false;
+    static int cx = -2, cy = 0;
+    if (cx == -2) {
+        cx = -1;
+        std::vector<std::string> lines;
+        if (data.vfs.readTable("data/events/Mountain.dat", lines))
+            for (auto& l : lines) {
+                if (l.rfind("404798", 0) != 0) continue;
+                int w, h, x, y;
+                size_t p = l.find("ShimmeringWater ");
+                if (p != std::string::npos && sscanf(l.c_str() + p + 16, "%d %d %d %d", &w, &h, &x, &y) == 4) { cx = x; cy = y; break; }
+                p = l.find(" Willy ");
+                if (p != std::string::npos && sscanf(l.c_str() + p + 7, "%d %d", &x, &y) == 2) { cx = x; cy = y - 2; }
+            }
+    }
+    if (cx < 0) return false;
+    tx = cx; ty = cy;
+    return true;
+}
+
 } // namespace sv

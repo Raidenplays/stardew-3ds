@@ -744,6 +744,9 @@ public:
     std::string L(const std::string& key, const std::string& fallback, const std::string& a0 = "", const std::string& a1 = "");
     // ---- the last pieces (game_last.cpp) ----
     bool desertFest() const; bool troutDerby() const; bool squidFest() const; bool nightMarket() const;
+    // The glittering boulder in the Mountain stream, until the Fish Tank is done (or Joja's Panning
+    // is bought): its tile (bottom middle), true if it's there today.
+    bool glitteringBoulder(int& tx, int& ty) const;
     std::string mapForToday(const std::string& name) const;
     int giveNamed(const char* name, int n);
     int perfection();
