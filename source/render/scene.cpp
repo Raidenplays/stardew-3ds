@@ -879,6 +879,38 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         drawOverlays(1, x0, y0, x1, y1, camX, camY, 0.0f);
     }
 
+    // The Community Center's fish tank, once the Fish Tank room is restored: water, and the fish you gave
+    // its bundles swimming about (their pictures on LooseSprites/AquariumFish, 24x24 cells, 20 a row)
+    if (g.location().name == "CommunityCenter" && g.mailReceived.count("ccFishTank") && c.texWidth("LooseSprites_AquariumFish") > 0) {
+        float sh = c.shift(0.0f);
+        float tx = 38 * TILE + 8 - camX + sh, ty = 7 * TILE + 19 - camY;   // the glass front, 74x23
+        c.rect(tx, ty, 74, 23, RGBA(52, 120, 196, 170));
+        c.rect(tx, ty, 74, 1, RGBA(170, 220, 255, 200));
+        c.rect(tx, ty + 19, 74, 4, RGBA(214, 186, 124, 230));                  // sand
+        c.rect(tx, ty + 19, 74, 1, RGBA(236, 210, 150, 230));
+        static std::vector<int> fish;
+        static size_t seen = (size_t)-1;
+        if (seen != g.data.aquarium.size()) {
+            seen = g.data.aquarium.size();
+            fish.clear();
+            for (auto& b : g.bundles())
+                if (b.room == "Fish Tank")
+                    for (auto& it : b.items) {
+                        auto a = g.data.aquarium.find(it.id);
+                        if (a != g.data.aquarium.end() && fish.size() < 5) fish.push_back(a->second);
+                    }
+        }
+        for (size_t k = 0; k < fish.size(); k++) {
+            float t = timeMs * 0.00035f * (0.7f + 0.13f * (k % 4)) + k * 2.5f;
+            float fx = tx + 25 + std::sin(t) * 24;                    // back and forth along the tank
+            static const float lane[5] = {-8, -2, -6, 0, -4};         // each at its own depth
+            float fy = ty + lane[k] + std::sin(t * 2.3f) * 1.0f;
+            bool right = std::cos(t) > 0;
+            int ix = fish[k];
+            c.image("LooseSprites_AquariumFish", (ix % 20) * 24, (ix / 20) * 48, 24, 24, fx, fy, right);
+        }
+    }
+
     // The glittering boulder in the stream (LooseSprites/Cursors), till the Fish Tank is restored.
     // Centred on the spot so it sits in the water, over the bank's edge and under the leaves
     if (g.location().name == "Mountain") {

@@ -82,6 +82,7 @@ EXTRA_TEXTURES = [
     ("Buildings/Mailbox", False),
     ("Buildings/Shipping Bin", False),
     ("LooseSprites/Cursors", False),
+    ("LooseSprites/AquariumFish", False),
     ("TileSheets/emotes", False),
     ("TileSheets/animations", False),
     ("Characters/Junimo", False),
@@ -1807,6 +1808,18 @@ def write_events(content, out_dir):
     with open(os.path.join(out_dir, "repeatevents.dat"), "w", encoding="utf-8") as f:
         for r in rep:
             f.write(r + "\n")
+    # Fish in tanks: the fish's picture on LooseSprites/AquariumFish (only the game's own sheet)
+    try:
+        aq = _load_json(content, "Data/AquariumFish.json")
+    except Exception:
+        aq = {}
+    with open(os.path.join(out_dir, "aquarium.dat"), "w", encoding="utf-8") as f:
+        for k, v in aq.items():
+            parts = str(v).split("/")
+            if len(parts) > 4 and parts[4].strip() and parts[4].strip() != "LooseSprites\\AquariumFish":
+                continue                      # a mod's own sheet
+            if k.isdigit() and parts[0].strip().isdigit():
+                f.write(f"{k}\t{parts[0].strip()}\t{parts[1] if len(parts) > 1 else 'fish'}\n")
     if rep:
         print(f"  {len(rep)} events that play every time")
 
