@@ -525,33 +525,6 @@ class MainActivity : AppCompatActivity() {
                 say("Saving to ${root.name}/3ds/stardew3ds ...")
                 val total = File(outDir, "3ds").walkTopDown().count { it.isFile }.coerceAtLeast(1)
                 var n = 0
-                var skipped = 0
-                // What this phone sent to this 3DS last time (path, size, checksum): files that are still
-                // the same there are not sent again. Most of a new conversion is the same as the last one
-                // (all of the sound, which is over half of it).
-                val sentFile = File(filesDir, "sent_" + ip.replace(Regex("[^0-9A-Za-z.]"), "_") + ".txt")
-                val sent = HashMap<String, String>()
-                try {
-                    if (sentFile.isFile) for (line in sentFile.readLines()) {
-                        val t = line.split('\t')
-                        if (t.size == 3) sent[t[0]] = t[1] + "\t" + t[2]
-                    }
-                } catch (_: Exception) {}
-                fun stamp(f: File): String {
-                    val crc = java.util.zip.CRC32()
-                    val buf = ByteArray(1 shl 16)
-                    FileInputStream(f).use { ins ->
-                        while (true) {
-                            val k = ins.read(buf)
-                            if (k <= 0) break
-                            crc.update(buf, 0, k)
-                        }
-                    }
-                    return f.length().toString() + "\t" + crc.value.toString(16)
-                }
-                fun saveSent() {
-                    try { sentFile.writeText(sent.entries.joinToString("\n") { it.key + "\t" + it.value }) } catch (_: Exception) {}
-                }
                 fun put(src: File, into: DocumentFile) {
                     for (f in src.listFiles() ?: emptyArray()) {
                         if (f.isDirectory) {
