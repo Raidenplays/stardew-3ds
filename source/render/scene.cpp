@@ -2205,7 +2205,7 @@ void loadUiSettings(Ui& ui, const std::string& path) {
         if (sscanf(line, "padPro=%d", &v) == 1) ui.padPro = v != 0;
         if (sscanf(line, "weather=%d", &v) == 1) ui.fxWeather = std::max(0, std::min(2, v));
         if (sscanf(line, "butterflies=%d", &v) == 1) ui.fxCritters = v != 0;
-        if (sscanf(line, "fps30=%d", &v) == 1) ui.fps30 = v != 0;
+        if (sscanf(line, "framerate=%d", &v) == 1) ui.fps30 = v <= 30;   // (the older fps30= line is ignored: it was written before anyone had chosen)
         int a, b, cc, d;
         if (sscanf(line, "padCal=%d,%d,%d,%d", &a, &b, &cc, &d) == 4) { ui.padCal[0] = a; ui.padCal[1] = b; ui.padCal[2] = cc; ui.padCal[3] = d; }
     }
@@ -2217,7 +2217,7 @@ void saveUiSettings(const Ui& ui, const std::string& path) {
     if (!f) return;
     fprintf(f, "fastMap=%d\nperfInfo=%d\npadPro=%d\npadCal=%d,%d,%d,%d\n", ui.mapCache, ui.showPerf ? 1 : 0, ui.padPro ? 1 : 0, ui.padCal[0],
             ui.padCal[1], ui.padCal[2], ui.padCal[3]);
-    fprintf(f, "weather=%d\nbutterflies=%d\nfps30=%d\n", ui.fxWeather, ui.fxCritters ? 1 : 0, ui.fps30 ? 1 : 0);
+    fprintf(f, "weather=%d\nbutterflies=%d\nframerate=%d\n", ui.fxWeather, ui.fxCritters ? 1 : 0, ui.fps30 ? 30 : 60);
     fclose(f);
 }
 
@@ -3455,7 +3455,7 @@ bool sceneAfterUpdate(Game& g, Ui& ui, const std::string& savePath) {
         ui.tab = TAB_ITEMS;
     }
     if (ui.night) {
-        ui.nightT += 1.0f / 60;
+        ui.nightT += ui.fps30 ? 1.0f / 30 : 1.0f / 60;
         if (ui.night == 2) {
             if (!ui.nightSaved && ui.nightT >= 1.5f) { g.save(savePath); ui.nightSaved = true; }
             if (ui.nightT >= 4.0f) {

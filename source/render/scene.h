@@ -22,7 +22,7 @@ struct Ui {
     // lighter drawing for the old 3DS (Options tab)
     int fxWeather = 2;        // rain, snow, petals: 2 all of it, 1 half, 0 none
     bool fxCritters = true;   // butterflies
-    bool fps30 = false;       // hold a steady 30 frames a second instead of chasing 60
+    bool fps30 = false;       // hold a steady 30 frames a second instead of chasing 60 (the default on an old 3DS)
     // A pointer for the bottom screen while a box, shop or letter is open: the D-pad or Circle Pad moves
     // it and A taps where it points, so those screens work without the stylus.
     float ptrX = 160, ptrY = 120;

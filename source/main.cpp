@@ -124,6 +124,8 @@ int main() {
     irrstInit();   // the New 3DS C-stick and ZL/ZR (does nothing on an old 3DS)
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
     ptmuInit();    // battery level and whether it's charging
+    bool isNew3ds = false;
+    APT_CheckNew3DS(&isNew3ds);
     bool haveMcu = R_SUCCEEDED(mcuHwcInit());   // the battery in percent (not every way of launching allows it)
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(12288);   // both eyes + bottom screen per frame
@@ -251,6 +253,7 @@ int main() {
         title.sound = [&sound](const char* cue) { sound.play(cue); };
         u64 tLast = osGetTime();
         Ui padUi;                                         // just for the pad's saved settings
+        padUi.fps30 = !isNew3ds;
         loadUiSettings(padUi, root + "settings.txt");
         if (padUi.padCal[2] > 0) cpp_pad::calibrate(padUi.padCal[0], padUi.padCal[1], padUi.padCal[2], padUi.padCal[3]);
         int calLoX = 0, calHiX = 0, calLoY = 0, calHiY = 0, calCx = 0x800, calCy = 0x800;
@@ -398,6 +401,7 @@ int main() {
     }
 
     Ui ui;
+    ui.fps30 = !isNew3ds;   // an old 3DS can't hold 60 everywhere, and a steady 30 plays smoother than an uneven 45
     loadUiSettings(ui, root + "settings.txt");
     game.keyboard = [](const std::string& hint, const std::string& cur, int maxLen) {   // naming your pet
         SwkbdState kb;
