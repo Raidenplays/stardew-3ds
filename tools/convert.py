@@ -83,6 +83,7 @@ EXTRA_TEXTURES = [
     ("Buildings/Shipping Bin", False),
     ("LooseSprites/Cursors", False),
     ("LooseSprites/AquariumFish", False),
+    ("LooseSprites/JunimoNote", False),
     ("TileSheets/emotes", False),
     ("TileSheets/animations", False),
     ("Characters/Junimo", False),

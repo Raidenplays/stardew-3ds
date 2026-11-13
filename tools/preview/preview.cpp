@@ -543,6 +543,15 @@ int main(int argc, char** argv) {
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
     if (const char* b = getenv("BATTERY")) { ui.battery = atoi(b); ui.batteryPct = atoi(b) * 20 - 7; ui.charging = atoi(b) == 2; }
+    if (getenv("BUNDLES")) {   // BUNDLES=1: the Pantry's page and its first bundle, with a few things to give
+        g.addItem(24, 3); g.addItem(188, 1); g.addItem(190, 2); g.addItem(192, 1); g.addItem(16, 4); g.addItem(18, 2);
+        g.bundleView = 1; g.bundleRoom = getenv("BUNDLE_ROOM") ? getenv("BUNDLE_ROOM") : "Crafts Room";
+        shot(c, g, ui, "bundle_room");
+        for (auto& b : g.bundles()) if (b.room == g.bundleRoom) { g.bundleSel = b.index; break; }
+        g.bundleView = 2;
+        shot(c, g, ui, "bundle_one");
+        return 0;
+    }
     if (const char* who = getenv("PORTRAITS")) {   // PORTRAITS=<npc>: their dialogue box with each portrait in turn
         for (auto& n : g.npcs)
             if (n.def && n.def->name == who) { g.teleport(n.loc, n.tileX() + 1, n.tileY()); break; }

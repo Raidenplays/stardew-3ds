@@ -3508,7 +3508,180 @@ static float bundlePitch(const Bundle& b) {
     return rows <= 5 ? 32.0f : 29.0f;
 }
 
+// The game's own Junimo note (LooseSprites/JunimoNote, 640x308): the room page with its tree on the left
+// half, the bundle page (inventory grid, the bundle's box, the slots it fills) on the right; the bundle
+// sacks below (16x16, frame 0 tied shut, 15 bloomed open; two colours a row: x = colour%2 * 256).
+static const char* JN = "LooseSprites_JunimoNote";
+static const float JG_X = 30, JG_Y = 34, JG_PX = 18.5f, JG_PY = 18.8f;   // the inventory grid on the bundle page
+static int g_bundleInfo = -1;                                            // the needed item last tapped (its name shows)
+
+static void jnSack(Canvas& c, int color, int frame, float x, float y, float scale) {
+    color = std::max(0, std::min(6, color));
+    c.imageScaled(JN, (color % 2) * 256 + frame * 16, 244 + (color / 2) * 16, 16, 16, x, y, scale);
+}
+
+// where a room's bundles sit round its tree
+static void jnSackSpot(int k, float& x, float& y) {
+    static const float spot[8][2] = {{58, 46}, {230, 46}, {40, 98}, {248, 98}, {96, 128}, {192, 128}, {144, 34}, {144, 112}};
+    x = spot[k % 8][0]; y = spot[k % 8][1];
+}
+
+static void jnBanner(Canvas& c, const std::string& s) {   // the scroll below the note (as in the game)
+    float w = std::min(300.0f, c.textWidth(s, 0.42f) + 28);
+    box(c, BOT_W / 2 - w / 2, 196, w, 26, COL_PANEL, COL_BORDER);
+    c.text(BOT_W / 2, 200, 0.42f, COL_TEXT, s, ALIGN_CENTER);
+}
+
+static void drawBundleNote(Canvas& c, Game& g) {
+    c.rect(0, 0, BOT_W, BOT_H, RGBA(0x20, 0x18, 0x14));
+    auto all = g.bundles();
+    if (g.bundleView == 1) {   // the room page: its bundles round the tree
+        c.image(JN, 0, 0, 320, 180, 0, 0);
+        c.text(160, 2, 0.42f, COL_TEXT, g.bundleRoom, ALIGN_CENTER);
+        int k = 0;
+        for (auto& b : all) {
+            if (b.room != g.bundleRoom) continue;
+            float x, y;
+            jnSackSpot(k++, x, y);
+            bool fin = g.bundleDone(b);
+            jnSack(c, b.color, fin ? 15 : 0, x - 16, y - 16, 2.0f);
+            if (!fin) {
+                char buf[16];
+                snprintf(buf, sizeof buf, "%d/%d", g.bundleGivenCount(b), b.needed);
+                c.text(x, y + 15, 0.32f, COL_TEXT, buf, ALIGN_CENTER);
+            }
+        }
+        c.text(304, 2, 0.5f, COL_TEXT, "X", ALIGN_CENTER);
+        jnBanner(c, "Tap a bundle");
+        return;
+    }
+    for (auto& b : all) {   // one bundle
+        if (b.index != g.bundleSel) continue;
+        c.image(JN, 320, 0, 320, 180, 0, 0);
+        c.text(304, 2, 0.5f, COL_TEXT, "X", ALIGN_CENTER);
+        bool fin = g.bundleDone(b);
+        // your things, in the grid; what the bundle can take stands out, the rest is dimmed
+        for (int i = 0; i < INV_SIZE; i++) {
+            const Slot& s = g.inv[i];
+            if (s.type == SLOT_EMPTY) continue;
+            float x = JG_X + (i % 6) * JG_PX, y = JG_Y + (i / 6) * JG_PY;
+            slotIcon(c, g, s, x, y);
+            bool wanted = false;
+            if (!fin && s.type == SLOT_OBJECT) {
+                auto it = g.bundleGiven.find(b.index);
+                for (size_t k = 0; k < b.items.size() && !wanted; k++) {
+                    const Bundle::Item& bi = b.items[k];
+                    bool given = it != g.bundleGiven.end() && k < it->second.size() && it->second[k];
+                    const ObjectDef* o = g.data.object(s.id);
+                    if (!given && ((bi.id >= 0 && bi.id == s.id && s.quality >= bi.quality) || (bi.id < -1 && o && o->category == bi.id)))
+                        wanted = true;
+                }
+            }
+            if (!wanted) c.rect(x - 1, y - 1, 18, 18, RGBA(0x30, 0x20, 0x10, 0x90));
+        }
+        // the bundle in its box, its name, the things it wants
+        jnSack(c, b.color, fin ? 15 : 0, 217, 21, 2.0f);
+        box(c, 172, 60, 136, 18, COL_PANEL, COL_BORDER, 1);
+        c.text(240, 62, 0.38f, COL_TEXT, b.name + " Bundle", ALIGN_CENTER);
+        auto it = g.bundleGiven.find(b.index);
+        size_t n = std::min<size_t>(b.items.size(), 12);
+        size_t perRow = n > 6 ? (n + 1) / 2 : n;
+        for (size_t i = 0; i < n; i++) {
+            const Bundle::Item& bi = b.items[i];
+            float x = 240 - perRow * 9 + (i % perRow) * 18, y = 82 + (i / perRow) * 14;
+            bool given = it != g.bundleGiven.end() && i < it->second.size() && it->second[i];
+            const ObjectDef* o = bi.id >= 0 ? g.data.object(bi.id) : nullptr;
+            if (o) itemIcon(c, o, x, y);
+            else if (bi.id == -1) c.text(x + 8, y + 2, 0.3f, COL_TEXT, "g", ALIGN_CENTER);
+            if (given) c.rect(x, y, 16, 16, RGBA(0xFF, 0xE8, 0xB0, 0xB0));
+            if ((int)i == g_bundleInfo) { c.rect(x, y + 16, 16, 1, COL_TEXT); }
+        }
+        // the slots it fills, one per item needed: what you've given sits in them
+        int need = std::max(1, b.needed), cols = std::min(need, 5);
+        int filled = g.bundleGivenCount(b), shown = 0;
+        float sx0 = 233 - cols * 9, sy0 = need > 5 ? 116 : 126;
+        for (int k = 0; k < need && k < 10; k++) {
+            float x = sx0 + (k % 5) * 18, y = sy0 + (k / 5) * 18;
+            c.image(JN, 512, 244, 16, 16, x, y);
+            if (k < filled) {   // the k-th given item
+                int seen = 0;
+                for (size_t i = 0; i < b.items.size(); i++) {
+                    bool given = it != g.bundleGiven.end() && i < it->second.size() && it->second[i];
+                    if (!given) continue;
+                    if (seen++ == shown) {
+                        const ObjectDef* o = b.items[i].id >= 0 ? g.data.object(b.items[i].id) : nullptr;
+                        if (o) itemIcon(c, o, x, y);
+                        break;
+                    }
+                }
+                shown++;
+            }
+        }
+        std::string info;
+        if (g_bundleInfo >= 0 && g_bundleInfo < (int)b.items.size()) {
+            const Bundle::Item& bi = b.items[g_bundleInfo];
+            const ObjectDef* o = bi.id >= 0 ? g.data.object(bi.id) : nullptr;
+            info = bi.id == -1 ? std::to_string(bi.count) + "g" : o ? o->name : "Any (category)";
+            if (bi.count > 1 && bi.id != -1) info += " x" + std::to_string(bi.count);
+            if (bi.quality > 0 && bi.id != -1) info += bi.quality >= 4 ? " (iridium)" : bi.quality >= 2 ? " (gold)" : " (silver)";
+            if (bi.id == -1 && !fin) info += "  (tap to pay)";
+        }
+        std::string rw = bundleRewardText(g, b);
+        if (!info.empty()) c.text(BOT_W / 2, 182, 0.36f, COL_CREAM, info, ALIGN_CENTER);
+        jnBanner(c, fin ? "Bundle complete!" : rw.empty() ? std::string("Tap your things to give them") : "Reward: " + rw);
+    }
+}
+
+static bool touchBundleNote(Game& g, int tx, int ty) {
+    if (hit(tx, ty, 290, 0, 30, 20)) { g.bundleView = g.bundleView == 1 ? 0 : 1; g_bundleInfo = -1; return true; }
+    auto all = g.bundles();
+    if (g.bundleView == 1) {
+        int k = 0;
+        for (auto& b : all) {
+            if (b.room != g.bundleRoom) continue;
+            float x, y;
+            jnSackSpot(k++, x, y);
+            if (hit(tx, ty, x - 18, y - 18, 36, 40)) { g.bundleSel = b.index; g.bundleView = 2; g_bundleInfo = -1; return true; }
+        }
+        return true;
+    }
+    for (auto& b : all) {
+        if (b.index != g.bundleSel) continue;
+        size_t n = std::min<size_t>(b.items.size(), 12);
+        size_t perRow = n > 6 ? (n + 1) / 2 : n;
+        for (size_t i = 0; i < n; i++) {   // a needed thing: show its name (gold: pay it)
+            float x = 240 - perRow * 9 + (i % perRow) * 18, y = 82 + (i / perRow) * 14;
+            if (hit(tx, ty, x - 1, y - 1, 18, 16)) {
+                g_bundleInfo = (int)i;
+                if (b.items[i].id == -1) g.bundleGive(b.index, (int)i);
+                return true;
+            }
+        }
+        for (int s = 0; s < INV_SIZE; s++) {   // one of your things: in it goes, if the bundle wants it
+            float x = JG_X + (s % 6) * JG_PX, y = JG_Y + (s / 6) * JG_PY;
+            if (!hit(tx, ty, x - 1, y - 1, 18, 18)) continue;
+            const Slot& sl = g.inv[s];
+            if (sl.type != SLOT_OBJECT) return true;
+            const ObjectDef* o = g.data.object(sl.id);
+            auto it = g.bundleGiven.find(b.index);
+            for (size_t k = 0; k < b.items.size(); k++) {
+                const Bundle::Item& bi = b.items[k];
+                bool given = it != g.bundleGiven.end() && k < it->second.size() && it->second[k];
+                if (given) continue;
+                if ((bi.id >= 0 && bi.id == sl.id && sl.quality >= bi.quality) || (bi.id < -1 && o && o->category == bi.id)) {
+                    if (g.bundleGive(b.index, (int)k)) g.sfx("newArtifact");
+                    return true;
+                }
+            }
+            if (o) g.notify("The junimos don't need " + o->name + " for this bundle.");
+            return true;
+        }
+    }
+    return true;
+}
+
 static void drawBundles(Canvas& c, Game& g) {
+    if (g.bundleView >= 1 && c.texWidth(JN) > 0) { drawBundleNote(c, g); return; }
     c.rect(0, 0, BOT_W, BOT_H, RGBA(0x2A, 0x3A, 0x22));
     box(c, 4, 4, BOT_W - 8, 32, COL_PANEL, COL_BORDER);
     box(c, BOT_W - 38, 7, 28, 26, COL_PANEL_DARK, COL_BORDER, 1);
@@ -3587,6 +3760,7 @@ static void drawBundles(Canvas& c, Game& g) {
 }
 
 static void touchBundles(Game& g, int tx, int ty) {
+    if (g.bundleView >= 1 && g.data.vfs.exists("tex/LooseSprites_JunimoNote.s3t")) { touchBundleNote(g, tx, ty); return; }
     if (hit(tx, ty, BOT_W - 38, 7, 28, 26)) {   // close / back
         g.bundleView = g.bundleView == 0 ? -1 : g.bundleView - 1;
         return;
