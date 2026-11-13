@@ -2324,18 +2324,164 @@ RAIDEN_FACTS = [
 ]
 
 
-def write_raiden(data_dir):
-    loc, x, y, d = RAIDEN_SPOT
+def write_prop(data_dir, name, spot, anim, lines, intro=None, busy=None):
+    """A talking prop: stands at one spot all day playing its animation (frames 16-19 of its
+    sheet) and says one of `lines` when you talk to it. No friendship, gifts or birthday."""
+    loc, x, y, d = spot
     with open(os.path.join(data_dir, "npcs.dat"), "a", encoding="utf-8") as f:
-        f.write("\t".join(["Raiden", "Raiden", "-1", "0", loc, str(x), str(y), str(d), "0"]) + "\n")
-    with open(os.path.join(data_dir, "schedules", "Raiden.dat"), "w", encoding="utf-8") as f:
-        f.write(f"default\t600 {loc} {x} {y} {d} raiden_3ds\n")
-    with open(os.path.join(data_dir, "dialogue", "Raiden.dat"), "w", encoding="utf-8") as f:
-        for i, fact in enumerate(RAIDEN_FACTS):
-            f.write(f"fact_{i}\t{fact}\n")
+        f.write("\t".join([name, name, "-1", "0", loc, str(x), str(y), str(d), "0"]) + "\n")
+    with open(os.path.join(data_dir, "schedules", name + ".dat"), "w", encoding="utf-8") as f:
+        f.write(f"default\t600 {loc} {x} {y} {d} {anim}\n")
+    with open(os.path.join(data_dir, "dialogue", name + ".dat"), "w", encoding="utf-8") as f:
+        for i, line in enumerate(lines):
+            f.write(f"fact_{i}\t{line}\n")
+        if intro is not None: f.write(f"prop_intro\t{intro or '-'}\n")
+        if busy: f.write(f"prop_busy\t{busy}\n")
     with open(os.path.join(data_dir, "animations.dat"), "a", encoding="utf-8") as f:
-        f.write("raiden_3ds\t16\t16 17 18 19\t16\n")
-    print("  Raiden is at the Saloon")
+        f.write(f"{anim}\t16\t16 17 18 19\t16\n")
+    print(f"  {name} is at the {loc}")
+
+
+def write_raiden(data_dir):
+    write_prop(data_dir, "Raiden", RAIDEN_SPOT, "raiden_3ds", RAIDEN_FACTS)
+
+
+# Raiden's friends, also props in the Saloon. Their portraits are their own art (romfs, from
+# art/friends/); their sprites are made here from the player's own villager sheets, recoloured:
+# aleas from Shane's (green hoodie), Siepert from Emily's (black dress, white apron, cat ears).
+ALEAS_SPOT = ("Saloon", 36, 18, 0)        # at his own arcade cabinet (36,17), back to you
+SIEPERT_SPOT = ("Saloon", 23, 22, 0)      # at her own table (23-24,21), typing on her laptop
+ALEAS_LINES = [
+    "I have the next 11 games paid for.",
+    "Sorry, I have the next 11 games paid for.",
+    "Nope. I have the next 11 games paid for.$h",
+    "Hold on, I'm on a streak. Also I have the next 11 games paid for.",
+]
+SIEPERT_LINES = [
+    "Oh! Hi!$h",
+    "Hi! Sorry, I'm in the middle of something.",
+    "Just one more paragraph...",
+]
+
+
+def _remap(img, table):
+    px = img.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            r, g, b, a = px[x, y]
+            if a and (r, g, b) in table:
+                px[x, y] = table[(r, g, b)] + (a,)
+
+
+def _aleas_sheet(src):
+    im = Image.open(src).convert("RGBA").crop((0, 0, 64, 128))
+    _remap(im, {(4, 41, 73): (18, 52, 28), (1, 73, 170): (44, 110, 50), (4, 112, 221): (78, 156, 66),
+                (0, 123, 224): (78, 156, 66), (33, 56, 93): (38, 34, 46), (52, 86, 128): (56, 50, 64),
+                (66, 118, 144): (74, 68, 84), (63, 26, 55): (40, 30, 28), (101, 45, 101): (58, 42, 36),
+                (96, 62, 89): (70, 122, 62)})
+    out = Image.new("RGBA", (64, 160))
+    out.paste(im, (0, 0))
+    back = im.crop((0, 64, 16, 96))
+    for i in range(4):                     # mashing buttons: the shoulders bob a pixel
+        f = back.copy()
+        if i % 2:
+            f = Image.new("RGBA", (16, 32))
+            f.paste(back.crop((0, 0, 16, 20)), (0, 1))
+            low = back.crop((0, 20, 16, 32))
+            f.paste(low, (0, 20), low)
+        out.paste(f, (i * 16, 128))
+    return out
+
+
+def _siepert_sheet(src):
+    hair = {(0, 0, 65): (14, 10, 14), (23, 8, 63): (18, 12, 16), (39, 14, 104): (26, 18, 22),
+            (0, 11, 126): (30, 22, 26), (2, 48, 139): (38, 28, 30), (20, 84, 200): (52, 40, 40),
+            (27, 142, 246): (74, 58, 56), (113, 220, 251): (100, 80, 76)}
+    dress = {(249, 128, 114): (58, 54, 68), (242, 102, 81): (42, 38, 50), (198, 54, 43): (24, 20, 28),
+             (93, 0, 40): (16, 14, 20), (122, 0, 74): (24, 20, 28), (151, 0, 25): (30, 27, 36),
+             (200, 7, 24): (42, 38, 50), (226, 46, 30): (58, 54, 68)}
+    WHITE, SHADE = (236, 232, 240, 255), (178, 172, 190, 255)
+    PINK, OUT = (240, 150, 170, 255), (40, 24, 34, 255)
+    dset = set(v + (255,) for v in dress.values())
+    im = Image.open(src).convert("RGBA").crop((0, 0, 64, 128))
+    _remap(im, hair)
+    _remap(im, dress)
+
+    def deck(f, facing):
+        px = f.load()
+        top = next(y for y in range(32) if any(px[x, y][3] for x in range(16)))
+        xs = [x for x in range(16) if px[x, top + 3][3]]
+        x0, x1 = min(xs), max(xs)
+        for x in range(x0 + 1, x1):        # the frilly headband
+            if px[x, top + 3][3]: px[x, top + 3] = WHITE if x % 2 == 0 else SHADE
+        cols = [x0, x1 - 2] if facing in (0, 2) else ([x0 + 2] if facing == 3 else [x1 - 4])
+        for cx in cols:                    # cat ears
+            for dx, dy, c in [(0, -2, OUT), (1, -2, OUT), (0, -1, OUT), (1, -1, PINK), (2, -1, OUT),
+                              (0, 0, PINK if facing != 2 else WHITE), (1, 0, PINK), (2, 0, OUT)]:
+                X, Y = cx + dx, top + dy
+                if 0 <= X < 16 and Y >= 0: px[X, Y] = c
+        rows = [y for y in range(32) if any(px[x, y] in dset for x in range(16))]
+        if not rows: return
+        t, b = rows[0], rows[-1]
+        ds = [x for y in rows for x in range(16) if px[x, y] in dset]
+        cx = (min(ds) + max(ds)) // 2
+        if facing == 0:                    # collar and apron
+            for x in range(cx - 2, cx + 2):
+                if px[x, t] in dset: px[x, t] = WHITE
+            for y in range(t + 5, b):
+                w = 1 if y < t + 7 else 2
+                for x in range(cx - w, cx + w):
+                    if px[x, y] in dset: px[x, y] = WHITE if y < b - 1 else SHADE
+        elif facing == 2:                  # apron straps and the bow at the back
+            for y in range(t, t + 5):
+                for x in (cx - 3, cx + 2):
+                    if px[x, y] in dset: px[x, y] = WHITE
+            wy = t + 5
+            for x in range(cx - 3, cx + 3):
+                if px[x, wy] in dset: px[x, wy] = SHADE
+            for dx, dy in [(-2, -1), (1, -1), (-2, 1), (1, 1), (-1, 0), (0, 0), (-1, 2), (0, 2)]:
+                if px[cx + dx, wy + dy] in dset: px[cx + dx, wy + dy] = WHITE
+        else:                              # the apron's edge
+            side = 1 if facing == 1 else -1
+            for y in range(t + 3, b):
+                xr = [x for x in range(16) if px[x, y] in dset]
+                if not xr: continue
+                edge = max(xr) if side > 0 else min(xr)
+                for k in range(2):
+                    if px[edge - k * side, y] in dset: px[edge - k * side, y] = WHITE
+
+    out = Image.new("RGBA", (64, 160))
+    for row in range(4):
+        for col in range(4):
+            f = im.crop((col * 16, row * 32, col * 16 + 16, row * 32 + 32))
+            deck(f, row)
+            out.paste(f, (col * 16, row * 32))
+    back = out.crop((0, 64, 16, 96))
+    for i in range(4):                     # sitting at her table, typing; the screen glows past her
+        f = Image.new("RGBA", (16, 32))
+        f.paste(back.crop((0, 0, 16, 27)), (0, 4))
+        px = f.load()
+        glow = [(120, 200, 255, 255), (170, 230, 255, 255)][i % 2]
+        for x, y in [(0, 13), (0, 14), (15, 13), (15, 14), (1, 12), (14, 12), (1, 15), (14, 15)]:
+            if not px[x, y][3]: px[x, y] = glow
+        out.paste(f, (i * 16, 128))
+    return out
+
+
+def write_friends(content, data_dir, tex_dir):
+    src_root = ORIG_CONTENT[0] or BASE_CONTENT[0] or content
+    for name, base, make, spot, lines, busy in [
+            ("aleas", "Characters/Shane", _aleas_sheet, ALEAS_SPOT, ALEAS_LINES, "aleas is too busy playing to take that."),
+            ("Siepert", "Characters/Emily", _siepert_sheet, SIEPERT_SPOT, SIEPERT_LINES, "Siepert is too busy typing to take that.")]:
+        src = find_png(src_root, base) or find_png(content, base)
+        if not src:
+            print(f"  ! {base}.png missing: {name} stays home")
+            continue
+        tmp = os.path.join(tex_dir, f"_{name}.png")
+        make(src).save(tmp)
+        convert_texture(tmp, os.path.join(tex_dir, f"Characters_{name}.s3t"))
+        os.remove(tmp)
+        write_prop(data_dir, name, spot, name.lower() + "_3ds", lines, intro="", busy=busy)
 
 
 DEFAULT_LAYOUT = """\
@@ -2842,6 +2988,7 @@ def main():
         print(f"  ! {name}: {err}" if err else f"  {name}  {w}x{h}")
     took("textures")
     write_raiden(os.path.join(out_root, "data"))
+    write_friends(content, os.path.join(out_root, "data"), out_tex)
     if pool:
         pool.shutdown()
 

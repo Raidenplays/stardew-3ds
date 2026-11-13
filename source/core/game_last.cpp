@@ -114,6 +114,38 @@ void Game::lastMapFixes() {
         } else if (mailReceived.count("raccoonTreeFallen")) stamp("Forest_RaccoonStump", 53, 2);
     }
     if (cur->name == "Beach" && squidFest()) stamp("Beach_SquidFest", 11, 3);
+    // Raiden's friends (tools/convert.py ALEAS_SPOT / SIEPERT_SPOT) bring their own furniture, copied
+    // from the Saloon's: aleas an arcade cabinet beside the others, Siepert a table like the rest.
+    if (cur->name == "Saloon" && !cur->stamps.count("friends")) {
+        cur->stamps.insert("friends");
+        TileMap& m = cur->map;
+        auto empty = [&](int x, int y) {
+            return m.inBounds(x, y) && m.tile(L_BUILDINGS, x, y) == NO_TILE && !(m.flags(x, y) & CF_BLOCKED) && m.action(x, y).empty();
+        };
+        auto copy = [&](int l, int sx, int sy, int dx, int dy) {
+            if (m.tile(l, sx, sy) != NO_TILE) m.setTile(l, dx, dy, m.tile(l, sx, sy), m.tileset(l, sx, sy));
+        };
+        for (int y = 0; y < m.height(); y++)
+            for (int x = 0; x < m.width(); x++)
+                if (m.action(x, y) == "Arcade_Prairie" && empty(36, 17)) {   // aleas's cabinet: a Prairie King
+                    copy(L_BUILDINGS, x, y, 36, 17);
+                    copy(L_FRONT, x, y - 1, 36, 16);
+                    m.setFlags(36, 17, m.flags(36, 17) | CF_BLOCKED);
+                    y = m.height(); break;
+                }
+        bool tabled = false;   // Siepert's table: the two-tile round table with the lamp
+        for (int y = 1; y < m.height() && !tabled; y++)
+            for (int x = 0; x + 1 < m.width() && !tabled; x++)
+                if (m.tile(L_BUILDINGS, x, y) == 887 && m.tile(L_BUILDINGS, x + 1, y) == 888 &&
+                    m.tile(L_FRONT, x, y - 1) == 1297 && empty(23, 21) && empty(24, 21)) {
+                    for (int k = 0; k < 2; k++) {
+                        copy(L_BUILDINGS, x + k, y, 23 + k, 21);
+                        copy(L_FRONT, x + k, y - 1, 23 + k, 20);
+                        m.setFlags(23 + k, 21, m.flags(23 + k, 21) | CF_BLOCKED);
+                    }
+                    tabled = true;
+                }
+    }
     // After the Community Center's ceremony JojaMart closes; the Missing Bundle inside turns it into a theater.
     bool ccRoute = !mailReceived.count("JojaMember") && eventsSeen.count("191393");
     if (cur->name == "Town" && ccRoute) {

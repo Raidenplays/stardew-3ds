@@ -342,10 +342,12 @@ void Game::talkTo(NpcState& n) {
         std::vector<const std::string*> facts;
         for (auto& kv : n.def->dialogue)
             if (kv.first.rfind("fact_", 0) == 0) facts.push_back(&kv.second);
+        auto in = n.def->dialogue.find("prop_intro");   // Raiden's friends just say their line
+        std::string intro = in == n.def->dialogue.end() ? "Oh, hey! Did you know...$h#$b#" : in->second == "-" ? "" : in->second + "#$b#";
         uint32_t r = rand32() % facts.size();
         if (facts.size() > 1 && r == n.lastFact) r = (r + 1) % facts.size();
         n.lastFact = r;
-        auto pages = parseDialogue("Oh, hey! Did you know...$h#$b#" + *facts[r], me.name);
+        auto pages = parseDialogue(intro + *facts[r], me.name);
         showDialogue(n, pages);
         return;
     }
@@ -388,7 +390,11 @@ void Game::giveGift(NpcState& n, int slot) {
         if (--sl.count <= 0) sl = Slot();
         return;
     }
-    if (n.def->dialogue.count("fact_0")) { say(n.def->display + " is too busy racing to take that."); return; }
+    if (n.def->dialogue.count("fact_0")) {
+        auto b = n.def->dialogue.find("prop_busy");
+        say(b != n.def->dialogue.end() ? b->second : n.def->display + " is too busy racing to take that.");
+        return;
+    }
     if (sl.type == SLOT_OBJECT && sl.id == 809) {        // a movie ticket: they'll come and watch with you
         for (auto it = mailReceived.begin(); it != mailReceived.end();)
             if (it->rfind("movieGuest:", 0) == 0) it = mailReceived.erase(it); else ++it;
