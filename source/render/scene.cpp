@@ -835,19 +835,17 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                                    // layers (walls/roofs, trunks/leaves) must not come apart in 3D
     }
 
-    // The junimos' golden scrolls on the Community Center walls (townInterior tiles 1824-1833, shimmering)
-    if (g.location().name == "CommunityCenter") {
+    // The junimos' golden scrolls on the Community Center walls (townInterior tiles 1824-1833, shimmering),
+    // and the Missing Bundle's in the abandoned JojaMart
+    if (g.location().name == "CommunityCenter" || g.location().name == "AbandonedJojaMart") {
         auto notes = g.ccNotes();
-        if (!notes.empty())
-            for (size_t i = 0; i < m.tilesets.size(); i++) {
-                if (tsTex[i].find("townInterior") == std::string::npos || tsTex[i].find("_2") != std::string::npos) continue;
-                int cols = tsCols[i] > 0 ? tsCols[i] : 32;
-                uint32_t t = timeMs % 2400;
-                int tile = t < 1000 ? 1824 + (int)(t / 100) : 1833;
-                for (auto& n : notes)
-                    c.image(tsTex[i], (tile % cols) * 16, (tile / cols) * 16, 16, 16, n.x * TILE - camX + c.shift(0.0f), n.y * TILE - camY);
-                break;
-            }
+        if (!notes.empty() && c.texWidth("Maps_townInterior") > 0) {
+            int cols = std::max(1, c.texWidth("Maps_townInterior") / 16);
+            uint32_t t = timeMs % 2400;
+            int tile = t < 1000 ? 1824 + (int)(t / 100) : 1833;
+            for (auto& n : notes)
+                c.image("Maps_townInterior", (tile % cols) * 16, (tile / cols) * 16, 16, 16, n.x * TILE - camX + c.shift(0.0f), n.y * TILE - camY);
+        }
     }
 
     // The bus waits at the stop (LooseSprites/Cursors), on the road above the pavement

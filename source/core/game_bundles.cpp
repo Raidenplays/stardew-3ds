@@ -19,6 +19,11 @@ std::vector<Game::CcNote> Game::ccNotes() const {
         {"Pantry", 14, 5}, {"Crafts Room", 14, 23}, {"Fish Tank", 40, 10},
         {"Boiler Room", 63, 14}, {"Vault", 55, 6}, {"Bulletin Board", 46, 11}};
     std::vector<CcNote> out;
+    if (cur && cur->name == "AbandonedJojaMart") {   // the Missing Bundle, once the center is restored
+        if (roomOpen("Abandoned Joja Mart") && !roomDone("Abandoned Joja Mart") && !mailReceived.count("ccMovieTheater"))
+            out.push_back({"Abandoned Joja Mart", 8, 8});
+        return out;
+    }
     if (!cur || cur->name != "CommunityCenter" || mailReceived.count("JojaMember")) return out;
     bool canRead = canReadJunimo();
     for (auto& sp : SPOTS) {
@@ -52,7 +57,7 @@ bool Game::roomOpen(const std::string& room) const {
     if (room == "Boiler Room") return done >= 2;
     if (room == "Bulletin Board") return done >= 3;
     if (room == "Vault") return done >= 4;
-    if (room == "Abandoned Joja Mart") return ccDone() && !mailReceived.count("JojaMember");
+    if (room == "Abandoned Joja Mart") return ccDone() && !mailReceived.count("JojaMember") && eventsSeen.count("191393");
     return true;
 }
 
@@ -87,7 +92,9 @@ void Game::ccRestore() {
 
 // Overnight the junimos finish what a restored room does for the valley.
 void Game::ccMorning() {
-    for (auto& r : bundleRooms()) {
+    auto rooms = bundleRooms();
+    rooms.push_back("Abandoned Joja Mart");
+    for (auto& r : rooms) {
         const char* fl = roomFlagOf(r);
         if (!*fl || mailReceived.count(fl) || !roomDone(r)) continue;
         mailReceived.insert(fl);
@@ -102,7 +109,8 @@ void Game::ccMorning() {
                 {"Fish Tank", "The junimos have been busy: the glittering boulder in the mountain stream is gone."},
                 {"Boiler Room", "The junimos have been busy: the minecarts are running."},
                 {"Bulletin Board", "The junimos have been busy: the townsfolk seem friendlier."},
-                {"Vault", "The junimos have been busy: the bus is fixed."}};
+                {"Vault", "The junimos have been busy: the bus is fixed."},
+                {"Abandoned Joja Mart", "The junimos have been busy: a movie theater stands where JojaMart was."}};
             for (auto& nt : NOTES) if (r == nt.room) morningNote = nt.note;
         }
     }
@@ -129,6 +137,7 @@ static const char* roomFlag(const std::string& room) {
     if (room == "Boiler Room") return "ccBoilerRoom";
     if (room == "Bulletin Board") return "ccBulletin";
     if (room == "Vault") return "ccVault";
+    if (room == "Abandoned Joja Mart") return "ccMovieTheater";
     return "";
 }
 

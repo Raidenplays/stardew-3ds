@@ -86,6 +86,8 @@ public:
     // Take over the cells marked in `mask` (w*h, nonzero = take) from a map of the same size: every layer,
     // walls, actions and numbered-layer tiles (a room of the Community Center restored from its refurbished map).
     bool copyCells(const TileMap& src, const std::vector<uint8_t>& mask);
+    // The part of this map that has anything on it (a patch drawn on a full-size canvas), and where that part starts.
+    TileMap trimmed(int& ox, int& oy) const;
     // Where a patch map belongs: the offset where most of its ground already matches. ok=false if nothing fits well.
     bool findFit(const TileMap& patch, int& dx, int& dy, int* fitScore = nullptr) const;
     uint32_t rev = 0;   // bumps whenever a tile changes (cached drawings go stale)

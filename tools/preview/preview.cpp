@@ -791,6 +791,10 @@ int main(int argc, char** argv) {
     if (!whereMap.empty()) {
         // time the top screen at a location (centre of the map), per drawing stage
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
+        if (const char* ev = getenv("SEEN")) {   // SEEN=191393: events already seen
+            std::string all = ev, one;
+            for (char ch : all + ",") { if (ch == ',') { if (!one.empty()) g.eventsSeen.insert(one); one.clear(); } else one += ch; }
+        }
         if (const char* ml = getenv("MAIL")) {   // MAIL=ccCraftsRoom,ccPantry: flags set before going there
             std::string all = ml, one;
             for (char ch : all + ",") { if (ch == ',') { if (!one.empty()) g.mailReceived.insert(one); one.clear(); } else one += ch; }

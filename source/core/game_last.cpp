@@ -114,6 +114,47 @@ void Game::lastMapFixes() {
         } else if (mailReceived.count("raccoonTreeFallen")) stamp("Forest_RaccoonStump", 53, 2);
     }
     if (cur->name == "Beach" && squidFest()) stamp("Beach_SquidFest", 11, 3);
+    // After the Community Center's ceremony JojaMart closes; the Missing Bundle inside turns it into a theater.
+    bool ccRoute = !mailReceived.count("JojaMember") && eventsSeen.count("191393");
+    if (cur->name == "Town" && ccRoute) {
+        int doorX = -1, doorY = -1;   // JojaMart's front door (the leftmost of its two tiles)
+        for (int y = 0; y < cur->map.height() && doorX < 0; y++)
+            for (int x = 0; x < cur->map.width(); x++) {
+                const std::string& a = cur->map.action(x, y);
+                if (a.rfind("LockedDoorWarp", 0) == 0 && a.find("JojaMart") != std::string::npos) { doorX = x; doorY = y; break; }
+            }
+        if (mailReceived.count("ccMovieTheater") && !cur->stamps.count("Town-TheaterCC") && data.vfs.exists("maps/Town-TheaterCC.smap")) {
+            TileMap full;
+            if (full.load(data.vfs.path("maps/Town-TheaterCC.smap"), nullptr)) {
+                int ox = 0, oy = 0;
+                TileMap p = full.trimmed(ox, oy);
+                int ex = -1, ey = -1;   // the theater's doors go where JojaMart's were
+                for (int y = 0; y < p.height() && ex < 0; y++)
+                    for (int x = 0; x < p.width(); x++)
+                        if (p.action(x, y) == "Theater_Entrance") { ex = x; ey = y; break; }
+                int x = -1, y = -1;
+                if (doorX >= 0 && ex >= 0) { x = doorX - ex; y = doorY - ey; }
+                else if (!cur->map.findFit(p, x, y)) x = -1;
+                if (x >= 0 && cur->map.stamp(p, x, y)) cur->stamps.insert("Town-TheaterCC");
+            }
+        } else if (!mailReceived.count("ccMovieTheater") && doorX >= 0) {
+            cur->map.setAction(doorX, doorY, "Warp 9 12 AbandonedJojaMart");
+            cur->map.setAction(doorX + 1, doorY, "Warp 9 12 AbandonedJojaMart");
+        }
+    }
+    if (cur->name == "AbandonedJojaMart" && !cur->map.warpTo("Town")) {   // its way out isn't in the map data
+        int doorX = 95, doorY = 50;
+        if (Location* town = locations.count("Town") ? locations["Town"].get() : nullptr)
+            for (int y = 0; y < town->map.height(); y++)
+                for (int x = 0; x < town->map.width(); x++)
+                    if (town->map.action(x, y) == "Warp 9 12 AbandonedJojaMart") { doorX = x; doorY = y; y = town->map.height(); break; }
+        for (int x = 8; x <= 10; x++) {
+            Warp w;
+            w.x = x; w.y = 13; w.target = "Town"; w.tx = doorX; w.ty = doorY + 1;
+            cur->map.warps.push_back(w);
+            cur->map.setFlags(x, 13, 0);
+        }
+    }
     if (cur->name == "Mountain" && mailReceived.count("ccCraftsRoom") && !cur->stamps.count("Mountain-BridgeFixed")) {
         // the junimos mend the bridge to the quarry: the patch goes where its ground matches the mountain's
         TileMap p;

@@ -311,6 +311,29 @@ bool TileMap::stamp(const TileMap& p, int dx, int dy) {
         for (auto& mw : warps) have |= mw.x == pw.x && mw.y == pw.y;
         if (!have) warps.push_back(pw);
     }
+    // numbered layers: the patch's replace the map's on the cells it covers
+    if (!p.overlays.empty() || !overlays.empty()) {
+        auto covers = [&](int x, int y) {
+            int px = x - dx, py = y - dy;
+            if (px < 0 || py < 0 || px >= p.w || py >= p.h) return false;
+            for (int L = 0; L < L_COUNT; L++) if (p.tiles[L][py * p.w + px] != NO_TILE) return true;
+            return false;
+        };
+        std::vector<Overlay> keep;
+        for (auto& o : overlays) if (!covers(o.x, o.y)) keep.push_back(o);
+        for (auto o : p.overlays) {
+            if (o.ts >= tsMap.size() || tsMap[o.ts] < 0) continue;
+            o.ts = (uint8_t)tsMap[o.ts]; o.x = (uint16_t)(o.x + dx); o.y = (uint16_t)(o.y + dy);
+            keep.push_back(o);
+        }
+        std::stable_sort(keep.begin(), keep.end(), [](const Overlay& a, const Overlay& b) {
+            if (a.group != b.group) return a.group < b.group;
+            if (a.y != b.y) return a.y < b.y;
+            return a.x < b.x;
+        });
+        overlays = keep;
+        rowRuns();
+    }
     rev++;
     return true;
 }
@@ -378,5 +401,40 @@ bool TileMap::copyCells(const TileMap& p, const std::vector<uint8_t>& mask) {
     rowRuns();
     rev++;
     return true;
+}
+} // namespace sv
+
+namespace sv {
+TileMap TileMap::trimmed(int& ox, int& oy) const {
+    int x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            for (int L = 0; L < L_COUNT; L++)
+                if (tiles[L][y * w + x] != NO_TILE) { x0 = std::min(x0, x); y0 = std::min(y0, y); x1 = std::max(x1, x); y1 = std::max(y1, y); }
+    for (auto& o : overlays) { x0 = std::min(x0, (int)o.x); y0 = std::min(y0, (int)o.y); x1 = std::max(x1, (int)o.x); y1 = std::max(y1, (int)o.y); }
+    TileMap t;
+    if (x1 < 0) { ox = oy = 0; return t; }
+    ox = x0; oy = y0;
+    t.w = x1 - x0 + 1; t.h = y1 - y0 + 1;
+    t.tilesets = tilesets; t.props = props; t.outdoors = outdoors; t.name = name;
+    for (int L = 0; L < L_COUNT; L++) { t.tiles[L].assign((size_t)t.w * t.h, NO_TILE); t.tsIdx[L].assign((size_t)t.w * t.h, 0); }
+    t.cellFlags.assign((size_t)t.w * t.h, 0);
+    for (int y = 0; y < t.h; y++)
+        for (int x = 0; x < t.w; x++) {
+            size_t si = (size_t)(y + y0) * w + x + x0, di = (size_t)y * t.w + x;
+            for (int L = 0; L < L_COUNT; L++) { t.tiles[L][di] = tiles[L][si]; t.tsIdx[L][di] = tsIdx[L][si]; }
+            t.cellFlags[di] = cellFlags[si];
+        }
+    for (auto& a : actions) {
+        int x = (int)(a.first % (uint32_t)w) - x0, y = (int)(a.first / (uint32_t)w) - y0;
+        if (x >= 0 && y >= 0 && x < t.w && y < t.h) t.actions.push_back({(uint32_t)(y * t.w + x), a.second});
+    }
+    for (auto o : overlays) { o.x = (uint16_t)(o.x - x0); o.y = (uint16_t)(o.y - y0); t.overlays.push_back(o); }
+    t.rowRuns();
+    for (auto wp : warps) {
+        wp.x -= x0; wp.y -= y0;
+        if (wp.x >= 0 && wp.y >= 0 && wp.x < t.w && wp.y < t.h) t.warps.push_back(wp);
+    }
+    return t;
 }
 } // namespace sv
