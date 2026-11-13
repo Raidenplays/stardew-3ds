@@ -176,6 +176,27 @@ void HostCanvas::imageRotated(TexName tex, int sx, int sy, int sw, int sh, float
         }
 }
 
+void HostCanvas::imageStretch(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy, float dw, float dh, uint32_t tint) {
+    const HostTexture* t = get(tex);
+    if (!t || sw <= 0 || sh <= 0) return;
+    draws++;
+    int bx = (int)std::floor(dx), by = (int)std::floor(dy), W = (int)dw, H = (int)dh;
+    for (int y = 0; y < H; y++) {
+        int ty = sy + y * sh / H;
+        if (ty < 0 || ty >= t->h) continue;
+        for (int x = 0; x < W; x++) {
+            int tx = sx + x * sw / W;
+            if (tx < 0 || tx >= t->w) continue;
+            uint32_t c = t->px[(size_t)ty * t->w + tx];
+            if (tint) {
+                auto m = [&](int s) { return ((((c >> s) & 0xFF) * ((tint >> s) & 0xFF)) / 255) << s; };
+                c = m(24) | m(16) | m(8) | (c & 0xFF);
+            }
+            blend(bx + x, by + y, c);
+        }
+    }
+}
+
 void HostCanvas::imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                              float scale, bool flipX, uint32_t tint) {
     const HostTexture* t = get(tex);

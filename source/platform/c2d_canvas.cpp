@@ -175,3 +175,16 @@ int C2DCanvas::preload(TexName tex, int sx, int sy, int sw, int sh, int budget) 
     const Texture* t = get(tex);
     return t ? t->preload(sx, sy, sw, sh, budget) : 0;
 }
+
+void C2DCanvas::imageStretch(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy, float dw, float dh, uint32_t tint) {
+    draws++;
+    const Texture* t = get(tex);
+    if (!t || sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
+    if (tint) {
+        C2D_ImageTint it;
+        C2D_PlainImageTint(&it, toC2D(tint), 1.0f);
+        t->draw(sx, sy, sw, sh, dx, dy, false, &it, dw / sw, dh / sh);
+    } else {
+        t->draw(sx, sy, sw, sh, dx, dy, false, nullptr, dw / sw, dh / sh);
+    }
+}

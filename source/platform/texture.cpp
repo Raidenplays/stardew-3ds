@@ -196,7 +196,8 @@ bool Texture::ensure(TexPage& p) const {
 }
 
 void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
-                   const C2D_ImageTint* tint, float scale) const {
+                   const C2D_ImageTint* tint, float scale, float scaleY) const {
+    if (scaleY <= 0) scaleY = scale;
     // A sprite can straddle the seam between two pages (e.g. the title
     // mountains on Cursors), so draw the part that falls in each page.
     if (gridCols > 0) {
@@ -206,14 +207,14 @@ void Texture::draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flip
         if (c1 >= gridCols) c1 = gridCols - 1;
         if (r1 >= rows) r1 = rows - 1;
         for (int r = r0; r <= r1; r++)
-            for (int cc = c0; cc <= c1; cc++) drawPart(pages[(size_t)r * gridCols + cc], sx, sy, sw, sh, dx, dy, flipX, tint, scale);
+            for (int cc = c0; cc <= c1; cc++) drawPart(pages[(size_t)r * gridCols + cc], sx, sy, sw, sh, dx, dy, flipX, tint, scale, scaleY);
         return;
     }
-    for (const TexPage& p : pages) drawPart(p, sx, sy, sw, sh, dx, dy, flipX, tint, scale);
+    for (const TexPage& p : pages) drawPart(p, sx, sy, sw, sh, dx, dy, flipX, tint, scale, scaleY);
 }
 
 void Texture::drawPart(const TexPage& p, int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
-                       const C2D_ImageTint* tint, float scale) const {
+                       const C2D_ImageTint* tint, float scale, float scaleY) const {
     {
         int x0 = sx > p.x0 ? sx : p.x0, y0 = sy > p.y0 ? sy : p.y0;
         int x1 = sx + sw < p.x0 + p.w ? sx + sw : p.x0 + p.w;
@@ -234,7 +235,7 @@ void Texture::drawPart(const TexPage& p, int sx, int sy, int sw, int sh, float d
         float ox = flipX ? (float)((sx + sw) - x1) : (float)(x0 - sx);
         float oy = (float)(y0 - sy);
         C2D_Image img = {const_cast<C3D_Tex*>(&p.tex), &sub};
-        C2D_DrawImageAt(img, dx + ox * scale, dy + oy * scale, 0.5f, tint, scale, scale);
+        C2D_DrawImageAt(img, dx + ox * scale, dy + oy * scaleY, 0.5f, tint, scale, scaleY);
     }
 }
 

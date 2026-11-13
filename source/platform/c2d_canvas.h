@@ -36,6 +36,7 @@ public:
     float textWidth(const std::string& s, float scale) override;
     int texWidth(TexName tex) override;
     int preload(TexName tex, int sx, int sy, int sw, int sh, int budget = 8) override;
+    void imageStretch(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy, float dw, float dh, uint32_t tint = 0) override;
     int texHeight(TexName tex) override;
     void dropTextures() override {
         cache.clear();

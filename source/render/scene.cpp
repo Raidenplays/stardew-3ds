@@ -53,17 +53,26 @@ static uint32_t mulColor(uint32_t a, uint32_t b) {
 // 9-slice: corners as they are, edges tiled, middle filled with the sheet's colour.
 static void frame9(Canvas& c, const Frame& f, float x, float y, float w, float h, uint32_t tint = 0) {
     x = std::floor(x); y = std::floor(y); w = std::floor(w); h = std::floor(h);
-    int mw = f.w - f.l - f.r, mh = f.h - f.t - f.b;
-    c.rect(x + f.l, y + f.t, w - f.l - f.r, h - f.t - f.b, mulColor(UI_FILL, tint));
-    for (float ex = x + f.l; ex < x + w - f.r; ex += mw) {   // top + bottom edges
-        int seg = (int)std::min((float)mw, x + w - f.r - ex);
-        c.image(UI_TEX, f.x + f.l, f.y, seg, f.t, ex, y, false, tint);
-        c.image(UI_TEX, f.x + f.l, f.y + f.h - f.b, seg, f.b, ex, y + h - f.b, false, tint);
+    // A box no bigger than the frame's own picture (item slots) is its four quarters: 4 draws.
+    int hw = (int)w / 2, hh = (int)h / 2, rw = (int)w - hw, rh = (int)h - hh;
+    if (rw <= f.w - f.r && rh <= f.h - f.b && hw >= f.l && hh >= f.t) {
+        c.image(UI_TEX, f.x, f.y, hw, hh, x, y, false, tint);
+        c.image(UI_TEX, f.x + f.w - rw, f.y, rw, hh, x + hw, y, false, tint);
+        c.image(UI_TEX, f.x, f.y + f.h - rh, hw, rh, x, y + hh, false, tint);
+        c.image(UI_TEX, f.x + f.w - rw, f.y + f.h - rh, rw, rh, x + hw, y + hh, false, tint);
+        return;
     }
-    for (float ey = y + f.t; ey < y + h - f.b; ey += mh) {   // left + right edges
-        int seg = (int)std::min((float)mh, y + h - f.b - ey);
-        c.image(UI_TEX, f.x, f.y + f.t, f.l, seg, x, ey, false, tint);
-        c.image(UI_TEX, f.x + f.w - f.r, f.y + f.t, f.r, seg, x + w - f.r, ey, false, tint);
+    // Otherwise the corners as they are and each edge pulled out to length (the edges are the same
+    // all the way along, so one stretched piece is the picture a row of repeats would make).
+    c.rect(x + f.l, y + f.t, w - f.l - f.r, h - f.t - f.b, mulColor(UI_FILL, tint));
+    float iw = w - f.l - f.r, ih = h - f.t - f.b;
+    if (iw > 0) {
+        c.imageStretch(UI_TEX, f.x + f.l, f.y, 1, f.t, x + f.l, y, iw, (float)f.t, tint);
+        c.imageStretch(UI_TEX, f.x + f.l, f.y + f.h - f.b, 1, f.b, x + f.l, y + h - f.b, iw, (float)f.b, tint);
+    }
+    if (ih > 0) {
+        c.imageStretch(UI_TEX, f.x, f.y + f.t, f.l, 1, x, y + f.t, (float)f.l, ih, tint);
+        c.imageStretch(UI_TEX, f.x + f.w - f.r, f.y + f.t, f.r, 1, x + w - f.r, y + f.t, (float)f.r, ih, tint);
     }
     c.image(UI_TEX, f.x, f.y, f.l, f.t, x, y, false, tint);
     c.image(UI_TEX, f.x + f.w - f.r, f.y, f.r, f.t, x + w - f.r, y, false, tint);
@@ -512,6 +521,102 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
             }
     };
 
+    // ---- What lies on the ground: paths, tilled soil, sticks and stones, crops, grass.
+    // None of it moves, so with the map cache on it is painted into the ground picture with the tiles
+    // and only the few tiles that need it are drawn again each frame: ones that changed since the
+    // picture was made, grass that is swaying, and crops and grass next to anything that walks or
+    // stands (so they still overlap its feet the right way).
+    const Location& hereG = g.location();
+    const int mapWt = m.width();
+    const bool cropLand = g.cropLand();
+    const bool hasGrassG = !hereG.grass.empty(), hasFloorsG = !hereG.floors.empty();
+    const void* grassTex = c.texLookup("TerrainFeatures_grass");
+    const void* dirtTex = c.texLookup("TerrainFeatures_hoeDirt");
+    const void* objTex = c.texLookup("Maps_springobjects");
+    const bool wetHalf = cropLand && c.texWidth("TerrainFeatures_hoeDirt") >= 128;
+    const char* floorSheet = hasFloorsG && g.season == WINTER && cropLand && c.texWidth("TerrainFeatures_Flooring_winter") >= 256
+                                 ? "TerrainFeatures_Flooring_winter" : "TerrainFeatures_Flooring";
+    const void* floorTex = hasFloorsG ? c.texLookup(floorSheet) : nullptr;
+    auto tilledAt = [&](int x, int y) { return m.inBounds(x, y) && hereG.soils[(size_t)y * mapWt + x].tilled; };
+    auto floorKind = [&](int x, int y) { return hasFloorsG && m.inBounds(x, y) ? (int)hereG.floors[(size_t)y * mapWt + x] - 1 : -1; };
+    auto drawFloorAt = [&](int x, int y, float dx, float dy) {
+        int kind = floorKind(x, y);
+        if (kind < 0) return;
+        bool u = floorKind(x, y - 1) == kind, d = floorKind(x, y + 1) == kind;
+        bool l = floorKind(x - 1, y) == kind, rr = floorKind(x + 1, y) == kind;
+        int col = !l && !rr ? 0 : !l ? 1 : rr ? 2 : 3;
+        int row = col == 0 ? (!u && !d ? 0 : !u ? 1 : d ? 2 : 3) : (!u && !d ? 3 : !u ? 0 : d ? 1 : 2);
+        c.imageTex(floorTex, floorSheet, (kind % 4) * 64 + col * 16, (kind / 4) * 64 + row * 16, 16, 16, dx, dy);
+    };
+    auto drawSoilAt = [&](int x, int y, float dx, float dy) {
+        const Soil& so = hereG.soils[(size_t)y * mapWt + x];
+        if (!so.tilled) return;
+        int idx = hoeDirtIndex(tilledAt(x, y - 1), tilledAt(x + 1, y), tilledAt(x, y + 1), tilledAt(x - 1, y));
+        int sx = (idx % 4) * 16, sy = (idx / 4) * 16;
+        c.imageTex(dirtTex, "TerrainFeatures_hoeDirt", sx, sy, 16, 16, dx, dy);
+        if (so.watered) {
+            if (wetHalf) c.imageTex(dirtTex, "TerrainFeatures_hoeDirt", sx + 64, sy, 16, 16, dx, dy);
+            else c.image("TerrainFeatures_hoeDirt", sx, sy, 16, 16, dx, dy, false, RGBA(0x90, 0x80, 0x80));
+        }
+    };
+    auto drawDebrisAt = [&](int x, int y, float dx, float dy) {
+        static const int weeds[2] = {674, 675}, stones[2] = {343, 450}, twigs[2] = {294, 295};
+        size_t i = (size_t)y * mapWt + x;
+        int v = hereG.debrisVar[i] & 1;
+        DebrisType d = (DebrisType)hereG.debris[i];
+        if (d == DEB_NONE) return;
+        int idx = d == DEB_WEED ? weeds[v] : d == DEB_STONE ? stones[v] : twigs[v];
+        c.imageTex(objTex, "Maps_springobjects", (idx % 24) * 16, (idx / 24) * 16, 16, 16, dx, dy);
+    };
+    auto drawCropAt = [&](int x, int y, float dx, float dy) {
+        const Soil& so = hereG.soils[(size_t)y * mapWt + x];
+        const CropDef* cd = so.seed >= 0 ? g.data.cropForSeed(so.seed) : nullptr;
+        if (!cd) return;
+        int frame = g.cropFrame(x, y);
+        int sx = (cd->spriteIndex % 2) * 128 + frame * 16, sy = (cd->spriteIndex / 2) * 32;
+        c.image(cd->texture, sx, sy, 16, 32, dx, dy - 16, ((x + y) & 1) != 0, so.dead ? RGBA(0x90, 0x70, 0x40) : 0);
+    };
+    auto drawGrassAt = [&](int x, int y, float dx, float dy, float sway) {   // 1-4 tufts
+        int cell = y * mapWt + x;
+        uint8_t v = hereG.grass[(size_t)cell];
+        int n = v & 7;
+        int row = (v & 8) ? 160 : g.season == SUMMER ? 20 : g.season == FALL ? 40 : g.season == WINTER ? 80 : 0;
+        for (int k = 0; k < n; k++) {
+            uint32_t h = (uint32_t)(cell * 4 + k) * 2654435761u;
+            int variant = (h >> 13) % 3;
+            float ox = (k & 1) * 7 - 3 + (float)((h >> 5) % 3), oy = (k >> 1) * 6 - 12;
+            float sw = k & 1 ? sway : -sway;
+            c.imageTex(grassTex, "TerrainFeatures_grass", variant * 15, row, 15, 20, std::floor(dx + ox + sw), dy + oy);
+        }
+    };
+    // everything about a tile that decides what the ground picture shows there
+    auto groundSig = [&](int x, int y) -> uint32_t {
+        size_t i = (size_t)y * mapWt + x;
+        uint32_t sg = hereG.debris[i] | ((hereG.debrisVar[i] & 1u) << 3);
+        if (hasGrassG) sg |= (uint32_t)hereG.grass[i] << 4;
+        if (hasFloorsG && hereG.floors[i]) {
+            int kind = hereG.floors[i] - 1;
+            sg |= (uint32_t)(kind + 1) << 8;
+            sg |= (uint32_t)((floorKind(x, y - 1) == kind) | (floorKind(x + 1, y) == kind) << 1 | (floorKind(x, y + 1) == kind) << 2 | (floorKind(x - 1, y) == kind) << 3) << 16;
+        }
+        const Soil& so = hereG.soils[i];
+        if (so.tilled || so.seed >= 0) {
+            uint32_t t = 1u | (uint32_t)so.watered << 1 | (uint32_t)so.dead << 2 | (uint32_t)so.regrown << 3 | (uint32_t)(so.regrowWait > 0) << 4 |
+                         (uint32_t)(so.variant & 1) << 5 | (uint32_t)so.phase << 6;
+            if (so.tilled) t |= (uint32_t)(tilledAt(x, y - 1) | tilledAt(x + 1, y) << 1 | tilledAt(x, y + 1) << 2 | tilledAt(x - 1, y) << 3) << 14;
+            sg = (sg * 16777619u) ^ (t * 2654435761u) ^ ((uint32_t)(so.seed + 1) * 40503u);
+        }
+        return sg;
+    };
+    static std::vector<uint32_t> snap;            // the signatures the ground picture was painted from
+    static int snX0 = 0, snY0 = 0, snW = 0, snH = 0;
+    static const TileMap* snapMap = nullptr;
+    static std::vector<uint32_t> curSig;          // and as last looked at (same window)
+    static std::vector<uint16_t> gList;           // the tiles in view with anything to draw this frame
+    static std::vector<uint8_t> gmask;            // per tile in view: G_PATCH, G_TALL
+    enum { G_PATCH = 1, G_TALL = 2 };
+    const int vw = x1 - x0 + 1, vh = y1 - y0 + 1;
+
     // Map cache: Back + Buildings drawn once into an offscreen picture around the
     // camera; each frame shows it as one image, plus the animated tiles live.
     // Two pictures: [0] the ground and buildings, [1] the tiles drawn over everything. Each keeps its own window
@@ -521,8 +626,28 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     static float lastCamX = 0, lastCamY = 0;
     MapCache& mc = mcs[0];
     bool cached = g_useMapCache && c.cacheSupported();
+    bool groundCached = false;         // the ground picture holds the paths, soil, crops, grass and stones too
     if (!cached) mcs[0].ok = mcs[1].ok = false;
     bool frontLive = false;            // this frame the front tiles are drawn one by one (their picture is being caught up)
+    if (cached && mcs[0].ok && snapMap == &m && snW > 0) {
+        // Has the ground changed since its picture was painted? Looked at every frame around you (where
+        // tools reach), and a few rows of the rest in turn (anything further off shows within a moment).
+        static int turn = 0;
+        auto look = [&](int ax0, int ay0, int ax1, int ay1) {
+            ax0 = std::max(ax0, snX0); ay0 = std::max(ay0, snY0);
+            ax1 = std::min(ax1, snX0 + snW - 1); ay1 = std::min(ay1, snY0 + snH - 1);
+            for (int y = ay0; y <= ay1; y++)
+                for (int x = ax0; x <= ax1; x++) curSig[(size_t)(y - snY0) * snW + (x - snX0)] = groundSig(x, y);
+        };
+        int ptx = (int)g.px / TILE, pty = (int)g.py / TILE;
+        look(ptx - 7, pty - 7, ptx + 7, pty + 7);
+        turn = (turn + 4) % snH;
+        look(snX0, snY0 + turn, snX0 + snW - 1, snY0 + turn + 3);
+        for (auto& r : hereG.rustles) { int rx = r.cell % mapWt, ry = r.cell / mapWt; look(rx, ry, rx, ry); }
+        int changed = 0;
+        for (size_t i = 0; i < snap.size(); i++) changed += snap[i] != curSig[i];
+        if (changed > 40) mcs[0].ok = false;   // a lot (a new day, a field watered): paint it again rather than patch it
+    }
     if (cached) {
         const int CS = Canvas::CACHE_SIZE;
         int dirX = camX > lastCamX ? 1 : camX < lastCamX ? -1 : 0, dirY = camY > lastCamY ? 1 : camY < lastCamY ? -1 : 0;
@@ -580,6 +705,31 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                     for (const TileDraw& d : tileDraws) c.imageTex(tsHandle[d.ts], tsTex[d.ts], d.sx, d.sy, 16, 16, d.dx, d.dy);
                     drawOverlays(layer == L_BACK ? 0 : layer == L_BUILDINGS ? 1 : layer == L_FRONT ? 2 : 3, cx0, cy0, cx1, cy1, (float)k.ox, (float)k.oy, 0.0f);
                 }
+                if (which == 0) {   // ...and what lies on the ground (a tile further out each way: tall things reach in)
+                    snX0 = std::max(0, cx0 - 1); snY0 = std::max(0, cy0 - 1);
+                    snW = std::min(m.width() - 1, cx1 + 1) - snX0 + 1;
+                    snH = std::min(m.height() - 1, cy1 + 3) - snY0 + 1;
+                    snapMap = &m;
+                    snap.resize((size_t)snW * snH);
+                    curSig.resize(snap.size());
+                    for (int y = snY0; y < snY0 + snH; y++)
+                        for (int x = snX0; x < snX0 + snW; x++) {
+                            curSig[(size_t)(y - snY0) * snW + (x - snX0)] = snap[(size_t)(y - snY0) * snW + (x - snX0)] = groundSig(x, y);
+                            drawFloorAt(x, y, (float)(x * TILE - k.ox), (float)(y * TILE - k.oy));
+                        }
+                    if (cropLand)
+                        for (int y = snY0; y < snY0 + snH; y++)
+                            for (int x = snX0; x < snX0 + snW; x++) drawSoilAt(x, y, (float)(x * TILE - k.ox), (float)(y * TILE - k.oy));
+                    for (int y = snY0; y < snY0 + snH; y++) {   // row by row, back to front
+                        float dy = (float)(y * TILE - k.oy);
+                        if (hasGrassG)
+                            for (int x = snX0; x < snX0 + snW; x++)
+                                if (hereG.grass[(size_t)y * mapWt + x]) drawGrassAt(x, y, (float)(x * TILE - k.ox), dy, 0.0f);
+                        for (int x = snX0; x < snX0 + snW; x++)
+                            if (hereG.soils[(size_t)y * mapWt + x].seed >= 0) drawCropAt(x, y, (float)(x * TILE - k.ox), dy);
+                        for (int x = snX0; x < snX0 + snW; x++) drawDebrisAt(x, y, (float)(x * TILE - k.ox), dy);
+                    }
+                }
                 c.cacheEnd(which);
             }
         }
@@ -602,6 +752,84 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                                y * TILE - camY);
                 }
             }
+        // Which tiles in view are drawn over the picture this frame
+        groundCached = mcs[0].ok && snapMap == &m && vw > 0 && vh > 0;
+        if (groundCached) {
+            gmask.assign((size_t)vw * vh, 0);
+            auto mark = [&](int x, int y, uint8_t bit) {
+                if (x >= x0 && x <= x1 && y >= y0 && y <= y1) gmask[(size_t)(y - y0) * vw + (x - x0)] |= bit;
+            };
+            // A tile that changed is redrawn from the ground up, and so are the tiles its old grass or
+            // crop leaned over (beside it and above it), since the picture still shows that there.
+            auto patch = [&](int x, int y) {
+                for (int dy = -1; dy <= 0; dy++)
+                    for (int dx = -1; dx <= 1; dx++) mark(x + dx, y + dy, G_PATCH);
+            };
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++) {
+                    bool in = x >= snX0 && y >= snY0 && x < snX0 + snW && y < snY0 + snH;
+                    size_t si = (size_t)(y - snY0) * snW + (x - snX0);
+                    if (!in || snap[si] != curSig[si]) patch(x, y);
+                }
+            for (auto& r : hereG.rustles) patch(r.cell % mapWt, r.cell / mapWt);   // swaying grass
+            // ...and whatever leans over a redrawn tile from beside or below is drawn again on top of it
+            for (int y = y1; y >= y0; y--)
+                for (int x = x0; x <= x1; x++)
+                    if (gmask[(size_t)(y - y0) * vw + (x - x0)] & G_PATCH)
+                        for (int dy = 0; dy <= 1; dy++)
+                            for (int dx = -1; dx <= 1; dx++) mark(x + dx, y + dy, G_TALL);
+            // crops and grass around anything standing or walking are drawn in turn with it
+            // something that stands still: only what grows in the row below reaches up over its foot
+            auto nearT = [&](int tx, int ty, int w) {
+                if (tx > x1 + 1 || tx + w < x0 - 1 || ty > y1 || ty < y0 - 1) return;   // nowhere near the view
+                for (int dx = -1; dx <= w; dx++) mark(tx + dx, ty + 1, G_TALL);
+            };
+            // something that walks: its own row (it can be in front of or behind that grass) and the row below
+            auto near = [&](float px, float py, int w) {
+                int tx = (int)px / TILE, ty = (int)py / TILE;
+                for (int dy = 0; dy <= 1; dy++)
+                    for (int dx = -1; dx <= w; dx++) mark(tx + dx, ty + dy, G_TALL);
+            };
+            if (cs.active) {
+                for (auto& a : cs.actors) if (a.visible) near(a.x, a.y, 1);
+            } else {
+                near(g.px, g.py, 1);
+                for (auto& n : g.npcs) if (n.loc == hereG.name) near(n.x, n.y, 1);
+            }
+            for (auto& pt : g.pets) if (pt.loc == hereG.name) near(pt.x, pt.y, 1);
+            for (auto& mo : hereG.monsters) near(mo.x, mo.y, 1);
+            if (!g.riding && g.horseLoc == hereG.name) near(g.horseX, g.horseY, 2);
+            for (auto& pl : g.placedHere()) nearT(pl.x, pl.y, 1);
+            for (auto& o : hereG.objects) nearT(o.x, o.y, 1);
+            for (auto& t : hereG.trees) nearT(t.x, t.y, 1);
+            for (auto& t : hereG.fruitTrees) nearT(t.x, t.y, 1);
+            for (auto& b : hereG.clumps) nearT(b.x, b.y + 1, 2);
+            for (auto& b : hereG.bushes) nearT(b.x, b.y, 3);
+            if (hereG.isFarm) {
+                for (auto& fb : g.buildings)
+                    if (const BuildingType* bt = g.typeOf(fb)) nearT(fb.x, fb.y + bt->h - 1, bt->w);
+                for (auto& b : g.data.layout.buildings) nearT(b.tileX, b.tileY + b.footH - 1, b.footW);
+            }
+            gList.clear();
+            for (size_t i = 0; i < gmask.size(); i++)
+                if (gmask[i]) gList.push_back((uint16_t)i);
+            // the changed tiles: the map's own tiles first, over what the picture still shows there
+            float sh0 = c.shift(0.0f);
+            for (uint16_t gi : gList) {
+                    if (!(gmask[gi] & G_PATCH)) continue;
+                    int x = x0 + gi % vw, y = y0 + gi / vw;
+                    for (int layer : {L_BACK, L_BUILDINGS}) {
+                        uint16_t t = m.tile(layer, x, y);
+                        if (t != NO_TILE) {
+                            int ts = m.tileset(layer, x, y);
+                            int cols = tsCols[ts];
+                            if (cols > 0 && !m.isAnimated(ts, t))
+                                c.imageTex(tsHandle[ts], tsTex[ts], (t % cols) * 16, (t / cols) * 16, 16, 16, x * TILE - camX + sh0, y * TILE - camY);
+                        }
+                        drawOverlays(layer == L_BACK ? 0 : 1, x, y, x, y, camX, camY, 0.0f);
+                    }
+                }
+        }
     } else {
         drawLayer(L_BACK, 0.0f);   // the whole world sits at one depth: objects split across
                                    // layers (walls/roofs, trunks/leaves) must not come apart in 3D
@@ -611,42 +839,25 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     if (g.location().name == "BusStop")
         c.image("LooseSprites_Cursors", 288, 1247, 128, 64, 20 * TILE - camX + c.shift(0.0f), 6 * TILE + 4 - camY);
 
-    // Paths and floors: each kind is a 4x4 block of pieces that join up with their neighbours
-    if (!g.location().floors.empty()) {
+    // Paths and floors, then tilled soil (only the changed tiles when the picture already has them)
+    {
         float sh = c.shift(0.0f);
-        const char* sheet = g.season == WINTER && c.texWidth("TerrainFeatures_Flooring_winter") >= 256 && g.cropLand()
-                                ? "TerrainFeatures_Flooring_winter" : "TerrainFeatures_Flooring";
-        for (int y = y0; y <= y1; y++)
-            for (int x = x0; x <= x1; x++) {
-                if (!m.inBounds(x, y)) continue;
-                int kind = g.floorAt(x, y);
-                if (kind < 0) continue;
-                bool u = g.floorAt(x, y - 1) == kind, d = g.floorAt(x, y + 1) == kind;
-                bool l = g.floorAt(x - 1, y) == kind, rr = g.floorAt(x + 1, y) == kind;
-                int col = !l && !rr ? 0 : !l ? 1 : rr ? 2 : 3;
-                int row = col == 0 ? (!u && !d ? 0 : !u ? 1 : d ? 2 : 3) : (!u && !d ? 3 : !u ? 0 : d ? 1 : 2);
-                c.image(sheet, (kind % 4) * 64 + col * 16, (kind / 4) * 64 + row * 16, 16, 16, x * TILE - camX + sh, y * TILE - camY);
-            }
-    }
-
-    // Tilled soil
-    if (g.cropLand()) {
-        bool wetHalf = c.texWidth("TerrainFeatures_hoeDirt") >= 128;
-        auto tilled = [&](int x, int y) { return m.inBounds(x, y) && g.soil(x, y).tilled; };
-        float sh = c.shift(0.0f);
-        for (int y = y0; y <= y1; y++)
-            for (int x = x0; x <= x1; x++) {
-                const Soil& s = g.soil(x, y);
-                if (!s.tilled) continue;
-                int idx = hoeDirtIndex(tilled(x, y - 1), tilled(x + 1, y), tilled(x, y + 1), tilled(x - 1, y));
-                int sx = (idx % 4) * 16, sy = (idx / 4) * 16;
-                float dx = x * TILE - camX + sh, dy = y * TILE - camY;
-                c.image("TerrainFeatures_hoeDirt", sx, sy, 16, 16, dx, dy);
-                if (s.watered) {
-                    if (wetHalf) c.image("TerrainFeatures_hoeDirt", sx + 64, sy, 16, 16, dx, dy);
-                    else c.image("TerrainFeatures_hoeDirt", sx, sy, 16, 16, dx, dy, false, RGBA(0x90, 0x80, 0x80));
+        if (groundCached) {
+            for (int pass = 0; pass < 2; pass++)
+                for (uint16_t gi : gList) {
+                    if (!(gmask[gi] & G_PATCH)) continue;
+                    int x = x0 + gi % vw, y = y0 + gi / vw;
+                    if (pass == 0) drawFloorAt(x, y, x * TILE - camX + sh, y * TILE - camY);
+                    else if (cropLand) drawSoilAt(x, y, x * TILE - camX + sh, y * TILE - camY);
                 }
-            }
+        } else {
+            if (hasFloorsG)
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++) drawFloorAt(x, y, x * TILE - camX + sh, y * TILE - camY);
+            if (cropLand)
+                for (int y = y0; y <= y1; y++)
+                    for (int x = x0; x <= x1; x++) drawSoilAt(x, y, x * TILE - camX + sh, y * TILE - camY);
+        }
     }
 
     if (!cached) {
@@ -659,13 +870,20 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
     static std::vector<DrawItem> items;
     items.clear();
     const Location& here = g.location();
-    bool hasGrass = !here.grass.empty();
-    for (int y = y0; y <= y1; y++)
-        for (int x = x0; x <= x1; x++) {
-            if (g.debris(x, y) != DEB_NONE) items.push_back({(float)(y * TILE + 15), 0, x, y});
-            if (g.soil(x, y).seed >= 0) items.push_back({(float)(y * TILE + 14), 1, x, y});
-            if (hasGrass && here.grass[(size_t)y * m.width() + x]) items.push_back({(float)(y * TILE + 10), 10, x, y});
+    {
+        auto ground = [&](int x, int y, uint8_t mk) {
+            size_t i = (size_t)y * mapWt + x;
+            if ((mk & G_PATCH) && here.debris[i] != DEB_NONE) items.push_back({(float)(y * TILE + 15), 0, x, y});
+            if (here.soils[i].seed >= 0) items.push_back({(float)(y * TILE + 14), 1, x, y});
+            if (hasGrassG && here.grass[i]) items.push_back({(float)(y * TILE + 10), 10, x, y});
+        };
+        if (groundCached) {   // the rest is in the ground picture
+            for (uint16_t gi : gList) ground(x0 + gi % vw, y0 + gi / vw, gmask[gi]);
+        } else {
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++) ground(x, y, G_PATCH | G_TALL);
         }
+    }
     for (size_t i = 0; i < here.bushes.size(); i++) {
         const Location::Bush& b = here.bushes[i];
         if (b.x >= x0 - 3 && b.x <= x1 && b.y >= y0 && b.y <= y1 + 3) items.push_back({(float)((b.y + 1) * TILE - 2), 11, (int)i, 0});
@@ -700,7 +918,6 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
         const Location::Clump& b = here.clumps[i];
         if (b.x >= x0 - 2 && b.x <= x1 && b.y >= y0 - 2 && b.y <= y1) items.push_back({(float)((b.y + 2) * TILE - 2), 12, (int)i, 0});
     }
-    const void* grassTex = c.texLookup("TerrainFeatures_grass");
     if (g.location().isFarm)
         for (size_t i = 0; i < g.data.layout.buildings.size(); i++) {
             auto& b = g.data.layout.buildings[i];
@@ -743,25 +960,8 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
 
     for (auto& it : items) {
         switch (it.kind) {
-            case 0: {
-                static const int weeds[2] = {674, 675}, stones[2] = {343, 450}, twigs[2] = {294, 295};
-                int v = g.debrisVariant(it.a, it.b) & 1;
-                DebrisType d = g.debris(it.a, it.b);
-                int idx = d == DEB_WEED ? weeds[v] : d == DEB_STONE ? stones[v] : twigs[v];
-                objectIcon(c, idx, it.a * TILE - camX, it.b * TILE - camY);
-                break;
-            }
-            case 1: {
-                const Soil& s = g.soil(it.a, it.b);
-                const CropDef* cd = g.data.cropForSeed(s.seed);
-                if (!cd) break;
-                int frame = g.cropFrame(it.a, it.b);
-                int sx = (cd->spriteIndex % 2) * 128 + frame * 16, sy = (cd->spriteIndex / 2) * 32;
-                c.image(cd->texture, sx, sy, 16, 32, it.a * TILE - camX,
-                        it.b * TILE - 16 - camY, ((it.a + it.b) & 1) != 0,
-                        s.dead ? RGBA(0x90, 0x70, 0x40) : 0);
-                break;
-            }
+            case 0: drawDebrisAt(it.a, it.b, it.a * TILE - camX, it.b * TILE - camY); break;
+            case 1: drawCropAt(it.a, it.b, it.a * TILE - camX, it.b * TILE - camY); break;
             case 2: {
                 auto& b = g.data.layout.buildings[it.a];
                 float dx = b.tileX * TILE + (b.footW * TILE - b.srcW) / 2.0f - camX;
@@ -935,22 +1135,12 @@ static void drawWorld(Canvas& c, Game& g, uint32_t timeMs) {
                 }
                 break;
             }
-            case 10: {   // 1-4 grass tufts, swaying for a moment after you walk through
-                uint8_t v = here.grass[(size_t)it.b * m.width() + it.a];
-                int n = v & 7;
-                int row = (v & 8) ? 160 : g.season == SUMMER ? 20 : g.season == FALL ? 40 : g.season == WINTER ? 80 : 0;
+            case 10: {   // grass, swaying for a moment after you walk through
                 float sway = 0;
-                int cell = it.b * m.width() + it.a;
+                int cell = it.b * mapWt + it.a;
                 for (auto& r : here.rustles)
                     if (r.cell == cell) sway = std::sin(r.t * 30.0f) * 2.0f * (r.t / 0.5f);
-                float tx = it.a * TILE - camX, ty = it.b * TILE - camY;
-                for (int k = 0; k < n; k++) {
-                    uint32_t h = (uint32_t)(cell * 4 + k) * 2654435761u;
-                    int variant = (h >> 13) % 3;
-                    float ox = (k & 1) * 7 - 3 + (float)((h >> 5) % 3), oy = (k >> 1) * 6 - 12;
-                    float s = k & 1 ? sway : -sway;
-                    c.imageTex(grassTex, "TerrainFeatures_grass", variant * 15, row, 15, 20, std::floor(tx + ox + s), ty + oy);
-                }
+                drawGrassAt(it.a, it.b, it.a * TILE - camX, it.b * TILE - camY, sway);
                 break;
             }
             case 14: {   // a farm building (see-through while Robin works on it)

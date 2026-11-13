@@ -542,6 +542,27 @@ int main(int argc, char** argv) {
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
     if (const char* b = getenv("BATTERY")) { ui.battery = atoi(b); ui.batteryPct = atoi(b) * 20 - 7; ui.charging = atoi(b) == 2; }
+    if (getenv("GROUNDTEST")) {   // the ground picture patched after changes must match one painted fresh
+        g.teleport("Farm", 62, 22);
+        step(g, ui, none, 5);
+        shot(c, g, ui, "ground_before");
+        Location& L = const_cast<Location&>(g.location());
+        int W = L.map.width();
+        for (int y = 20; y <= 23; y++)
+            for (int x = 58; x <= 61; x++) { L.debris[(size_t)y * W + x] = DEB_NONE; if (!L.grass.empty()) L.grass[(size_t)y * W + x] = 0; }
+        for (int x = 58; x <= 61; x++) { Soil& so = L.soils[(size_t)21 * W + x]; so.tilled = true; so.watered = x & 1; }
+        L.soils[(size_t)22 * W + 59].tilled = true;
+        L.soils[(size_t)21 * W + 59].seed = 472;
+        L.soils[(size_t)21 * W + 59].phase = 2;
+        if (!L.grass.empty()) { L.grass[(size_t)24 * W + 64] = 4; L.grass[(size_t)24 * W + 65] = 3; L.grass[(size_t)23 * W + 63] = 0; }
+        L.debris[(size_t)24 * W + 66] = DEB_STONE;
+        step(g, ui, none, 2);
+        shot(c, g, ui, "ground_patched");
+        ui.mapCache = 0;
+        shot(c, g, ui, "ground_fresh");
+        ui.mapCache = 1;
+        return 0;
+    }
     if (getenv("NIGHT")) {   // the end of a day: the bed's question, the shipping screen, the date scroll
         g_nightShow = true;
         g.teleport("FarmHouse", 9, 8);

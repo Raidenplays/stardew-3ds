@@ -36,7 +36,7 @@ public:
     void drawRotated(int sx, int sy, int sw, int sh, float cx, float cy, float radians,
                      const C2D_ImageTint* tint) const;
     void draw(int sx, int sy, int sw, int sh, float dx, float dy, bool flipX = false,
-              const C2D_ImageTint* tint = nullptr, float scale = 1.0f) const;
+              const C2D_ImageTint* tint = nullptr, float scale = 1.0f, float scaleY = 0.0f) const;   // scaleY 0 = same as scale
 
     int width = 0, height = 0;
 
@@ -52,7 +52,7 @@ public:
     // mid-scene. At most `budget` pages; returns how many it loaded.
     int preload(int sx, int sy, int sw, int sh, int budget) const;
     void drawPart(const TexPage& p, int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
-                  const C2D_ImageTint* tint, float scale) const;
+                  const C2D_ImageTint* tint, float scale, float scaleY) const;
     std::string path;
     bool packed = false, v2 = false;
     int gridCols = 0, gridW = 0, gridH = 0;   // pages form a regular grid (0 = search them all)

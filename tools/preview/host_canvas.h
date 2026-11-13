@@ -41,6 +41,7 @@ public:
     int texWidth(TexName tex) override;
     int texHeight(TexName tex) override;
     void dropTextures() override { cache.clear(); }
+    void imageStretch(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy, float dw, float dh, uint32_t tint = 0) override;
     bool cacheSupported() override { return true; }
     void cacheBegin(int which = 0) override;
     void cacheEnd(int which = 0) override;

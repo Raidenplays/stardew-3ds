@@ -168,6 +168,14 @@ public:
     // Whole-number scaling (2x, 3x) stays sharp: used for the farmer preview.
     virtual void imageScaled(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy,
                              float scale, bool flipX = false, uint32_t tint = 0) = 0;
+    // One piece of a sheet pulled out to dw x dh (frame edges: one draw instead of a row of repeats).
+    // Canvases without it repeat the piece.
+    virtual void imageStretch(TexName tex, int sx, int sy, int sw, int sh, float dx, float dy, float dw, float dh, uint32_t tint = 0) {
+        if (sw <= 0 || sh <= 0) return;
+        for (float y = 0; y < dh; y += sh)
+            for (float x = 0; x < dw; x += sw)
+                image(tex, sx, sy, (int)std::min((float)sw, dw - x), (int)std::min((float)sh, dh - y), dx + x, dy + y, false, tint);
+    }
     virtual void rect(float x, float y, float w, float h, uint32_t color) = 0;
     virtual void line(float x1, float y1, float x2, float y2, uint32_t color, float width) = 0;
     // scale 0.5 is roughly a 15px-tall line, like the 3DS system font
