@@ -1,3 +1,4 @@
+#include <chrono>
 #include "audio/audio.h"
 
 #include <cctype>
@@ -105,6 +106,8 @@ static std::unordered_map<std::string, std::shared_ptr<Pcm>> g_waves;
 static size_t g_waveBytes = 0;
 static const size_t WAVE_CACHE_MAX = 3u << 20;
 
+unsigned g_sfxDecodes = 0, g_sfxDecodeMs = 0;   // for the performance readout: sounds read off the card, and how long that took
+
 std::shared_ptr<Pcm> Engine::loadSfx(const std::string& cue, float& vol) {
     std::unique_ptr<Decoder> d;
     std::string waveKey;
@@ -123,6 +126,7 @@ std::shared_ptr<Pcm> Engine::loadSfx(const std::string& cue, float& vol) {
         d = openWave(path, e);
     }
     if (!d) return nullptr;
+    auto t0 = std::chrono::steady_clock::now();
     auto p = std::make_shared<Pcm>();
     p->channels = d->channels;
     p->rate = d->rate;
@@ -133,6 +137,8 @@ std::shared_ptr<Pcm> Engine::loadSfx(const std::string& cue, float& vol) {
         if (p->data.size() > (size_t)p->rate * p->channels * 20) break;   // sanity: 20 s max
     }
     if (p->data.empty()) return nullptr;
+    g_sfxDecodes++;
+    g_sfxDecodeMs += (unsigned)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
     if (!waveKey.empty()) {
         if (g_waveBytes > WAVE_CACHE_MAX) {   // plenty kept: start again (anything still playing keeps its own copy)
             g_waves.clear();

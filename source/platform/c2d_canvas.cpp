@@ -170,3 +170,8 @@ void C2DCanvas::cacheDraw(int sx, int sy, int sw, int sh, float dx, float dy, in
         C2D_DrawImageAt(img, dx, dy + sh, 0.5f, nullptr, 1.0f, -1.0f);
     }
 }
+
+int C2DCanvas::preload(TexName tex, int sx, int sy, int sw, int sh, int budget) {
+    const Texture* t = get(tex);
+    return t ? t->preload(sx, sy, sw, sh, budget) : 0;
+}

@@ -1736,6 +1736,26 @@ void nightAdvance(Game& g, Ui& ui) {
 void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
     if (g.arcade.game) { drawArcade(c, g); return; }
     if (ui.night) { drawNight(c, g, ui); return; }
+    {   // a scene is starting: get its cast's sprites and faces into memory now, behind the fade,
+        // so they don't load one by one (a stutter each) as people walk on and speak
+        static bool wasActive = false;
+        static size_t cast = 0;
+        if (g.cutscene.active && (!wasActive || g.cutscene.actors.size() != cast)) {
+            int left = 16;
+            for (auto& a : g.cutscene.actors) {
+                if (left <= 0) break;
+                if (a.name == "farmer") continue;
+                left -= c.preload("Characters_" + a.name, 0, 0, 64, 256, left);
+                bool speaks = false;
+                for (auto& cmd : g.cutscene.cmds)
+                    if (cmd.compare(0, 6, "speak ") == 0 && cmd.compare(6, a.name.size(), a.name) == 0) { speaks = true; break; }
+                if (speaks && left > 0) left -= c.preload("Portraits_" + a.name, 0, 0, 128, 256, left);
+            }
+            if (left > 0) left -= c.preload("TileSheets_emotes", 0, 0, 64, 256, left);
+        }
+        wasActive = g.cutscene.active;
+        cast = g.cutscene.active ? g.cutscene.actors.size() : 0;
+    }
     g_useMapCache = ui.mapCache != 0;
     c.cacheFlipY = ui.mapCache == 2;
     c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));

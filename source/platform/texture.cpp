@@ -59,6 +59,7 @@ bool Texture::load(const std::string& path_) {
     }
     path = path_;
     v2 = magic[3] >= '2';
+    topFirst = (hdr[3] & 1) != 0;
     packed = magic[3] >= '3';   // S3T3: each page deflated; S3T4: and stored as a palette when it has few colours
     width = hdr[0];
     height = hdr[1];
@@ -182,12 +183,13 @@ bool Texture::ensure(TexPage& p) const {
         g_stats.failed++;
         return false;
     }
-    unflip((u32*)p.tex.data, p.pw, p.ph);
+    if (!topFirst) unflip((u32*)p.tex.data, p.pw, p.ph);
     C3D_TexFlush(&p.tex);
     C3D_TexSetFilter(&p.tex, GPU_NEAREST, GPU_NEAREST);
     C3D_TexSetWrap(&p.tex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
     p.loaded = true;
     g_stats.loads++;
+    g_stats.lastLoadFrame = g_frame;
     g_stats.loadMs += (unsigned)((svcGetSystemTick() - t0) / CPU_TICKS_PER_MSEC);
     C2D_Prepare();   // forgets the cached texture binding
     return true;
@@ -269,4 +271,15 @@ void TexCache::clear() {
     C2D_Flush();
     cache.clear();
     C2D_Prepare();
+}
+
+int Texture::preload(int sx, int sy, int sw, int sh, int budget) const {
+    int n = 0;
+    for (auto& p : pages) {
+        if (n >= budget) break;
+        if (p.x0 >= sx + sw || p.x0 + p.w <= sx || p.y0 >= sy + sh || p.y0 + p.h <= sy) continue;
+        bool was = p.loaded;
+        if (ensure(p) && !was) n++;
+    }
+    return n;
 }

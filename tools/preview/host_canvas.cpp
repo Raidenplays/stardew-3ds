@@ -82,7 +82,7 @@ static bool loadS3T(const std::string& path, HostTexture& out) {
                 int morton = (xx & 1) | ((yy & 1) << 1) | ((xx & 2) << 1) | ((yy & 2) << 2) |
                              ((xx & 4) << 2) | ((yy & 4) << 3);
                 size_t i = ((size_t)tile * 64 + morton) * 4;
-                int imgY = pgh - 1 - gy;   // GPU row 0 = image bottom
+                int imgY = (hdr[3] & 1) ? gy : pgh - 1 - gy;   // newer files are top row first
                 if (imgY >= hh || x >= ww) continue;
                 uint8_t a = data[i], b = data[i + 1], g = data[i + 2], r = data[i + 3];
                 out.px[(size_t)(y0 + imgY) * out.w + x0 + x] =

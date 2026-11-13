@@ -113,6 +113,7 @@ static bool runSetup(C2DCanvas& c, C3D_RenderTarget* top, C3D_RenderTarget* bot,
     return false;
 }
 
+extern unsigned g_sfxDecodes, g_sfxDecodeMs;
 static char perfLine1[96], perfLine2[96], perfLine3[96];   // performance readout text
 static double tickMs() { return svcGetSystemTick() / (double)CPU_TICKS_PER_MSEC; }
 
@@ -664,6 +665,13 @@ int main() {
             g_profClock = tickMs;
             for (int k = 0; k < PROF_COUNT; k++) prof[k] = std::max(prof[k], g_profMs[k]);
             static TexStats last;
+            static u64 lastFrameT = 0;
+            static unsigned worst = 0, lastSfx = 0, lastSfxMs = 0;
+            {   // the longest single frame this second: what a stutter looks like in numbers
+                u64 ft = osGetTime();
+                if (lastFrameT) worst = std::max(worst, (unsigned)(ft - lastFrameT));
+                lastFrameT = ft;
+            }
             frames++;
             upd = std::max(upd, updMs);
             cpu = std::max(cpu, C3D_GetProcessingTime());
@@ -672,11 +680,14 @@ int main() {
             if (nowT - since >= 1000) {
                 TexStats st = texStats();
                 float fps = frames * 1000.0f / (float)(nowT - since);
-                snprintf(perfLine1, sizeof perfLine1, "%.0ffps  upd %.0fms  cpu %.0fms  gpu %.0fms", fps, upd, cpu, gpu);
+                snprintf(perfLine1, sizeof perfLine1, "%.0ffps upd %.0f cpu %.0f gpu %.0f worst %ums", fps, upd, cpu, gpu, worst);
+                worst = 0;
                 snprintf(perfLine2, sizeof perfLine2, "free %uK pg +%u %ums -%u !%u dr %u", (unsigned)(linearSpaceFree() / 1024),
                          st.loads - last.loads, st.loadMs - last.loadMs, st.evictions - last.evictions, st.failed - last.failed, topDraws);
-                snprintf(perfLine3, sizeof perfLine3, "map %.0f obj %.0f front %.0f wthr %.0f hud %.0f ms rd %d", prof[PROF_MAP],
-                         prof[PROF_OBJECTS], prof[PROF_FRONT], prof[PROF_WEATHER], prof[PROF_HUD], g_mapRedraws);
+                snprintf(perfLine3, sizeof perfLine3, "map %.0f obj %.0f frnt %.0f wth %.0f hud %.0f rd %d sfx +%u %ums", prof[PROF_MAP],
+                         prof[PROF_OBJECTS], prof[PROF_FRONT], prof[PROF_WEATHER], prof[PROF_HUD], g_mapRedraws,
+                         g_sfxDecodes - lastSfx, g_sfxDecodeMs - lastSfxMs);
+                lastSfx = g_sfxDecodes; lastSfxMs = g_sfxDecodeMs;
                 g_mapRedraws = 0;
                 for (float& v : prof) v = 0;
                 last = st;

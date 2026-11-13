@@ -23,7 +23,7 @@ struct TexPage {
 // then be evicted when GPU memory runs out.
 void texNewFrame();
 // counters for the on-screen performance readout
-struct TexStats { unsigned loads = 0, evictions = 0, failed = 0, loadMs = 0; };
+struct TexStats { unsigned loads = 0, evictions = 0, failed = 0, loadMs = 0, lastLoadFrame = 0; };
 TexStats& texStats();
 
 class Texture {
@@ -46,6 +46,11 @@ public:
 
 private:
     bool ensure(TexPage& p) const;
+    bool topFirst = false;   // pages are stored top row first (header flag 1): nothing to reorder after loading
+public:
+    // Load the pages under (sx,sy,sw,sh) now (during a fade or a loading screen) so they don't load
+    // mid-scene. At most `budget` pages; returns how many it loaded.
+    int preload(int sx, int sy, int sw, int sh, int budget) const;
     void drawPart(const TexPage& p, int sx, int sy, int sw, int sh, float dx, float dy, bool flipX,
                   const C2D_ImageTint* tint, float scale) const;
     std::string path;

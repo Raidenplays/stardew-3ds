@@ -175,6 +175,9 @@ public:
                       int align = ALIGN_LEFT) = 0;
     virtual float textWidth(const std::string& s, float scale) = 0;
     virtual int texWidth(TexName tex) = 0;   // 0 if missing
+    // Get this part of a sheet into memory now (at the start of a scene, behind a fade) instead of
+    // on the frame it is first drawn. Returns the number of pages it had to load.
+    virtual int preload(TexName tex, int sx, int sy, int sw, int sh, int budget = 8) { (void)tex; (void)sx; (void)sy; (void)sw; (void)sh; (void)budget; return 0; }
     virtual int texHeight(TexName tex) = 0;  // 0 if missing
     virtual void dropTextures() = 0;                    // free everything (map/season change)
     // Map cache: a 512x512 offscreen image the still map layers are drawn into

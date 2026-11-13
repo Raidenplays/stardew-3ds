@@ -167,11 +167,12 @@ def swizzle(rgba):
     """rgba: HxWx4 uint8 (top row first) already padded to pow2.
     Returns bytes in 3DS GPU RGBA8 tiled layout."""
     ph, pw = rgba.shape[:2]
-    flipped = rgba[::-1]                      # GPU row 0 is image bottom
+    # Top row first, the order the 3DS draws from: the page goes into video memory as it is, with no
+    # second pass over it on the console (header flag 1; older files were bottom row first).
     idx = _morton_table(pw, ph).ravel()
     out = np.zeros((pw * ph, 4), dtype=np.uint8)
     # GPU_RGBA8 little-endian word 0xRRGGBBAA -> bytes A B G R
-    out[idx] = flipped.reshape(-1, 4)[:, ::-1]
+    out[idx] = rgba.reshape(-1, 4)[:, ::-1]
     return out.tobytes()
 
 
@@ -195,7 +196,7 @@ def convert_texture(src_png, dst_s3t):
         # it's pixel art) is stored as a palette and one byte per pixel, so the 3DS has a quarter
         # as much to unpack when the page is first drawn. Other pages are plain RGBA.
         f.write(b"S3T4")
-        f.write(struct.pack("<HHHH", w, h, len(pages), 0))
+        f.write(struct.pack("<HHHH", w, h, len(pages), 1))   # flags: 1 = pages are top row first
         for (x0, y0, ww, hh, pw, ph, data) in pages:
             f.write(struct.pack("<HHHHHH", x0, y0, ww, hh, pw, ph))
             words = np.frombuffer(data, dtype="<u4")
