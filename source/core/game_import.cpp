@@ -2,6 +2,7 @@
 // rebuilt from it on top of a fresh game, then saved the 3DS way.
 #include "game.h"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
@@ -337,6 +338,13 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     museumRewardsCheck(false);   // rewards you already got on the PC
     ensureGreenhouse();
     farm->spawnDay = absoluteDay();
+    {   // the morning banner was written for the fresh game's first day: show the farm's own date
+        char date[64];
+        snprintf(date, sizeof date, "%s %d, Year %d%s", seasonName(season), day, year, raining ? " - Rain" : "");
+        std::string s = date;
+        s[0] = (char)toupper((unsigned char)s[0]);
+        say(s);
+    }
     if (summary) {
         std::ostringstream ss;
         ss << "Welcome back, " << me.name << "! Brought over " << counts[0] << " items, " << counts[5] << " machines/chests ("
