@@ -361,6 +361,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     weddingDay = -1;
     bundleDefs.clear();
     bundleGiven.clear();
+    bundleRewards.clear();
     bundleView = -1;
     buildings.clear();
     animals.clear();
@@ -1803,7 +1804,7 @@ bool Game::goToBed() {
 // ---------------------------------------------------------------- saving
 
 static const uint32_t SAVE_MAGIC = 0x53563344;   // "SV3D"
-static const uint32_t SAVE_VERSION = 37;   // 2: villager friendships, 3: events seen + mail,
+static const uint32_t SAVE_VERSION = 38;   // 2: villager friendships, 3: events seen + mail,
                                           // 4: skills, flavors, placed machines/chests
                                           // 5: tool at the blacksmith
                                           // 6: farm trees
@@ -2086,6 +2087,8 @@ bool Game::save(const std::string& path) const {
             w.u32((uint32_t)p.items.size());
             for (auto& s : p.items) w.u8(s.quality);
         }
+    w.u32((uint32_t)bundleRewards.size());                    // v38
+    for (auto& s : bundleRewards) { w.slot(s); w.u8(s.quality); }
     bool ok = ferror(f) == 0;
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
@@ -2563,6 +2566,15 @@ bool Game::load(const std::string& path, std::string* err) {
                 }
             }
     }
+    bundleRewards.clear();
+    if (version >= 38 && r.ok) {
+        uint32_t n = r.u32();
+        for (uint32_t k = 0; k < n && r.ok && k < 64; k++) {
+            Slot sl = r.slot();
+            sl.quality = r.u8();
+            bundleRewards.push_back(sl);
+        }
+    }
     for (auto& c : farm->clumps)     // nothing grows under them
         for (int dy = 0; dy < 2; dy++)
             for (int dx = 0; dx < 2; dx++)
@@ -2571,6 +2583,20 @@ bool Game::load(const std::string& path, std::string* err) {
     if (!r.ok) return false;
     // saves from before events could hand out items: Willy's rod was never given
     if (eventsSeen.count("739330") && toolLevel(TOOL_ROD) < 0) awardPrize("rod");
+    // Willy's copper pan was never handed over (the event said "Pan", the game looked for "pan")
+    if (eventsSeen.count("404798")) {
+        bool pan = false;   // any pan: in the pack or put away
+        auto isPan = [&](const Slot& s) {
+            if (s.type != SLOT_TOOL) return false;
+            const ToolDef* t = data.tool(s.id);
+            return t && t->key.find("Pan") != std::string::npos;
+        };
+        for (auto& s : inv) pan |= isPan(s);
+        for (auto& kv : placed)
+            for (auto& p : kv.second)
+                for (auto& s : p.items) pan |= isPan(s);
+        if (!pan) awardPrize("pan");
+    }
     ensureGreenhouse();
     riding = false;
     horseMorning();

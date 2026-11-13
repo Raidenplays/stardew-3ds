@@ -20,16 +20,103 @@ std::vector<Game::CcNote> Game::ccNotes() const {
         {"Boiler Room", 63, 14}, {"Vault", 55, 6}, {"Bulletin Board", 46, 11}};
     std::vector<CcNote> out;
     if (!cur || cur->name != "CommunityCenter" || mailReceived.count("JojaMember")) return out;
-    bool canRead = mailReceived.count("canReadJunimoText") || eventsSeen.count("112");
-    for (auto& kv : bundleGiven) canRead |= !kv.second.empty();
+    bool canRead = canReadJunimo();
     for (auto& sp : SPOTS) {
         std::string room = sp.room;
-        if (mailReceived.count(roomFlagOf(room))) continue;   // that room is done
-        if (!canRead && room != "Crafts Room") continue;
-        if (room == "Bulletin Board" && !canRead) continue;
+        if (mailReceived.count(roomFlagOf(room)) || roomDone(room)) continue;   // that room is done
+        if (!canRead ? room != "Crafts Room" : !roomOpen(room)) continue;
         out.push_back({room, sp.x, sp.y});
     }
     return out;
+}
+
+bool Game::canReadJunimo() const {
+    if (mailReceived.count("canReadJunimoText") || eventsSeen.count("112")) return true;
+    for (auto& kv : bundleGiven) if (!kv.second.empty()) return true;   // an older save already working on them
+    return false;
+}
+
+int Game::bundlesDone() const {
+    int n = 0;
+    for (auto& b : bundles()) if (b.room != "Abandoned Joja Mart") n += bundleDone(b);
+    return n;
+}
+
+// The Crafts Room is open from the start; the Pantry and Fish Tank after one bundle, the Boiler Room after
+// two, the Bulletin Board after three and the Vault after four (the Missing Bundle once the rest are done).
+bool Game::roomOpen(const std::string& room) const {
+    if (mailReceived.count(roomFlagOf(room))) return true;
+    int done = bundlesDone();
+    if (room == "Crafts Room") return true;
+    if (room == "Pantry" || room == "Fish Tank") return done >= 1;
+    if (room == "Boiler Room") return done >= 2;
+    if (room == "Bulletin Board") return done >= 3;
+    if (room == "Vault") return done >= 4;
+    if (room == "Abandoned Joja Mart") return ccDone() && !mailReceived.count("JojaMember");
+    return true;
+}
+
+// Which room each tile of the Community Center belongs to: restoring a room takes its tiles from the
+// refurbished map. (The main hall goes with the Bulletin Board.)
+static const char* ccRoomAt(int x, int y) {
+    if (x >= 36 && x <= 44 && y >= 4 && y <= 11) return "Fish Tank";
+    if (x >= 46 && x <= 61 && y <= 8) return "Vault";
+    if (x >= 54 && y >= 9) return "Boiler Room";
+    if (x <= 21 && y <= 12) return "Pantry";
+    if (x <= 21) return "Crafts Room";
+    return "Bulletin Board";
+}
+
+void Game::ccRestore() {
+    if (!cur || cur->name != "CommunityCenter" || mailReceived.count("JojaMember")) return;
+    std::vector<std::string> rooms;
+    for (auto& r : bundleRooms())
+        if ((mailReceived.count(roomFlagOf(r)) || roomDone(r)) && !cur->stamps.count("cc:" + r)) rooms.push_back(r);
+    if (rooms.empty() || !data.vfs.exists("maps/CommunityCenter_Refurbished.smap")) return;
+    TileMap ref;
+    if (!ref.load(data.vfs.path("maps/CommunityCenter_Refurbished.smap"), nullptr)) return;
+    int w = cur->map.width(), h = cur->map.height();
+    if (ref.width() != w || ref.height() != h) return;
+    std::vector<uint8_t> mask((size_t)w * h, 0);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            for (auto& r : rooms) if (r == ccRoomAt(x, y)) mask[(size_t)y * w + x] = 1;
+    if (!cur->map.copyCells(ref, mask)) return;
+    for (auto& r : rooms) cur->stamps.insert("cc:" + r);
+}
+
+// Overnight the junimos finish what a restored room does for the valley.
+void Game::ccMorning() {
+    for (auto& r : bundleRooms()) {
+        const char* fl = roomFlagOf(r);
+        if (!*fl || mailReceived.count(fl) || !roomDone(r)) continue;
+        mailReceived.insert(fl);
+        if (r == "Bulletin Board")   // 500 friendship with everyone you've met who isn't someone to date
+            for (auto& n : npcs)
+                if (n.def && n.introduced && !data.romanceable(n.def->name))
+                    n.friendship = std::min(n.friendship + 500, friendshipCap(n));
+        if (morningNote.empty()) {
+            static const struct { const char* room; const char* note; } NOTES[] = {
+                {"Pantry", "The junimos have been busy: your greenhouse is fixed."},
+                {"Crafts Room", "The junimos have been busy: the bridge to the quarry is mended."},
+                {"Fish Tank", "The junimos have been busy: the glittering boulder in the mountain stream is gone."},
+                {"Boiler Room", "The junimos have been busy: the minecarts are running."},
+                {"Bulletin Board", "The junimos have been busy: the townsfolk seem friendlier."},
+                {"Vault", "The junimos have been busy: the bus is fixed."}};
+            for (auto& nt : NOTES) if (r == nt.room) morningNote = nt.note;
+        }
+    }
+    collectBundleRewards();
+}
+
+bool Game::collectBundleRewards() {
+    bool any = false;
+    while (!bundleRewards.empty()) {
+        if (!addSlot(bundleRewards.front())) break;
+        bundleRewards.erase(bundleRewards.begin());
+        any = true;
+    }
+    return any;
 }
 
 static const char* roomFlag(const std::string& room);
@@ -160,19 +247,25 @@ bool Game::bundleGive(int bundleIndex, int slot) {
         int n = 1;
         if (rs >> kind >> id) {
             rs >> n;
-            if (kind == "O") { int oid = data.objectIdFor(id); if (data.object(oid)) addItem(oid, std::max(1, n)); }
-            else if (kind == "BO") {
-                Slot s;
+            Slot s;
+            s.count = std::max(1, n);
+            if (kind == "O" || kind == "R") {   // an object, or a ring
+                s.type = SLOT_OBJECT;
+                s.id = data.objectIdFor(id);
+                if (!data.object(s.id)) s = Slot();
+            } else if (kind == "BO") {
                 s.type = SLOT_BIG;
-                s.id = atoi(id.c_str());
-                s.count = std::max(1, n);
-                if (data.big(s.id)) addSlot(s);
+                s.id = atoi((id.rfind("(BC)", 0) == 0 ? id.substr(4) : id).c_str());
+                if (!data.big(s.id)) s = Slot();
             }
+            if (!s.empty()) bundleRewards.push_back(s);
         }
         say(b.name + " Bundle complete!");
+        if (!collectBundleRewards() && !bundleRewards.empty())
+            say("Your pack is full: the reward waits in the bundle list.");
         if (roomDone(b.room) && *roomFlag(b.room) && !mailReceived.count(roomFlag(b.room))) {
-            mailReceived.insert(roomFlag(b.room));
-            say("The " + b.room + " is restored!" + (b.room == "Pantry" ? " Your greenhouse is fixed." : ""));
+            say("The " + b.room + " is restored! The junimos will finish the job tonight.");
+            ccRestore();
         }
         return true;
     }

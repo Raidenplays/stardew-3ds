@@ -114,6 +114,14 @@ void Game::lastMapFixes() {
         } else if (mailReceived.count("raccoonTreeFallen")) stamp("Forest_RaccoonStump", 53, 2);
     }
     if (cur->name == "Beach" && squidFest()) stamp("Beach_SquidFest", 11, 3);
+    if (cur->name == "Mountain" && mailReceived.count("ccCraftsRoom") && !cur->stamps.count("Mountain-BridgeFixed")) {
+        // the junimos mend the bridge to the quarry: the patch goes where its ground matches the mountain's
+        TileMap p;
+        int x = -1, y = -1;
+        if (data.vfs.exists("maps/Mountain-BridgeFixed.smap") && p.load(data.vfs.path("maps/Mountain-BridgeFixed.smap"), nullptr) &&
+            cur->map.findFit(p, x, y))
+            stamp("Mountain-BridgeFixed", x, y);
+    }
     if (cur->name == "Submarine" && stats["submarine"] != absoluteDay())
         ask3(*this, L("Submarine_SubmergeQuestion", "Captain: Ahoy there! Want to take the deep-sea fishing tour? It'll cost ya 1,000g."), {{"Yes", "last:sub:yes"}, {"No", "last:sub:no"}});
     if (cur->name == "MermaidHouse")

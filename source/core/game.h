@@ -939,6 +939,13 @@ public:
     std::map<int, std::vector<uint8_t>> bundleGiven;                // bundle index -> each item slot given
     std::vector<Bundle> bundles() const;
     static std::vector<std::string> bundleRooms();
+    std::vector<Slot> bundleRewards;                 // finished bundles' rewards that didn't fit in the pack yet
+    int bundlesDone() const;
+    bool roomOpen(const std::string& room) const;    // the junimos let you at this room's bundles yet
+    bool canReadJunimo() const;
+    void ccRestore();                                // finished rooms look restored
+    void ccMorning();                                // the junimos finish a room's reward overnight
+    bool collectBundleRewards();
     struct CcNote { std::string room; int x, y; };
     std::vector<CcNote> ccNotes() const;            // the scrolls on the Community Center walls
     static const char* roomFlagOf(const std::string& room);

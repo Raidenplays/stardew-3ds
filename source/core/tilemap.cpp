@@ -166,14 +166,7 @@ bool TileMap::load(const std::string& path, std::string* err) {
             o.y = (uint16_t)(cell / w);
             overlays.push_back(o);
         }
-        // the converter writes them in order (group, cell, stacking), so each group's rows are runs
-        size_t at = 0;
-        for (int gidx = 0; gidx < 4; gidx++) {
-            for (int y = 0; y <= h; y++) {
-                while (at < overlays.size() && (overlays[at].group < gidx || (overlays[at].group == gidx && overlays[at].y < y))) at++;
-                overlayRow[gidx][(size_t)y] = (uint32_t)at;
-            }
-        }
+        rowRuns();
     }
     if (!r.ok) {
         if (err) *err = "truncated map file " + path;
@@ -244,10 +237,16 @@ namespace sv {
 bool TileMap::findFit(const TileMap& p, int& bx, int& by, int* fitScore) const {
     if (p.w > w || p.h > h) return false;
     // translate the patch's tilesheets to ours by texture name (-1: we don't have it)
-    std::vector<int> tsMap(p.tilesets.size(), -1);
+    // (a map can list the same sheet twice: SVE's mountain has the outdoor sheet at 0 and 6, so sheets are
+    // compared by the first entry with their texture)
+    std::vector<int> tsMap(p.tilesets.size(), -1), canon(tilesets.size());
+    for (size_t j = 0; j < tilesets.size(); j++) {
+        canon[j] = (int)j;
+        for (size_t k = 0; k < j; k++) if (tilesets[k].texture == tilesets[j].texture) { canon[j] = (int)k; break; }
+    }
     for (size_t i = 0; i < p.tilesets.size(); i++)
         for (size_t j = 0; j < tilesets.size(); j++)
-            if (tilesets[j].texture == p.tilesets[i].texture) tsMap[i] = (int)j;
+            if (tilesets[j].texture == p.tilesets[i].texture) { tsMap[i] = (int)j; break; }
     int best = -1, total = 0;
     for (int L = 0; L < L_COUNT; L++)
         for (int i = 0; i < p.w * p.h; i++) total += p.tiles[L][i] != NO_TILE;
@@ -261,7 +260,7 @@ bool TileMap::findFit(const TileMap& p, int& bx, int& by, int* fitScore) const {
                     const uint16_t* mt = &tiles[L][(oy + y) * w + ox];
                     const uint8_t* ms = &tsIdx[L][(oy + y) * w + ox];
                     for (int x = 0; x < p.w; x++)
-                        if (pt[x] != NO_TILE && pt[x] == mt[x] && tsMap[ps[x]] == ms[x]) score++;
+                        if (pt[x] != NO_TILE && pt[x] == mt[x] && ms[x] < canon.size() && tsMap[ps[x]] == canon[ms[x]]) score++;
                 }
             if (score > best) { best = score; bx = ox; by = oy; }
         }
@@ -274,7 +273,7 @@ bool TileMap::stamp(const TileMap& p, int dx, int dy) {
     std::vector<int> tsMap(p.tilesets.size(), -1);
     for (size_t i = 0; i < p.tilesets.size(); i++) {
         for (size_t j = 0; j < tilesets.size(); j++)
-            if (tilesets[j].texture == p.tilesets[i].texture) tsMap[i] = (int)j;
+            if (tilesets[j].texture == p.tilesets[i].texture) { tsMap[i] = (int)j; break; }
         if (tsMap[i] < 0 && tilesets.size() < 255) {
             tilesets.push_back(p.tilesets[i]);
             tsMap[i] = (int)tilesets.size() - 1;
@@ -325,5 +324,59 @@ void TileMap::setAction(int x, int y, const std::string& a) {
     auto it = std::lower_bound(actions.begin(), actions.end(), std::make_pair(cell, std::string()));
     if (it != actions.end() && it->first == cell) it->second = a;
     else actions.insert(it, {cell, a});
+}
+} // namespace sv
+
+namespace sv {
+// overlays are kept in order (group, row, column); each group's rows are runs
+void TileMap::rowRuns() {
+    for (auto& v : overlayRow) v.assign((size_t)h + 1, 0);
+    size_t at = 0;
+    for (int gidx = 0; gidx < 4; gidx++)
+        for (int y = 0; y <= h; y++) {
+            while (at < overlays.size() && (overlays[at].group < gidx || (overlays[at].group == gidx && overlays[at].y < y))) at++;
+            overlayRow[gidx][(size_t)y] = (uint32_t)at;
+        }
+}
+
+bool TileMap::copyCells(const TileMap& p, const std::vector<uint8_t>& mask) {
+    if (p.w != w || p.h != h || mask.size() != (size_t)w * h) return false;
+    std::vector<int> tsMap(p.tilesets.size(), -1);
+    for (size_t i = 0; i < p.tilesets.size(); i++) {
+        for (size_t j = 0; j < tilesets.size(); j++)
+            if (tilesets[j].texture == p.tilesets[i].texture) { tsMap[i] = (int)j; break; }
+        if (tsMap[i] < 0 && tilesets.size() < 255) {
+            tilesets.push_back(p.tilesets[i]);
+            tsMap[i] = (int)tilesets.size() - 1;
+        }
+    }
+    for (size_t i = 0; i < mask.size(); i++) {
+        if (!mask[i]) continue;
+        for (int L = 0; L < L_COUNT; L++) {
+            tiles[L][i] = p.tiles[L][i];
+            int ts = p.tiles[L][i] == NO_TILE ? 0 : tsMap[p.tsIdx[L][i]];
+            tsIdx[L][i] = (uint8_t)std::max(0, ts);
+            if (ts < 0) tiles[L][i] = NO_TILE;
+        }
+        cellFlags[i] = p.cellFlags[i];
+        auto it = std::lower_bound(actions.begin(), actions.end(), std::make_pair((uint32_t)i, std::string()));
+        if (it != actions.end() && it->first == (uint32_t)i) actions.erase(it);
+    }
+    for (auto& a : p.actions)
+        if (a.first < mask.size() && mask[a.first]) actions.push_back(a);
+    std::sort(actions.begin(), actions.end());
+    std::vector<Overlay> keep;
+    for (auto& o : overlays) if (!mask[(size_t)o.y * w + o.x]) keep.push_back(o);
+    for (auto o : p.overlays)
+        if (mask[(size_t)o.y * w + o.x] && tsMap[o.ts] >= 0) { o.ts = (uint8_t)tsMap[o.ts]; keep.push_back(o); }
+    std::stable_sort(keep.begin(), keep.end(), [](const Overlay& a, const Overlay& b) {
+        if (a.group != b.group) return a.group < b.group;
+        if (a.y != b.y) return a.y < b.y;
+        return a.x < b.x;
+    });
+    overlays = keep;
+    rowRuns();
+    rev++;
+    return true;
 }
 } // namespace sv

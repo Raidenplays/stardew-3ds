@@ -791,6 +791,10 @@ int main(int argc, char** argv) {
     if (!whereMap.empty()) {
         // time the top screen at a location (centre of the map), per drawing stage
         if (!g.hasMap(whereMap)) { printf("  ! no map %s\n", whereMap.c_str()); return 1; }
+        if (const char* ml = getenv("MAIL")) {   // MAIL=ccCraftsRoom,ccPantry: flags set before going there
+            std::string all = ml, one;
+            for (char ch : all + ",") { if (ch == ',') { if (!one.empty()) g.mailReceived.insert(one); one.clear(); } else one += ch; }
+        }
         g.teleport(whereMap, 10, 10);
         ui.mapCache = mapCacheArg;
         if (getenv("HOUSE")) { for (int lv = 0; lv < atoi(getenv("HOUSE")); lv++) { g.houseUpgradeDays = 1; g.teleport("FarmHouse", 9, 8); g.goToBed(); } }

@@ -83,6 +83,9 @@ public:
     void setAction(int x, int y, const std::string& a);
     // Lay a smaller map over this one at (dx, dy): tiles, walls, actions and warps. Returns false if it doesn't fit.
     bool stamp(const TileMap& patch, int dx, int dy);
+    // Take over the cells marked in `mask` (w*h, nonzero = take) from a map of the same size: every layer,
+    // walls, actions and numbered-layer tiles (a room of the Community Center restored from its refurbished map).
+    bool copyCells(const TileMap& src, const std::vector<uint8_t>& mask);
     // Where a patch map belongs: the offset where most of its ground already matches. ok=false if nothing fits well.
     bool findFit(const TileMap& patch, int& dx, int& dy, int* fitScore = nullptr) const;
     uint32_t rev = 0;   // bumps whenever a tile changes (cached drawings go stale)
@@ -107,6 +110,7 @@ public:
     std::string name;
 
 private:
+    void rowRuns();
     std::vector<std::pair<uint32_t, std::string>> actions;   // sorted by cell
     int w = 0, h = 0;
     std::vector<uint16_t> tiles[L_COUNT];

@@ -84,7 +84,9 @@ bool Game::giveTool(const std::string& key) {
     return false;
 }
 
-void Game::awardPrize(const std::string& what) {
+void Game::awardPrize(const std::string& whatIn) {
+    std::string what = whatIn;   // events write "Pan", "rod"...
+    for (auto& ch : what) ch = (char)tolower((unsigned char)ch);
     if (what == "rod") {                 // Willy's old rod
         if (!giveTool("BambooPole")) {
             if (const ToolDef* t = data.toolByKind(TOOL_ROD)) giveTool(t->key);
