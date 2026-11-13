@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stardew3ds converter</title>
+<meta name="description" content="Turns your own copy of Stardew Valley into the files stardew3ds needs. Runs in this page; your files never leave your computer.">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.png" width="48" height="48" alt="">
+    <div>
+      <h1>stardew3ds converter</h1>
+      <p class="sub">Turns your own copy of Stardew Valley into the files the 3DS game needs.</p>
+    </div>
+  </header>
+
+  <p class="private"><strong>Nothing is uploaded.</strong> This page reads your game files on your own computer
+    and builds the 3DS files right here in the tab. Your game, mods and save never leave it.
+    <a href="https://github.com/Raidenplays/stardew-3ds/tree/main/web">See the code.</a></p>
+
+  <section class="step" id="stepGame">
+    <h2><span class="num">1</span> Your Stardew Valley folder</h2>
+    <p class="hint">In Steam: right-click Stardew Valley, then Manage, then Browse local files. Pick that folder
+      (or just its <em>Content</em> folder).</p>
+    <div class="row">
+      <button type="button" id="pickGame">Choose folder</button>
+      <span class="picked" id="gameName">not picked</span>
+    </div>
+    <div id="dllBox" hidden>
+      <h3>StardewValley.GameData.dll</h3>
+      <p class="hint" id="dllHint">The converter reads the game's data files with this one file from your game. It sits in
+        the Stardew Valley folder, right next to <em>Content</em>. It wasn't in the folder you picked, so add it here.</p>
+      <div class="row">
+        <button type="button" id="pickDll">Choose the file</button>
+        <span class="picked" id="dllName">not picked</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <h2><span class="num">2</span> Mods <span class="opt">optional</span></h2>
+    <p class="hint">Your Mods folder with Stardew Valley Expanded, Ridgeside Village or other Content Patcher packs.
+      A Mods folder inside the game folder is found on its own.</p>
+    <div class="row">
+      <button type="button" id="pickMods" class="quiet">Choose folder</button>
+      <span class="picked" id="modsName">none</span>
+      <button type="button" id="clearMods" class="link" hidden>remove</button>
+    </div>
+  </section>
+
+  <section class="step">
+    <h2><span class="num">3</span> Your PC farm <span class="opt">optional</span></h2>
+    <p class="hint">To carry on a farm from your PC, pick your <em>Saves</em> folder (or one farm's folder inside it,
+      named like <em>Farmer_123456789</em>). Saves aren't kept in the game folder:</p>
+    <ul class="hint where">
+      <li>Windows: <code>%AppData%\StardewValley\Saves</code> (paste that into the folder window's address bar)</li>
+      <li>Linux and Mac: <code>~/.config/StardewValley/Saves</code></li>
+    </ul>
+    <div class="row">
+      <button type="button" id="pickSave" class="quiet">Choose folder</button>
+      <span class="picked" id="saveName">none</span>
+      <button type="button" id="clearSave" class="link" hidden>remove</button>
+    </div>
+    <div id="farmRow" hidden>
+      <h3>Farms to bring over</h3>
+      <div id="farm"></div>
+      <p class="hint">Each one becomes its own farm on the 3DS (it keeps up to 12). Nothing already on your card is replaced.</p>
+    </div>
+  </section>
+
+  <section class="step go">
+    <button type="button" id="convert" class="big" disabled>Convert</button>
+    <div class="bar" aria-hidden="true"><div id="barFill"></div></div>
+    <p id="status" role="status">Getting ready...</p>
+  </section>
+
+  <section class="step" id="result" hidden>
+    <h2><span class="num">4</span> Put it on your SD card</h2>
+    <p id="resultInfo"></p>
+    <div class="row">
+      <button type="button" id="zip">Download as a zip</button>
+      <button type="button" id="saveTo" class="quiet" hidden>Save straight to the SD card</button>
+    </div>
+    <p class="hint">Unzip it onto the top level of your 3DS SD card, so its <em>3ds</em> folder joins the one already
+      there. The game itself (stardew3ds.3dsx) is included: open it from the Homebrew Launcher.
+      Your save and backups on the card are left alone.</p>
+  </section>
+
+  <details id="logBox">
+    <summary>Details</summary>
+    <pre id="log"></pre>
+  </details>
+
+  <footer>
+    <p>Unofficial fan project. Not affiliated with ConcernedApe. Stardew Valley is a trademark of ConcernedApe LLC.
+      You need your own copy of the game. Will be removed if ConcernedApe requests it.</p>
+    <p><a href="https://github.com/Raidenplays/stardew-3ds">stardew3ds on GitHub</a> ·
+      <a href="https://github.com/Raidenplays/stardew-3ds/releases/latest">Android converter app</a>
+      <span id="build"></span></p>
+  </footer>
+</main>
+<input type="file" id="dirInput" webkitdirectory multiple hidden>
+<input type="file" id="dllInput" accept=".dll" hidden>
+<script src="app.js"></script>
+</body>
+</html>
