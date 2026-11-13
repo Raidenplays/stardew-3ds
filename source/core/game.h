@@ -245,6 +245,11 @@ struct Cutscene {
     struct Poof { float x, y; int row, len, ms; bool flip; float t; };   // temporarySprite: a row of TileSheets/animations
     std::vector<Poof> poofs;
     float flash = 0;                 // screenFlash: white, fading
+    // The wizard's magic (specificTemporarySprite): the cage of light round a junimo, and the vision of the
+    // forest the farmer has after drinking his brew (seconds since it began; -1 none)
+    bool cage = false; float cageX = 0, cageY = 0;
+    float vision = -1;
+    float goneX = 0, goneY = 0;      // where the last actor warped away from (wizardWarp sparkles there)
     bool skippable = false;
     bool forkFlag = false;
     int forkWant = -1;               // question forkN: which answer arms the fork

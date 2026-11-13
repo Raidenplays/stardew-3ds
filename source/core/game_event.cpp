@@ -378,6 +378,7 @@ void Game::skipEvent() {
 void Game::eventUpdate(float dt) {
     Cutscene& cs = cutscene;
     if (cs.flash > 0) cs.flash = std::max(0.0f, cs.flash - dt * 1.5f);
+    if (cs.vision >= 0) cs.vision += dt;
     for (size_t i = cs.poofs.size(); i-- > 0;) {
         cs.poofs[i].t += dt;
         if (cs.poofs[i].t * 1000 >= cs.poofs[i].len * cs.poofs[i].ms) cs.poofs.erase(cs.poofs.begin() + i);
@@ -519,6 +520,7 @@ bool Game::eventStep(const std::string& raw) {
     }
     if (c == "warp") {
         if (EventActor* a = eventActor(arg(1))) {
+            if (iarg(2) < -100) { cs.goneX = a->x; cs.goneY = a->y; }
             a->x = iarg(2) * TILE + TILE / 2.0f;
             a->y = iarg(3) * TILE + TILE - 2.0f;
             a->moving = false;
@@ -806,6 +808,27 @@ bool Game::eventStep(const std::string& raw) {
         return true;
     }
     if (c == "money") { money = std::max(0, money + iarg(1)); return true; }
+    if (c == "specificTemporarySprite") {
+        const std::string k = arg(1);
+        auto poof = [&](float x, float y, int row, int len, int ms) {
+            Cutscene::Poof p;
+            p.x = x - TILE / 2.0f; p.y = y - TILE; p.row = row; p.len = len; p.ms = ms; p.flip = false; p.t = 0;
+            cs.poofs.push_back(p);
+        };
+        if (k == "junimoCage") {                     // round the junimo the wizard just summoned
+            if (EventActor* a = eventActor("Junimo")) { cs.cage = true; cs.cageX = a->x; cs.cageY = a->y; }
+            return true;
+        }
+        if (k == "junimoCageGone") {                 // it bursts in a puff
+            if (cs.cage) poof(cs.cageX, cs.cageY, 5, 8, 70);
+            cs.cage = false;
+            return true;
+        }
+        if (k == "wizardWarp") { poof(cs.goneX, cs.goneY, 10, 8, 80); return true; }
+        if (k == "farmerForestVision") { cs.vision = 0; return true; }
+        if (k == "junimoCageGone2") { cs.vision = -1; cs.cage = false; return true; }
+        return true;                                 // other set dressing the 3DS scene does without
+    }
     if (c == "addObject" || c == "addBigProp" || c == "addLantern" || c == "addConversationTopic" || c == "makeInvisible" ||
         c == "eyes" || c == "glow" || c == "ambientLight" || c == "farmerEat" || c == "playPetSound" ||
         c == "specificTemporarySprite" || c == "removeSprite" || c == "stopSwimming" ||

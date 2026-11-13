@@ -2026,6 +2026,42 @@ void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
             c.imageScaled("TileSheets_animations", f * 64 % 640, p.row * 64 + (f * 64 / 640) * 64, 64, 64,
                           std::floor(p.x - g_camX), std::floor(p.y - g_camY), 0.25f, p.flip);
         }
+        if (g.cutscene.cage) {   // the wizard's cage of light: shimmering bars round the junimo, sparkles at the top
+            const auto& cs = g.cutscene;
+            float bx = std::floor(cs.cageX - g_camX), by = std::floor(cs.cageY - g_camY);
+            float sh = std::sin(timeMs * 0.008f);
+            uint8_t a = (uint8_t)(150 + 60 * sh);
+            for (int k = 0; k < 5; k++) c.rect(bx - 11 + k * 5, by - 24, 1, 26, RGBA(170, 230, 255, a));
+            c.rect(bx - 12, by - 25, 24, 1, RGBA(220, 245, 255, a));
+            c.rect(bx - 12, by + 1, 24, 1, RGBA(220, 245, 255, a));
+            int f = (timeMs / 90) % 8;
+            c.imageScaled("TileSheets_animations", f * 64, 10 * 64, 64, 64, bx - 8, by - 34, 0.25f);
+        }
+        if (g.cutscene.vision >= 0) {   // the vision of the forest: junimos dancing in a ring among the trees
+            float v = g.cutscene.vision;
+            float in = std::min(1.0f, v / 1.5f);
+            c.rect(0, 0, TOP_W, TOP_H, RGBA(18, 52, 30, (uint8_t)(255 * in)));
+            if (in >= 1.0f) {
+                float cx = TOP_W / 2.0f, cy = TOP_H / 2.0f + 40;
+                static const float tr[9][2] = {{-180, 70}, {-160, 0}, {-120, -50}, {-60, -75}, {0, -82}, {60, -75}, {120, -50}, {160, 0}, {180, 70}};
+                for (auto& t : tr) {   // the forest round the clearing
+                    c.image("TerrainFeatures_tree1_spring", 0, 0, 48, 96, cx + t[0] - 24, cy + t[1] - 96);
+                }
+                static const uint32_t tint[8] = {RGBA(0x88, 0xE0, 0x50), RGBA(0xF0, 0xE0, 0x50), RGBA(0x60, 0xB0, 0xF8), RGBA(0xC0, 0x80, 0xF0),
+                                                 RGBA(0xF8, 0x70, 0x60), RGBA(0xF8, 0xA0, 0x40), RGBA(0xF8, 0x98, 0xD0), RGBA(0x70, 0xE8, 0xE0)};
+                int n = 8;
+                for (int k = 0; k < n; k++) {
+                    float ang = timeMs * 0.0006f + k * 6.2832f / n;
+                    float jx = cx + std::cos(ang) * 90, jy = cy + std::sin(ang) * 34;
+                    float hop = std::fabs(std::sin(timeMs * 0.006f + k)) * 8;
+                    int f = 40 + ((timeMs / 120 + k) % 8);
+                    c.imageScaled("Characters_Junimo", (f % 8) * 16, (f / 8) * 16, 16, 16, std::floor(jx - 16), std::floor(jy - 32 - hop),
+                                  2.0f, std::cos(ang) < 0, tint[k]);
+                }
+                float sparkle = (timeMs / 100) % 8;
+                c.imageScaled("TileSheets_animations", (int)sparkle * 64, 4 * 64, 64, 64, cx - 32, cy - 48, 1.0f);
+            }
+        }
         if (g.cutscene.flash > 0)
             c.rect(0, 0, TOP_W, TOP_H, RGBA(255, 255, 255, (uint8_t)(std::min(1.0f, g.cutscene.flash) * 255)));
         if (g.cutscene.fade > 0)
