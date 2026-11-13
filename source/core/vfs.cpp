@@ -190,7 +190,8 @@ std::string backupSaveIfModsChanged(const std::string& root, const std::string& 
         char stamp[32];
         time_t t = time(nullptr);
         strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", localtime(&t));
-        backup = root + "backups/" + stamp + "-save.sav";
+        size_t cut = savePath.find_last_of('/');   // each farm's backups carry its own file name
+        backup = root + "backups/" + stamp + "-" + (cut == std::string::npos ? savePath : savePath.substr(cut + 1));
         FILE* out = fopen(backup.c_str(), "wb");
         if (out) {
             char buf[8192];

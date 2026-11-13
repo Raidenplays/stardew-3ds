@@ -189,42 +189,48 @@ int main() {
 
     std::string err;
     Game game(data);
-    std::string savePath = root + "save.sav";
-    // never load a world into a different mod set without a copy of it first
-    backupSaveIfModsChanged(root, savePath, data.vfs.signature());
+    std::string savePath = root + "save.sav";   // which farm: picked on the title's Load screen
     bool ok = data.load(root, &err);
     loadUiFonts(canvas, [&data](const std::string& rel) { return data.vfs.path(rel); });
     bool newFarm = false;
     std::string importNote;
-    if (ok) {   // a PC save brought over with tools/saveimport.py: build the farm from it once
-        std::string imp = root + "import.txt";
-        if (FILE* fi = fopen(imp.c_str(), "r")) {
+    if (ok) {
+        // PC farms brought over by the converter (import.txt, import2.txt, ...): each becomes a farm
+        // of its own in the next free slot, so nothing already on the card is replaced.
+        for (int n = 1; n <= sv::MAX_SAVES; n++) {
+            std::string tag = n == 1 ? std::string() : std::to_string(n);
+            std::string imp = root + "import" + tag + ".txt";
+            FILE* fi = fopen(imp.c_str(), "r");
+            if (!fi) continue;
             fclose(fi);
-            if (FILE* old = fopen(savePath.c_str(), "rb")) {   // keep the farm that was here
-                std::string bak = savePath + ".before_import";
-                if (FILE* nb = fopen(bak.c_str(), "wb")) {
-                    char cb[4096];
-                    size_t n;
-                    while ((n = fread(cb, 1, sizeof cb, old)) > 0) fwrite(cb, 1, n, nb);
-                    fclose(nb);
-                }
-                fclose(old);
+            int slot = sv::freeSaveSlot(root);
+            if (slot < 0) {
+                importNote = "All 12 farm slots are full: delete a farm (Load) to bring your PC farm over.";
+                break;
             }
-            if (game.newGame((uint32_t)osGetTime(), &err) && game.applyImport(imp, &importNote) && game.save(savePath)) {
-                remove((root + "import_done.txt").c_str());
-                rename(imp.c_str(), (root + "import_done.txt").c_str());
+            std::string to = sv::savePathFor(root, slot), note;
+            if (game.newGame((uint32_t)osGetTime(), &err) && game.applyImport(imp, &note) && game.save(to)) {
+                std::string done = root + "import" + tag + "_done.txt";
+                remove(done.c_str());
+                rename(imp.c_str(), done.c_str());
+                if (importNote.empty()) {       // the first one (the farm played last on the PC)
+                    sv::setLastSave(root, to);  // comes first on the Load screen
+                    importNote = note;
+                }
             } else {
-                importNote = "Couldn't bring your PC save over (import.txt).";
+                importNote = "Couldn't bring your PC save over (import" + tag + ".txt).";
             }
         }
+        sv::describeOldSaves(game, root);
     }
     if (ok) {
         // ---- title screen: Continue your farm, or make a new one
-        FILE* sf = fopen(savePath.c_str(), "rb");
-        bool hasSave = sf != nullptr;
-        if (sf) fclose(sf);
         TitleUi title;
-        titleInit(title, data, hasSave);
+        titleInit(title, data, !sv::listSaves(root).empty());
+        titleSetSaves(title, root);
+        bool hasSave = title.hasSave;
+        if (!importNote.empty())
+            title.note = importNote.rfind("Welcome", 0) == 0 ? "Your PC farm is here: choose Load." : importNote;
         title.keyboard = [](const std::string& hint, const std::string& cur, int maxLen) {
             SwkbdState kb;
             char buf[64] = {0};
@@ -235,14 +241,14 @@ int main() {
             SwkbdButton b = swkbdInputText(&kb, buf, sizeof buf);
             return b == SWKBD_BUTTON_RIGHT ? std::string(buf) : cur;
         };
-        if (hasSave) game.load(savePath);   // the title shows your farmer
+        if (hasSave) game.load(title.saves[0].path);   // the title shows the farmer you played last
         title.sound = [&sound](const char* cue) { sound.play(cue); };
         u64 tLast = osGetTime();
         Ui padUi;                                         // just for the pad's saved settings
         loadUiSettings(padUi, root + "settings.txt");
         if (padUi.padCal[2] > 0) cpp_pad::calibrate(padUi.padCal[0], padUi.padCal[1], padUi.padCal[2], padUi.padCal[3]);
         int calLoX = 0, calHiX = 0, calLoY = 0, calHiY = 0, calCx = 0x800, calCy = 0x800;
-        while (aptMainLoop() && (title.screen == TS_SPLASH || title.screen == TS_TITLE || title.screen == TS_CREATE || title.screen == TS_PADPRO)) {
+        while (aptMainLoop() && (title.screen == TS_SPLASH || title.screen == TS_TITLE || title.screen == TS_CREATE || title.screen == TS_PADPRO || title.screen == TS_LOAD)) {
             hidScanInput();
             if (title.screen == TS_PADPRO) {              // calibrating the Circle Pad Pro
                 cpp_pad::start();
@@ -296,6 +302,7 @@ int main() {
             if (k & KEY_RIGHT) titleKey(title, data, TK_RIGHT);
             if (k & KEY_A) titleKey(title, data, TK_A);
             if (k & KEY_B) titleKey(title, data, TK_B);
+            if (k & KEY_X) titleKey(title, data, TK_X);
             if (k & KEY_START) titleKey(title, data, TK_START);
             if (k & KEY_TOUCH) {
                 touchPosition tp;
@@ -314,19 +321,29 @@ int main() {
             C3D_FrameEnd(0);
         }
         if (title.screen == TS_EXIT || title.screen == TS_SPLASH || title.screen == TS_TITLE ||
-            title.screen == TS_CREATE || title.screen == TS_PADPRO) {   // Exit button (or HOME > close)
+            title.screen == TS_CREATE || title.screen == TS_PADPRO || title.screen == TS_LOAD) {   // Exit button (or HOME > close)
             C2D_Fini();
             C3D_Fini();
             romfsExit();
             gfxExit();
             return 0;
         }
+        bool brought = false;   // the farm being opened is one just brought over from the PC
         if (title.screen == TS_DONE_NEW) {
+            // a new farm takes the next free slot: it never replaces one that's already there
+            int slot = sv::freeSaveSlot(root);
+            savePath = sv::savePathFor(root, slot < 0 ? 0 : slot);
             ok = game.newGame((uint32_t)osGetTime(), title.draft, &err);
             newFarm = true;
-        } else if (!hasSave || !game.load(savePath)) {
-            ok = game.newGame((uint32_t)osGetTime(), &err);
+        } else {
+            savePath = title.chosenPath.empty() ? sv::savePathFor(root, 0) : title.chosenPath;
+            brought = !importNote.empty() && !title.saves.empty() && savePath == title.saves[0].path;
+            // never load a world into a different mod set without a copy of it first
+            backupSaveIfModsChanged(root, savePath, data.vfs.signature());
+            if (!game.load(savePath)) ok = game.newGame((uint32_t)osGetTime(), &err);
         }
+        if (ok) sv::setLastSave(root, savePath);
+        if (!brought) importNote.clear();
         canvas.dropTextures();
     }
     if (ok && !importNote.empty()) game.notify(importNote);

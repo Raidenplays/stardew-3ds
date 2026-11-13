@@ -46,7 +46,8 @@ h3 { font-size: 0.95rem; margin: 14px 0 4px; }
 .hint { color: var(--soft); font-size: 0.92rem; margin: 0 0 10px; }
 .where { padding-left: 20px; }
 #farmRow { margin-top: 10px; }
-select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); max-width: 100%; }
+#farm label { display: block; padding: 3px 0; }
+#farm input { width: 18px; height: 18px; vertical-align: -3px; accent-color: var(--leaf); }
 .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .picked { color: var(--soft); overflow-wrap: anywhere; }
 .picked.ok { color: var(--leaf-dark); font-weight: 600; }

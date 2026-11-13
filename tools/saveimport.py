@@ -406,7 +406,7 @@ def import_save(save_path, root):
         kinds[line[0]] = kinds.get(line[0], 0) + 1
     print(f"Imported {txt(p, 'name')}'s farm ({txt(sg, 'currentSeason')} {num(sg, 'dayOfMonth')}, year {num(sg, 'year')}):")
     print("  " + ", ".join(f"{v} {k}" for k, v in sorted(kinds.items())))
-    print(f"Wrote {dest}. Start stardew3ds to load it (a farm already there is backed up first).")
+    print(f"Wrote {dest}. Start stardew3ds: it appears as a new farm under Load (farms already there are kept).")
     return dest
 
 

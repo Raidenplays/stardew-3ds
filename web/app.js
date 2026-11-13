@@ -28,7 +28,8 @@
     $("convert").disabled = busy || !ready || !picked.game.length || (needDll && !dll);
     $("dllBox").hidden = !needDll;
     $("pickDll").disabled = busy;
-    for (const id of ["pickGame", "pickMods", "pickSave", "zip", "saveTo", "farm"]) $(id).disabled = busy;
+    for (const id of ["pickGame", "pickMods", "pickSave", "zip", "saveTo"]) $(id).disabled = busy;
+    for (const t of document.querySelectorAll("#farm input")) t.disabled = busy;
     $("clearMods").hidden = !picked.mods.length;
     $("clearSave").hidden = !picked.save.length;
     $("result").hidden = !converted;
@@ -145,7 +146,7 @@
   // in the save folder that was picked and, in case a copy is kept there, in the game and mods folders.
   let farms = [];
   function findFarms() {
-    const before = $("farm").value;
+    const off = new Set([...document.querySelectorAll("#farm input")].filter((t) => !t.checked).map((t) => t.value));
     farms = [];
     for (const kind of ["save", "game", "mods"]) {
       for (const e of picked[kind]) {
@@ -157,19 +158,21 @@
       }
     }
     farms.sort((x, y) => y.when - x.when);   // most recently played first
-    const sel = $("farm");
-    sel.innerHTML = "";
+    if (farms.length > 12) farms.length = 12;   // the game keeps up to 12 farms
+    const box = $("farm");
+    box.innerHTML = "";
     for (const f of farms) {
-      const o = document.createElement("option");
-      o.value = f.name;
-      o.textContent = f.name.replace(/_\d+$/, "") + (f.when ? " (last played " + new Date(f.when).toLocaleDateString() + ")" : "");
-      sel.appendChild(o);
+      const row = document.createElement("label");
+      const tick = document.createElement("input");
+      tick.type = "checkbox";
+      tick.value = f.name;
+      tick.checked = !off.has(f.name);
+      tick.onchange = () => { converted = false; refresh(); };
+      row.appendChild(tick);
+      row.appendChild(document.createTextNode(" " + f.name.replace(/_\d+$/, "")
+        + (f.when ? " (last played " + new Date(f.when).toLocaleDateString() + ")" : "")));
+      box.appendChild(row);
     }
-    const none = document.createElement("option");
-    none.value = "";
-    none.textContent = "Don't bring a farm";
-    sel.appendChild(none);
-    if (farms.some((f) => f.name === before) || before === "" && sel.dataset.touched) sel.value = before;
     $("farmRow").hidden = !farms.length;
     const el = label.save;
     if (picked.save.length) {
@@ -181,8 +184,6 @@
       el.textContent = farms.length ? "found " + farms.length + (farms.length === 1 ? " farm" : " farms") + " in your other folders" : "none";
     }
   }
-  $("farm").onchange = () => { $("farm").dataset.touched = "1"; converted = false; refresh(); };
-
   function top(entries) { return entries.length ? entries[0].path.split("/")[0] : ""; }
 
   function use(kind, entries) {
@@ -253,8 +254,13 @@
     status("Converting...");
     // the DLL picked on its own joins the game folder, where the converter looks for it
     const game = needDll && dll ? picked.game.concat([{ path: top(picked.game) + "/" + DLL, file: dll }]) : picked.game;
-    const farm = farms.find((f) => f.name === $("farm").value);
-    worker.postMessage({ cmd: "convert", game, mods: picked.mods, save: farm ? farm.files : [] });
+    // every ticked farm goes along, each in its own numbered folder so they keep this order
+    const ticked = new Set([...document.querySelectorAll("#farm input:checked")].map((t) => t.value));
+    const save = [];
+    farms.filter((f) => ticked.has(f.name)).forEach((f, i) => {
+      for (const x of f.files) save.push({ path: String(i).padStart(2, "0") + "/" + x.path, file: x.file });
+    });
+    worker.postMessage({ cmd: "convert", game, mods: picked.mods, save });
   }
   $("convert").onclick = convert;
 

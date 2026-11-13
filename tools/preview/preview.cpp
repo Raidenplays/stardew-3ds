@@ -299,6 +299,28 @@ int main(int argc, char** argv) {
         t.padState = 2; t.padStep = 1; t.padX = 0.6f; t.padY = -0.4f; t.padButtons = 2;
         shoot("padpro_step2");
         titleKey(t, data, TK_B);
+        {   // the Load screen with a few farms on the card
+            const char* who[5][2] = {{"Raiden", "Truro"}, {"yenis", "frenis"}, {"Dorfy", "Meadow"}, {"Egg", "Sunny"}, {"Tanni", "Apple"}};
+            for (int i = 0; i < 5; i++) {
+                sv::SaveSlot s;
+                s.slot = i; s.farmer = who[i][0]; s.farm = who[i][1]; s.known = true;
+                s.day = 3 + i * 6; s.season = i % 4; s.year = 1 + i / 2; s.money = 4350 + i * 12345;
+                t.saves.push_back(s);
+            }
+            t.hasSave = true;
+            t.cursor = 1;
+            shoot("title_with_saves");
+            titleKey(t, data, TK_A);
+            titleKey(t, data, TK_DOWN);
+            shoot("load");
+            titleKey(t, data, TK_X);
+            shoot("load_delete");
+            titleKey(t, data, TK_B);
+            titleKey(t, data, TK_B);
+            t.saves.clear();
+            t.hasSave = false;
+            t.cursor = 0;
+        }
         titleKey(t, data, TK_A);              // New farm
         titleKey(t, data, TK_A);              // type a name
         titleKey(t, data, TK_DOWN);

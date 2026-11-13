@@ -8,6 +8,7 @@
 #include <cstdlib>
 
 #include "game.h"
+#include "saves.h"
 using namespace sv;
 
 static void run(Game& g, const Input& in, int frames) {
@@ -305,6 +306,39 @@ int main(int argc, char** argv) {
     assert(g2.npcByName("Juniper")->introduced);
     assert(g2.npcByName("Juniper")->friendship == g.npcByName("Juniper")->friendship);
     assert(g2.eventsSeen.count("900") && g2.mailReceived.count("juniperInvite"));
+    {   // several farms on one card: slots, the Load list, deleting
+        std::string sr = "/tmp/sv_slots/";
+        system("rm -rf /tmp/sv_slots && mkdir -p /tmp/sv_slots");
+        assert(listSaves(sr).empty() && freeSaveSlot(sr) == 0);
+        assert(savePathFor(sr, 0) == sr + "save.sav" && savePathFor(sr, 1) == sr + "save2.sav");
+        g.me.name = "Ann";
+        g.me.farm = "Tab\tby";                       // a tab in a name mustn't break the list
+        assert(g.save(savePathFor(sr, 0)));
+        assert(freeSaveSlot(sr) == 1);
+        g.me.name = "Bo";
+        g.me.farm = "Second";
+        g.money = 777;
+        assert(g.save(savePathFor(sr, 1)));
+        std::vector<SaveSlot> ls = listSaves(sr);
+        assert(ls.size() == 2 && ls[0].known && ls[0].farmer == "Ann" && ls[0].farm == "Tab by");
+        assert(ls[1].farmer == "Bo" && ls[1].farm == "Second" && ls[1].money == 777 && ls[1].day == g.day);
+        setLastSave(sr, ls[1].path);                 // the farm played last is listed first
+        ls = listSaves(sr);
+        assert(ls[0].farmer == "Bo" && ls[1].farmer == "Ann");
+        remove((savePathFor(sr, 0) + ".info").c_str());   // a save from before the list existed
+        assert(!listSaves(sr)[1].known);
+        Game g3(d);
+        describeOldSaves(g3, sr);
+        assert(listSaves(sr)[1].known && listSaves(sr)[1].farmer == "Ann");
+        assert(trashSave(savePathFor(sr, 0)));       // deleting frees the slot and keeps a copy
+        ls = listSaves(sr);
+        assert(ls.size() == 1 && ls[0].farmer == "Bo" && freeSaveSlot(sr) == 0);
+        FILE* kept = fopen((savePathFor(sr, 0) + ".deleted").c_str(), "rb");
+        assert(kept);
+        fclose(kept);
+        for (int i = 0; i < MAX_SAVES; i++) assert(g.save(savePathFor(sr, i)));
+        assert(freeSaveSlot(sr) == -1 && (int)listSaves(sr).size() == MAX_SAVES);
+    }
     printf("all core tests passed\n");
     return 0;
 }

@@ -159,19 +159,7 @@ def run():
         sys.argv = old
         _clean()
     if code == 0 and os.path.isdir("/save"):
-        save = find_save()
-        if save:
-            print("Bringing your farm over: " + os.path.basename(save))
-            try:
-                import saveimport
-                saveimport.import_save(save, os.path.join(OUT, "3ds", "stardew3ds"))
-            except SystemExit as e:
-                print("! Couldn't read that save: " + str(e.code))
-            except Exception:
-                traceback.print_exc()
-                print("! Couldn't read that save. The game files are still fine.")
-        else:
-            print("! No save file in the save folder you picked")
+        _bring_farms(os.path.join(OUT, "3ds", "stardew3ds"))
     return code
 
 
@@ -187,6 +175,39 @@ def run_script(src, top):
         return e.code if isinstance(e.code, int) else (1 if e.code else 0)
     finally:
         sys.argv = old
+
+
+def _bring_farms(out):
+    """Each picked farm becomes import.txt, import2.txt, ... (the game gives every one
+    its own save slot). They arrive as /save/00/<farm>, /save/01/<farm>, in the order
+    they should appear."""
+    import saveimport
+    saves = [find_save(os.path.join("/save", d)) for d in sorted(os.listdir("/save"))]
+    saves = [s for s in saves if s]
+    if not saves:
+        print("! No save file in the save folder you picked")
+        return
+    main = os.path.join(out, "import.txt")
+    # last to first, so each can be written as import.txt and then moved to its own name
+    for n in range(len(saves), 0, -1):
+        save = saves[n - 1]
+        print("Bringing your farm over: " + os.path.basename(save))
+        try:
+            saveimport.import_save(save, out)
+            if n > 1:
+                os.replace(main, os.path.join(out, "import%d.txt" % n))
+        except SystemExit as e:
+            print("! Couldn't read that save: " + str(e.code))
+        except Exception as e:
+            print("! Couldn't read " + os.path.basename(save) + " (" + type(e).__name__ + ": " + str(e)
+                  + "). The game files and your other farms are still fine.")
+        if n == 1 and not os.path.isfile(main):
+            # the first farm didn't read: a later one takes its place so the numbering has no gap at 1
+            for k in range(2, len(saves) + 1):
+                later = os.path.join(out, "import%d.txt" % k)
+                if os.path.isfile(later):
+                    os.replace(later, main)
+                    break
 
 
 def outputs():

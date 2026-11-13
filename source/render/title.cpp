@@ -303,6 +303,117 @@ static void unofficialNotice(Canvas& c, float y) {
     c.text(160, y + 33, 0.38f, RGBA(0xE0, 0xD0, 0xB0), "Will be removed if ConcernedApe requests it.", ALIGN_CENTER);
 }
 
+void titleSetSaves(TitleUi& t, const std::string& root) {
+    t.root = root;
+    t.saves = sv::listSaves(root);
+    t.hasSave = !t.saves.empty();
+    if (t.saveSel >= (int)t.saves.size()) t.saveSel = std::max(0, (int)t.saves.size() - 1);
+    if (!t.hasSave && t.cursor == 1) t.cursor = 0;
+}
+
+// ---- Load screen: one row per farm
+static const int LOAD_ROWS = 4;
+static const float LOAD_Y0 = 30, LOAD_ROW_H = 40, LOAD_BTN_Y = 206;
+
+static void loadScroll(TitleUi& t) {
+    if (t.saveSel < t.saveTop) t.saveTop = t.saveSel;
+    if (t.saveSel >= t.saveTop + LOAD_ROWS) t.saveTop = t.saveSel - LOAD_ROWS + 1;
+    t.saveTop = std::max(0, std::min(t.saveTop, std::max(0, (int)t.saves.size() - LOAD_ROWS)));
+}
+
+static void drawLoad(Canvas& c, TitleUi& t) {
+    titleSky(c, 320, 240, t.t, true);
+    c.text(160, 8, 0.5f, CREAM, "Load a farm", ALIGN_CENTER);
+    loadScroll(t);
+    for (int r = 0; r < LOAD_ROWS; r++) {
+        int i = t.saveTop + r;
+        if (i >= (int)t.saves.size()) break;
+        const sv::SaveSlot& s = t.saves[i];
+        float y = LOAD_Y0 + r * (LOAD_ROW_H + 2);
+        uiSlot(c, 10, y, 300, LOAD_ROW_H, i == t.saveSel);
+        if (s.known) {
+            c.text(20, y + 5, 0.48f, TXT, (s.farm + " Farm").c_str());
+            c.text(20, y + 22, 0.4f, SOFT, s.farmer.c_str());
+            c.text(300, y + 5, 0.4f, SOFT, sv::saveDateText(s).c_str(), ALIGN_RIGHT);
+            c.text(300, y + 22, 0.4f, SOFT, (std::to_string(s.money) + "g").c_str(), ALIGN_RIGHT);
+        } else {
+            c.text(20, y + 12, 0.48f, TXT, ("Farm " + std::to_string(s.slot + 1)).c_str());
+        }
+    }
+    if (t.saveTop > 0) c.text(312, LOAD_Y0 - 12, 0.4f, CREAM, "^", ALIGN_RIGHT);
+    if (t.saveTop + LOAD_ROWS < (int)t.saves.size()) c.text(312, LOAD_BTN_Y - 9, 0.4f, CREAM, "v", ALIGN_RIGHT);
+    if (t.confirmDelete && t.saveSel < (int)t.saves.size()) {
+        const sv::SaveSlot& s = t.saves[t.saveSel];
+        uiFrame(c, 20, 70, 280, 100);
+        c.text(160, 82, 0.5f, SEL, "Delete this farm?", ALIGN_CENTER);
+        c.text(160, 104, 0.45f, TXT, (s.known ? s.farm + " Farm (" + s.farmer + ")" : "Farm " + std::to_string(s.slot + 1)).c_str(), ALIGN_CENTER);
+        uiSlot(c, 40, 134, 110, 26, false);
+        c.text(95, 139, 0.45f, SEL, "A: Delete", ALIGN_CENTER);
+        uiSlot(c, 170, 134, 110, 26, false);
+        c.text(225, 139, 0.45f, TXT, "B: Keep", ALIGN_CENTER);
+        return;
+    }
+    static const char* const BTN[3] = {"B: Back", "X: Delete", "A: Load"};
+    for (int k = 0; k < 3; k++) {
+        uiSlot(c, 10 + k * 102, LOAD_BTN_Y, 96, 26, false);
+        c.text(58 + k * 102, LOAD_BTN_Y + 5, 0.42f, k == 1 ? SEL : TXT, BTN[k], ALIGN_CENTER);
+    }
+}
+
+static void loadPick(TitleUi& t) {
+    if (t.saveSel < 0 || t.saveSel >= (int)t.saves.size()) return;
+    t.chosenPath = t.saves[t.saveSel].path;
+    t.screen = TS_DONE_CONTINUE;
+    if (t.sound) t.sound("select");
+}
+
+static void loadDelete(TitleUi& t) {
+    if (t.saveSel < 0 || t.saveSel >= (int)t.saves.size()) return;
+    sv::trashSave(t.saves[t.saveSel].path);
+    t.confirmDelete = false;
+    titleSetSaves(t, t.root);
+    if (t.sound) t.sound("trashcan");
+    if (!t.hasSave) t.screen = TS_TITLE;
+}
+
+static void loadKey(TitleUi& t, TitleKey k) {
+    if (t.confirmDelete) {
+        if (k == TK_A) loadDelete(t);
+        else if (k == TK_B) t.confirmDelete = false;
+        return;
+    }
+    int n = (int)t.saves.size();
+    if (k == TK_UP && n) t.saveSel = (t.saveSel + n - 1) % n;
+    else if (k == TK_DOWN && n) t.saveSel = (t.saveSel + 1) % n;
+    else if (k == TK_A || k == TK_START) loadPick(t);
+    else if (k == TK_X) t.confirmDelete = n > 0;
+    else if (k == TK_B) t.screen = TS_TITLE;
+    loadScroll(t);
+}
+
+static void loadTouch(TitleUi& t, int x, int y) {
+    if (t.confirmDelete) {
+        if (y >= 134 && y < 160 && x >= 40 && x < 150) loadDelete(t);
+        else if (y >= 134 && y < 160 && x >= 170 && x < 280) t.confirmDelete = false;
+        return;
+    }
+    if (y >= LOAD_BTN_Y && y < LOAD_BTN_Y + 26) {
+        int k = (x - 10) / 102;
+        if (k == 0) t.screen = TS_TITLE;
+        else if (k == 1) t.confirmDelete = !t.saves.empty();
+        else if (k == 2) loadPick(t);
+        return;
+    }
+    for (int r = 0; r < LOAD_ROWS; r++) {
+        float ry = LOAD_Y0 + r * (LOAD_ROW_H + 2);
+        int i = t.saveTop + r;
+        if (i >= (int)t.saves.size() || y < ry || y >= ry + LOAD_ROW_H) continue;
+        if (i == t.saveSel) loadPick(t);     // a second tap on the lit farm loads it
+        else t.saveSel = i;
+        return;
+    }
+}
+
 void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
     if (t.screen == TS_SPLASH) { drawSplash(c, t); return; }
     if (t.screen == TS_DONE_CONTINUE || t.screen == TS_EXIT) { c.rect(0, 0, 400, 240, RGBA(0, 0, 0)); return; }   // leaving: not the creator
@@ -337,7 +448,7 @@ void drawTitleTop(Canvas& c, const Game& g, TitleUi& t) {
         c.text(200, 186, 0.4f, SOFT, "B: back", ALIGN_CENTER);
         return;
     }
-    if (t.screen == TS_TITLE) {
+    if (t.screen == TS_TITLE || t.screen == TS_LOAD) {
         if (officialTitle(c)) {
             t.official = true;
             t.t += 1.0f / 60;
@@ -394,6 +505,7 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
     c.rect(0, 0, 320, 240, BG);
     if (t.screen == TS_SPLASH) { c.rect(0, 0, 320, 240, RGBA(255, 255, 255)); return; }   // white, like the top
     if (t.screen == TS_DONE_CONTINUE || t.screen == TS_EXIT) { c.rect(0, 0, 320, 240, RGBA(0, 0, 0)); return; }
+    if (t.screen == TS_LOAD) { drawLoad(c, t); return; }
     if (t.screen == TS_PADPRO) {
         titleSky(c, 320, 240, t.t, true);
         uiFrame(c, 90, 20, 140, 140);                     // the stick's travel, and where it is now
@@ -431,21 +543,24 @@ void drawTitleBottom(Canvas& c, const Game& g, TitleUi& t) {
                 c.image(TITLE_TEX, i * BTN_W, BTN_Y + (on && !off ? BTN_H : 0), BTN_W, BTN_H, x, BTNS_Y4, false, tint);
             }
         }
-        if (t.introT >= INTRO_SECONDS && t.cursor == 2)
+        if (t.introT >= INTRO_SECONDS && !t.note.empty())
+            c.text(160, BTNS_Y4 - 16, 0.36f, CREAM, t.note, ALIGN_CENTER);
+        else if (t.introT >= INTRO_SECONDS && t.cursor == 2)
             c.text(160, BTNS_Y4 - 16, 0.4f, CREAM, "Co-op is coming later", ALIGN_CENTER);
         if (t.introT >= INTRO_SECONDS) { unofficialNotice(c, 162); padProButton(c); }
         whiteOver(c, 320, 1 - t.introT / FADE_IN);
         return;
     }
     if (t.screen == TS_TITLE) {
-        const char* labels[2] = {"New farm", "Continue"};
+        const char* labels[2] = {"New farm", "Load a farm"};
         for (int i = 0; i < 2; i++) {
             bool on = t.cursor == i, off = i == 1 && !t.hasSave;
             float y = 48 + i * 58;
             uiSlot(c, 40, y, 240, 52, on && !off);
             c.text(160, y + 16, 0.6f, off ? SOFT : TXT, labels[i], ALIGN_CENTER);
         }
-        if (!t.hasSave) c.text(160, 32, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
+        if (!t.note.empty()) c.text(160, 32, 0.36f, CREAM, t.note, ALIGN_CENTER);
+        else if (!t.hasSave) c.text(160, 32, 0.4f, CREAM, "No saved farm yet", ALIGN_CENTER);
         unofficialNotice(c, 164);
         padProButton(c);
         return;
@@ -556,6 +671,7 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
         else if (k == TK_A && t.padState == 2) t.padConfirm = true;
         return;
     }
+    if (t.screen == TS_LOAD) { loadKey(t, k); return; }
     if (t.screen == TS_TITLE) {
         if (t.official) {   // New, Load, Co-op, Exit in a row
             if (k == TK_LEFT) t.cursor = (t.cursor + 3) % 4;
@@ -566,8 +682,10 @@ void titleKey(TitleUi& t, const GameData& data, TitleKey k) {
         if ((k == TK_A || k == TK_START) && t.sound && (t.cursor == 0 || t.cursor == 3 || (t.cursor == 1 && t.hasSave)))
             t.sound("select");
         if (k == TK_A || k == TK_START) {
-            if (t.cursor == 0) t.screen = TS_CREATE;
-            else if (t.cursor == 1 && t.hasSave) t.screen = TS_DONE_CONTINUE;
+            if (t.cursor == 0) {
+                if (!t.root.empty() && sv::freeSaveSlot(t.root) < 0) t.note = "All 12 farm slots are full. Delete one (Load) to start another.";
+                else { t.note.clear(); t.screen = TS_CREATE; }
+            } else if (t.cursor == 1 && t.hasSave) { t.note.clear(); t.confirmDelete = false; t.screen = TS_LOAD; }
             else if (t.cursor == 3 && t.official) t.screen = TS_EXIT;
         }
         return;
@@ -594,6 +712,7 @@ void titleTouch(TitleUi& t, const GameData& data, int x, int y) {
         if (x >= 110 && x < 210 && y >= 206 && y < 232) t.screen = TS_TITLE;
         return;
     }
+    if (t.screen == TS_LOAD) { loadTouch(t, x, y); return; }
     if (t.screen == TS_TITLE && x >= PADBTN_X && x < PADBTN_X + PADBTN_W && y >= PADBTN_Y && y < PADBTN_Y + PADBTN_H) {
         t.screen = TS_PADPRO;
         t.padStep = 0;

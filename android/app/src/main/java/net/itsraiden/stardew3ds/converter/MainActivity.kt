@@ -367,7 +367,7 @@ class MainActivity : AppCompatActivity() {
                 val cb = object : LineSink { override fun onLine(line: String) { say(line) } }
                 val code = Python.getInstance().getModule("bridge").callAttr(
                     "import_save", save.absolutePath, File(outDir, "3ds/stardew3ds").absolutePath, cb, toolsDir.absolutePath).toInt()
-                say(if (code == 0) "Your PC farm is ready. Save or send it to your 3DS, then start the game."
+                say(if (code == 0) "Your PC farm is ready. Save or send it to your 3DS, then start the game and choose Load. Farms already on the 3DS are kept."
                     else "Couldn't read that save (code $code)")
             } catch (e: Throwable) {
                 say("! ${e.javaClass.simpleName}: ${e.message}")

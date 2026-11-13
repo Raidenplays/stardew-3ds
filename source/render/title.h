@@ -2,11 +2,13 @@
 #pragma once
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "canvas.h"
 #include "core/game.h"
+#include "core/saves.h"
 
-enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE, TS_EXIT, TS_PADPRO };
+enum TitleScreen { TS_SPLASH = 0, TS_TITLE, TS_CREATE, TS_DONE_NEW, TS_DONE_CONTINUE, TS_EXIT, TS_PADPRO, TS_LOAD };
 
 // Fields on the creation screen, top to bottom.
 enum CreateField {
@@ -17,6 +19,12 @@ enum CreateField {
 struct TitleUi {
     TitleScreen screen = TS_TITLE;
     bool hasSave = false;
+    // Load screen (TS_LOAD): the farms on the card. The app fills `saves` and `root`.
+    std::string root;                   // where the saves live (for deleting one)
+    std::vector<sv::SaveSlot> saves;
+    int saveSel = 0, saveTop = 0;       // highlighted farm, first one shown
+    bool confirmDelete = false;         // "Delete this farm?" is up
+    std::string chosenPath;             // the farm to load (set with TS_DONE_CONTINUE)
     int cursor = 0;              // title: 0 new, 1 continue
     int field = CF_NAME;
     sv::Game::Character draft;
@@ -40,6 +48,8 @@ struct TitleUi {
 };
 
 void titleInit(TitleUi& t, const sv::GameData& data, bool hasSave);
+// The farms on the card (sets hasSave and the Load list).
+void titleSetSaves(TitleUi& t, const std::string& root);
 void drawTitleTop(Canvas& c, const sv::Game& g, TitleUi& t);
 // opening credits run for this long (on white, like the original), then the
 // title scene fades in and pans up the sky for INTRO_SECONDS
@@ -50,7 +60,7 @@ void titleSkipIntro(TitleUi& t);
 void titleTick(TitleUi& t, float dt);
 void drawTitleBottom(Canvas& c, const sv::Game& g, TitleUi& t);
 
-enum TitleKey { TK_UP, TK_DOWN, TK_LEFT, TK_RIGHT, TK_A, TK_B, TK_START };
+enum TitleKey { TK_UP, TK_DOWN, TK_LEFT, TK_RIGHT, TK_A, TK_B, TK_START, TK_X };
 void titleKey(TitleUi& t, const sv::GameData& data, TitleKey k);
 void titleTouch(TitleUi& t, const sv::GameData& data, int x, int y);
 

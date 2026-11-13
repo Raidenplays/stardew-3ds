@@ -1,4 +1,5 @@
 #include "game.h"
+#include "saves.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1992,7 +1993,9 @@ bool Game::save(const std::string& path) const {
     fclose(f);
     if (!ok) { remove(tmp.c_str()); return false; }
     remove(path.c_str());
-    return rename(tmp.c_str(), path.c_str()) == 0;
+    if (rename(tmp.c_str(), path.c_str()) != 0) return false;
+    writeSaveInfo(path, *this);   // who and when, for the Load screen
+    return true;
 }
 
 bool Game::load(const std::string& path, std::string* err) {
