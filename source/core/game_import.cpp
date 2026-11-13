@@ -1,5 +1,6 @@
 // A PC save brought over by tools/saveimport.py (import.txt): the farm is
 // rebuilt from it on top of a fresh game, then saved the 3DS way.
+#include <set>
 #include "game.h"
 
 #include <cctype>
@@ -69,7 +70,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     bundleDefs.clear();
     bundleGiven.clear();
     std::map<int, int> bid;   // import index -> building id
-    bool importedFurniture = false;
+    std::set<std::string> furnished;   // rooms whose furniture the save has replaced
     int counts[8] = {};
 
     auto locFor = [&](const std::string& name) -> Location* {
@@ -312,10 +313,8 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             for (char ch : f[2]) v.push_back(ch == '1');
             bundleGiven[I(f, 1)] = v;
         } else if (k == "furniture" && f.size() > 4) {   // your house as you left it
-            if (!importedFurniture) {
+            if (furnished.insert(f[1]).second)   // the first piece for a room: out goes what a new game put there
                 for (size_t q = furniture.size(); q-- > 0;) if (furniture[q].map == f[1]) furniture.erase(furniture.begin() + q);
-                importedFurniture = true;
-            }
             FurniturePlacement fp;
             fp.map = f[1]; fp.id = I(f, 2); fp.x = I(f, 3); fp.y = I(f, 4);
             if (data.furniture.count(fp.id)) furniture.push_back(fp);
