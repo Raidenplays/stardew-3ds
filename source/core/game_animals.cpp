@@ -652,16 +652,17 @@ bool Game::horseInteract(int tx, int ty) {
 }
 
 // Every farm has a greenhouse: in ruins until the Community Center pantry is
-// done. The standard farm keeps it at 25,10 (an imported farm brings its own).
+// done. It stands where the farm's map says (an imported farm brings its own).
 void Game::ensureGreenhouse() {
     const BuildingType* t = data.buildingType("Greenhouse");
-    if (!t || !farm || me.farmType != 0) return;
+    if (!t || !farm) return;
     for (auto& b : buildings) if (b.type == "Greenhouse") return;
     FarmBuilding b;
     b.id = nextBuildingId++;
     b.type = "Greenhouse";
-    b.x = 25;
-    b.y = 10;
+    const FarmType& ft = data.farmTypes[me.farmType >= 0 && me.farmType < (int)data.farmTypes.size() ? me.farmType : 0];
+    b.x = ft.ghX;   // the map's GreenhouseLocation (25,10 on the farms that don't say)
+    b.y = ft.ghY;
     int w = farm->map.width();
     for (int dy = 0; dy < t->h; dy++)
         for (int dx = 0; dx < t->w; dx++)
@@ -674,6 +675,39 @@ void Game::ensureGreenhouse() {
         if (farm->trees[i].x >= b.x && farm->trees[i].x < b.x + t->w && farm->trees[i].y >= b.y && farm->trees[i].y < b.y + t->h)
             farm->trees.erase(farm->trees.begin() + i);
     buildings.push_back(b);
+}
+
+void Game::startingCoop() {
+    const BuildingType* t = data.buildingType("Coop");
+    if (!t || !farm) return;
+    FarmBuilding b;
+    b.id = nextBuildingId++;
+    b.type = "Coop";
+    b.x = 54;   // where a new Meadowlands save has it
+    b.y = 9;
+    int w = farm->map.width();
+    for (int dy = -1; dy <= t->h; dy++)
+        for (int dx = 0; dx < t->w; dx++)
+            if (farm->map.inBounds(b.x + dx, b.y + dy)) {
+                size_t i = (size_t)(b.y + dy) * w + b.x + dx;
+                farm->debris[i] = DEB_NONE;
+                farm->grass[i] = 0;
+            }
+    for (size_t i = farm->trees.size(); i-- > 0;)
+        if (farm->trees[i].x >= b.x && farm->trees[i].x < b.x + t->w && farm->trees[i].y >= b.y - 1 && farm->trees[i].y <= b.y + t->h)
+            farm->trees.erase(farm->trees.begin() + i);
+    buildings.push_back(b);
+    static const char* kinds[2] = {"White Chicken", "Brown Chicken"};
+    static const char* names[2] = {"Daisy", "Clover"};
+    for (int i = 0; i < 2; i++) {
+        if (!data.animalType(kinds[i])) continue;
+        FarmAnimal an;
+        an.type = kinds[i];
+        an.name = names[i];
+        an.home = b.id;
+        an.x = -1;
+        animals.push_back(an);
+    }
 }
 
 // ---------------------------------------------------------------- things that happen in the night

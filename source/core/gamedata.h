@@ -177,7 +177,12 @@ enum Profession : int {
     PR_MINER = 18, PR_BLACKSMITH = 20, PR_GEMOLOGIST = 23,
 };
 
-struct FarmType { std::string key, name, map; };
+struct FarmType {
+    std::string key, name, map;
+    // where this farm's map puts things (its map properties): the house as an offset from the standard
+    // farm's, then the bin, mailbox, greenhouse and pet bowl tiles
+    int houseDx = 0, houseDy = 0, binX = 71, binY = 14, mailX = 68, mailY = 16, ghX = 25, ghY = 10, petX = 53, petY = 7;
+};
 
 struct MailTrigger {
     std::string id, when;            // "DayStarted" / "DayEnding"
@@ -373,6 +378,8 @@ public:
     std::vector<MailTrigger> mailTriggers;
     std::vector<ProfessionDef> professions;   // 30, by id
     std::vector<FarmType> farmTypes;          // Standard first
+    Layout baseLayout;                        // layout.txt as written (the standard farm's places)
+    void useFarm(int type) const;             // move the house, bin and mailbox to where this farm has them
     const ProfessionDef* profession(int id) const {
         return id >= 0 && id < (int)professions.size() ? &professions[id] : nullptr;
     }
@@ -393,7 +400,7 @@ public:
     std::vector<int> universalTastes[TASTE_COUNT];
     std::unordered_map<std::string, std::vector<GraphEdge>> graph;   // by source map
     const NpcDef* npc(const std::string& name) const;
-    Layout layout;
+    mutable Layout layout;   // for the farm being played (see useFarm)
     std::string root;   // SD folder the data came from
     Vfs vfs;            // base + enabled mod layers (set mods before load())
 };

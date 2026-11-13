@@ -1660,14 +1660,90 @@ static void drawArcade(Canvas& c, Game& g) {
     }
 }
 
+// The end of the day, as the game plays it: what went in the bin, heading by heading, under the night
+// sky; then the date scroll turning over to the new day while the farm is saved.
+static const int NIGHT_ROWS = 6;
+static const float NIGHT_ROW_TIME = 0.25f;
+
+static void drawNight(Canvas& c, Game& g, Ui& ui) {
+    c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));
+    if (ui.night == 1) {
+        static std::vector<uint32_t> sky;
+        if (sky.empty()) {
+            if (const std::string* list = g.mapString("ui:nightsky"))
+                for (size_t i = 0; i + 6 <= list->size(); i += 7) {
+                    unsigned v = (unsigned)strtoul(list->substr(i, 6).c_str(), nullptr, 16);
+                    sky.push_back(RGBA((uint8_t)(v >> 16), (uint8_t)(v >> 8), (uint8_t)v));
+                }
+            if (sky.empty()) sky = {RGBA(3, 3, 7), RGBA(24, 21, 55), RGBA(46, 41, 104), RGBA(68, 59, 152), RGBA(104, 56, 171), RGBA(130, 51, 179)};
+        }
+        float band = 204.0f / sky.size();
+        for (size_t i = 0; i < sky.size(); i++) c.rect(0, std::floor(i * band), TOP_W, std::ceil(band) + 1, sky[i]);
+        if (c.texWidth("LooseSprites_Cursors") > 0) {
+            c.image("LooseSprites_Cursors", 0, 1453, 400, 195, 0, 0);                                   // the stars
+            c.image("LooseSprites_Cursors", 0, 886, 400, 60, 0, TOP_H - 44, false, RGBA(22, 46, 44));    // the hills, in the dark
+        }
+        static const char* key[NIGHT_ROWS] = {"cs:ShippingMenu.cs.11389", "cs:ShippingMenu.cs.11390", "cs:ShippingMenu.cs.11391",
+                                              "cs:ShippingMenu.cs.11392", "cs:ShippingMenu.cs.11393", "cs:ShippingMenu.cs.11394"};
+        static const char* fall[NIGHT_ROWS] = {"Farming", "Foraging", "Fishing", "Mining", "Other", "Total"};
+        int shown = std::min(NIGHT_ROWS, (int)(ui.nightT / NIGHT_ROW_TIME) + 1);
+        for (int i = 0; i < shown; i++) {
+            float y = 12 + i * 37;
+            box(c, 96, y, 170, 28, COL_PANEL, COL_BORDER, 2);
+            c.text(104, y + 6, 0.6f, COL_TEXT, g.gameLine(key[i], fall[i], "", ""));
+            int total = 0;
+            if (i < 5) total = g.lastShip[i].total;
+            else for (auto& sc : g.lastShip) total += sc.total;
+            char buf[24];
+            snprintf(buf, sizeof buf, "%dg", total);
+            c.text(258, y + 6, 0.6f, total ? RGBA(0x8B, 0x1A, 0x1A) : COL_TEXT_SOFT, buf, ALIGN_RIGHT);
+            if (i < 5 && g.lastShip[i].kinds) {   // the first thing shipped under it, and a + when there was more
+                uiSlot(c, 272, y + 3, 22, 22, false);
+                slotIcon(c, g, g.lastShip[i].first, 275, y + 6);
+                if (g.lastShip[i].kinds > 1) {   // "and more"
+                    c.rect(299, y + 12, 9, 3, RGBA(0xFF, 0xD8, 0x4A));
+                    c.rect(302, y + 9, 3, 9, RGBA(0xFF, 0xD8, 0x4A));
+                }
+            }
+        }
+        if (shown == NIGHT_ROWS && ui.nightT >= NIGHT_ROWS * NIGHT_ROW_TIME) {
+            box(c, 272, 12 + 5 * 37 + 3, 30, 22, COL_PANEL, COL_BORDER, 2);
+            c.text(287, 12 + 5 * 37 + 8, 0.42f, RGBA(0x2E, 0x7D, 0x32), "OK", ALIGN_CENTER);
+        }
+        return;
+    }
+    // the scroll comes down with the day that ended, then turns to the new one
+    float t = ui.nightT;
+    std::string date = t < 1.3f ? g.dateLine(g.prevDay, g.prevSeason, g.prevYear) : g.dateLine(g.day, g.season, g.year);
+    float w = c.textWidth(date, 0.6f) + 28;
+    float y = t < 0.5f ? -30 + (108 + 30) * (t / 0.5f) : 108;
+    if (t < 3.7f) {
+        box(c, std::floor(TOP_W / 2 - w / 2), std::floor(y), w, 26, COL_PANEL, COL_BORDER, 2);
+        c.text(TOP_W / 2, std::floor(y) + 5, 0.6f, COL_TEXT, date, ALIGN_CENTER);
+    }
+    if (t >= 1.2f && !ui.nightSaved) c.text(8, TOP_H - 20, 0.45f, RGBA(255, 255, 255), "Saving...");
+    else if (ui.nightSaved && t < 3.7f)
+        c.text(8, TOP_H - 20, 0.45f, RGBA(0x4C, 0xD9, 0x4C), g.gameLine("cs:SaveGameMenu.cs.11378", "Your progress has been saved.", "", ""));
+}
+
+void nightAdvance(Game& g, Ui& ui) {
+    (void)g;
+    if (ui.night != 1) return;
+    if (ui.nightT < NIGHT_ROWS * NIGHT_ROW_TIME) ui.nightT = NIGHT_ROWS * NIGHT_ROW_TIME;   // show the rest at once
+    else { ui.night = 2; ui.nightT = 0; }
+}
+
 void drawTop(Canvas& c, Game& g, Ui& ui, uint32_t timeMs) {
     if (g.arcade.game) { drawArcade(c, g); return; }
+    if (ui.night) { drawNight(c, g, ui); return; }
     g_useMapCache = ui.mapCache != 0;
     c.cacheFlipY = ui.mapCache == 2;
     c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0));
     drawWorld(c, g, timeMs);
     drawWeatherAndLight(c, g, timeMs);
     profEnd(PROF_WEATHER);
+    if (g.sleepFade >= 0)   // in bed: the room goes dark
+        c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(255 * std::max(0.0f, std::min(1.0f, 1.0f - g.sleepFade)))));
     if (g.cutscene.active) {
         if (g.cutscene.fade > 0)
             c.rect(0, 0, TOP_W, TOP_H, RGBA(0, 0, 0, (uint8_t)(std::min(1.0f, g.cutscene.fade) * 255)));
@@ -1789,8 +1865,8 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
     }
     c.text(16, iy + 19, 0.38f, COL_TEXT_SOFT, info);
 
-    const char* labels[3] = {"Trash", g.equipKind(sel) >= 0 ? "Wear" : sel.type == SLOT_OBJECT && sel.id == 79 ? "Read" : "Eat", "Sleep"};
-    for (int i = 0; i < 3; i++) {
+    const char* labels[2] = {"Trash", g.equipKind(sel) >= 0 ? "Wear" : sel.type == SLOT_OBJECT && sel.id == 79 ? "Read" : "Eat"};
+    for (int i = 0; i < 2; i++) {
         float bx = 10 + i * 68;
         box(c, bx, iy + 42, 64, 26, COL_PANEL_DARK, COL_BORDER);
         c.text(bx + 32, iy + 47, 0.5f, COL_TEXT, labels[i], ALIGN_CENTER);
@@ -1800,6 +1876,18 @@ static void drawItemsTab(Canvas& c, Game& g, Ui& ui) {
         uiSlot(c, ex, iy + 44, 22, 22, false);
         if (!g.equip[e].empty()) slotIcon(c, g, g.equip[e], ex + 3, iy + 47);
         else c.text(ex + 11, iy + 49, 0.34f, COL_TEXT_SOFT, e < 2 ? "o" : e == 2 ? "b" : "h", ALIGN_CENTER);
+    }
+    if (ui.battery >= 0) {   // the console's battery, where the old Sleep button was
+        float bx = 160, by = iy + 49;
+        uint32_t ink = COL_TEXT, fill = ui.battery <= 1 && !ui.charging ? 0xFF3030D0u : COL_TEXT;
+        c.rect(bx, by, 30, 13, ink);                 // body
+        c.rect(bx + 30, by + 4, 2, 5, ink);          // terminal
+        c.rect(bx + 1, by + 1, 28, 11, COL_PANEL);
+        for (int i = 0; i < 5 && i < ui.battery; i++) c.rect(bx + 2 + i * 5.4f, by + 2, 4.4f, 9, fill);
+        char pct[24] = "";
+        if (ui.batteryPct >= 0) snprintf(pct, sizeof pct, "%d%%", ui.batteryPct);
+        if (pct[0]) c.text(bx + 15, by + 15, 0.34f, COL_TEXT_SOFT, ui.charging ? std::string(pct) + " charging" : std::string(pct), ALIGN_CENTER);
+        else if (ui.charging) c.text(bx + 15, by + 15, 0.34f, COL_TEXT_SOFT, "charging", ALIGN_CENTER);
     }
     char buf[80];
     snprintf(buf, sizeof buf, "%s %d, Year %d   %dg   Energy %d/%d", seasonShort(g.season), g.day,
@@ -1820,8 +1908,6 @@ static void touchItemsTab(Game& g, Ui& ui, int tx, int ty) {
     } else if (hit(tx, ty, 78, iy + 42, 64, 26)) {
         if (g.equipKind(g.inv[target]) >= 0) { if (g.wearSlot(target)) ui.picked = -1; }
         else if (g.eatSlot(target) && g.inv[target].empty()) ui.picked = -1;
-    } else if (hit(tx, ty, 146, iy + 42, 64, 26)) {
-        g.goToBed();
     } else {
         for (int e = 0; e < Game::EQ_COUNT; e++)
             if (hit(tx, ty, 216 + e * 24, iy + 44, 22, 22)) g.takeOff(e);
@@ -3252,6 +3338,11 @@ void drawBottom(Canvas& c, Game& g, Ui& ui) {
 }
 
 static void drawBottomScreen(Canvas& c, Game& g, Ui& ui) {
+    if (ui.night) {   // the end of the day plays on the top screen
+        c.rect(0, 0, BOT_W, BOT_H, RGBA(0, 0, 0));
+        if (ui.night == 1 && ui.nightT >= NIGHT_ROWS * NIGHT_ROW_TIME) c.text(160, 112, 0.45f, RGBA(0xF9, 0xD8, 0x96), "Tap or press A", ALIGN_CENTER);
+        return;
+    }
     if (ui.showSummary) {
         if (!g.levelUps.empty()) drawLevelUp(c, g, ui);
         else drawSummary(c, g);
@@ -3282,6 +3373,7 @@ static void drawBottomScreen(Canvas& c, Game& g, Ui& ui) {
 }
 
 void touchBottom(Game& g, Ui& ui, int tx, int ty, const std::string& savePath) {
+    if (ui.night) { nightAdvance(g, ui); return; }
     if (ui.showSummary) {
         if (!g.levelUps.empty()) touchLevelUp(g, ui, tx, ty);
         else summaryAdvance(g, ui);
@@ -3334,14 +3426,26 @@ bool sceneAfterUpdate(Game& g, Ui& ui, const std::string& savePath) {
         ui.cart.clear();
         g.openShop.clear();
     }
-    if (g.dayEnded) {
+    if (g.dayEnded) {   // the shipping screen if anything was shipped, then the date scroll and the save
         g.dayEnded = false;
-        g.save(savePath);
-        ui.showSummary = true;
+        ui.night = g.lastShipped ? 1 : 2;
+        ui.nightT = 0;
+        ui.nightSaved = false;
         ui.shop.clear();
         ui.tab = TAB_ITEMS;
     }
-    if (!ui.showSummary) g.passedOut = false;
+    if (ui.night) {
+        ui.nightT += 1.0f / 60;
+        if (ui.night == 2) {
+            if (!ui.nightSaved && ui.nightT >= 1.5f) { g.save(savePath); ui.nightSaved = true; }
+            if (ui.nightT >= 4.0f) {
+                ui.night = 0;
+                ui.showSummary = !g.levelUps.empty();   // new skill levels, one at a time
+                if (g.passedOut) { ui.status = "You passed out..."; ui.statusTime = 4; }
+            }
+        }
+    }
+    if (!ui.showSummary && !ui.night) g.passedOut = false;
     bool drop = false;
     if (g.season != ui.loadedSeason || g.location().name != ui.loadedMap) {
         drop = ui.loadedSeason != -1;

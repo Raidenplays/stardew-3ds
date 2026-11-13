@@ -277,9 +277,16 @@ bool GameData::load(const std::string& root, std::string* err) {
     readLines(root + "data/farmtypes.dat", lines);
     for (auto& l : lines) {
         auto f = splitTabs(l);
-        if (f.size() >= 3) farmTypes.push_back({f[0], f[1], f[2]});
+        if (f.size() < 3) continue;
+        FarmType t;
+        t.key = f[0]; t.name = f[1]; t.map = f[2];
+        if (f.size() >= 13) {
+            int* v[10] = {&t.houseDx, &t.houseDy, &t.binX, &t.binY, &t.mailX, &t.mailY, &t.ghX, &t.ghY, &t.petX, &t.petY};
+            for (int i = 0; i < 10; i++) *v[i] = atoi(f[3 + i].c_str());
+        }
+        farmTypes.push_back(t);
     }
-    if (farmTypes.empty()) farmTypes.push_back({"Standard", "Standard", "Farm"});
+    if (farmTypes.empty()) { FarmType t; t.key = t.name = "Standard"; t.map = "Farm"; farmTypes.push_back(t); }
 
     lines.clear();
     readLines(root + "data/mail.dat", lines);
@@ -834,7 +841,31 @@ bool GameData::load(const std::string& root, std::string* err) {
         b.tileX = layout.mailX; b.tileY = layout.mailY; b.footW = 1; b.footH = 1;
         layout.buildings.push_back(b);
     }
+    baseLayout = layout;
     return true;
+}
+
+// The house, its porch, door and mailbox, and the shipping bin sit where the farm's own map says
+// (the Meadowlands farm has them 17 tiles east of the standard farm's).
+void GameData::useFarm(int type) const {
+    layout = baseLayout;
+    if (type < 0 || type >= (int)farmTypes.size()) return;
+    const FarmType& t = farmTypes[type];
+    const FarmType std0;
+    int dx = t.houseDx, dy = t.houseDy;
+    int bdx = t.binX - std0.binX, bdy = t.binY - std0.binY;
+    int mdx = t.mailX - std0.mailX, mdy = t.mailY - std0.mailY;
+    if (!dx && !dy && !bdx && !bdy && !mdx && !mdy) return;
+    for (auto& b : layout.buildings) {
+        if (b.name == "shippingbin") { b.tileX += bdx; b.tileY += bdy; }
+        else if (b.name == "mailbox") { b.tileX += mdx; b.tileY += mdy; }
+        else { b.tileX += dx; b.tileY += dy; }
+    }
+    for (auto& o : layout.open) { o.x += dx; o.y += dy; }
+    layout.doorX += dx; layout.doorY += dy;
+    layout.spawnX += dx; layout.spawnY += dy;
+    layout.mailX += mdx; layout.mailY += mdy;
+    for (auto& b : layout.bins) { b.first += bdx; b.second += bdy; }
 }
 
 const NpcDef* GameData::npc(const std::string& name) const {

@@ -599,6 +599,14 @@ public:
     // events for the UI; it clears them
     bool dayEnded = false;
     int lastEarnings = 0;
+    // what went in the bin yesterday, by the shipping screen's headings (Farming, Foraging, Fishing, Mining, Other)
+    struct ShipCat { int total = 0, kinds = 0; Slot first; };
+    ShipCat lastShip[5];
+    bool lastShipped = false;
+    int prevDay = 1, prevSeason = 0, prevYear = 1;   // the day that just ended (the date scroll turns from it)
+    float sleepFade = -1;                // >= 0: in bed, the room going dark; the day turns when it runs out
+    void askSleep();                     // the bed's question
+    std::string dateLine(int d, int s, int y);   // "Day 22 of Spring, Year 1"
     bool passedOut = false;
     std::string openShop;     // set when the player talks to a shop counter
 
@@ -944,6 +952,7 @@ public:
     bool inGreenhouse() const { return cur && (cur->name.rfind("Greenhouse", 0) == 0 || cur->name == "IslandWest"); }   // grows anything, any season
     bool cropLand() const { return cur && (cur->isFarm || inGreenhouse()); }   // where you can hoe and plant
     void ensureGreenhouse();
+    void startingCoop();   // Meadowlands: a coop and two chickens from day one
     void notify(const std::string& s) { say(s); }
     void takeItem(int id, int n);
     // The Mines

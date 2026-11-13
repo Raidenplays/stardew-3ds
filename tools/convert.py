@@ -656,7 +656,7 @@ TEXTURES_FROM_DATA = set()
 # Robin's buildings that the engine handles: animal houses, sheds, silos, wells.
 BUILDABLE = {"Coop", "Big Coop", "Deluxe Coop", "Barn", "Big Barn", "Deluxe Barn", "Silo", "Well", "Shed", "Big Shed",
              "Greenhouse", "Stable", "Fish Pond", "Mill", "Slime Hutch", "Pet Bowl", "Junimo Hut", "Earth Obelisk",
-             "Water Obelisk", "Desert Obelisk", "Island Obelisk", "Gold Clock"}
+             "Water Obelisk", "Desert Obelisk", "Island Obelisk", "Gold Clock", "Cabin"}
 
 
 def write_buildings_animals(content, out_dir):
@@ -683,12 +683,12 @@ def write_buildings_animals(content, out_dir):
                 f.write("\t".join(_clean(x) for x in [
                     name, tex_name(tex),
                     f"{sr.get('X', 0)} {sr.get('Y', 0)} {sr.get('Width', 0)} {sr.get('Height', 0)}",
-                    f"{sz.get('X', 1)} {sz.get('Y', 1)}", int(b.get("BuildCost", 0) or 0), mats,
-                    b.get("IndoorMap") or "", f"{hd.get('X', -1)} {hd.get('Y', -1)}",
+                    f"{sz.get('X', 1)} {sz.get('Y', 1)}", 0 if name == "Cabin" else int(b.get("BuildCost", 0) or 0), mats,
+                    "" if name == "Cabin" else b.get("IndoorMap") or "", f"{hd.get('X', -1)} {hd.get('Y', -1)}",
                     f"{ad.get('X', -1)} {ad.get('Y', -1)} {ad.get('Width', 0)} {ad.get('Height', 0)}",
                     int(b.get("MaxOccupants", 0) or 0), ",".join(b.get("ValidOccupantTypes") or []),
                     b.get("BuildingToUpgrade") or "", int(b.get("BuildDays", 0) or 0), int(b.get("HayCapacity", 0) or 0), hopper,
-                    b.get("Builder") or "",
+                    "None" if name == "Cabin" else b.get("Builder") or "",   # a co-op cabin stands where it stood; Robin doesn't sell them
                 ]) + "\n")
     ap = os.path.join(content, "Data", "FarmAnimals.json")
     if os.path.isfile(ap):
@@ -1385,6 +1385,28 @@ FARM_TYPES = [("Standard", "Standard", "Farm"), ("Fishing", "Riverland", "Farm_F
               ("Beach", "Beach", "Farm_Island")]
 
 
+def _farm_spots(content, mp):
+    """Where a farm map puts the house, bin, mailbox, greenhouse and pet bowl (its map properties;
+    the standard farm's places when a map doesn't say)."""
+    props = {}
+    try:
+        root = ET.parse(os.path.join(content, "Maps", mp + ".tmx")).getroot()
+        pe = root.find("properties")
+        for e in (pe if pe is not None else []):
+            props[e.get("name")] = e.get("value") or ""
+    except Exception:
+        pass
+    def pt(key, dx, dy):
+        try:
+            a = props[key].split()
+            return int(a[0]), int(a[1])
+        except Exception:
+            return dx, dy
+    ex, ey = pt("FarmHouseEntry", 64, 15)
+    return [ex - 64, ey - 15, *pt("ShippingBinLocation", 71, 14), *pt("MailboxLocation", 68, 16),
+            *pt("GreenhouseLocation", 25, 10), *pt("PetBowlLocation", 53, 7)]
+
+
 def write_farm_types(content, out_dir):
     maps = os.path.join(content, "Maps")
     rows = [(k, n, m) for k, n, m in FARM_TYPES if os.path.isfile(os.path.join(maps, m + ".tmx"))]
@@ -1398,7 +1420,7 @@ def write_farm_types(content, out_dir):
         rows.append((key, name, mp))
     with open(os.path.join(out_dir, "farmtypes.dat"), "w", encoding="utf-8") as f:
         for k, n, m in rows:
-            f.write(f"{_clean(k)}\t{_clean(n)}\t{_clean(m)}\n")
+            f.write(f"{_clean(k)}\t{_clean(n)}\t{_clean(m)}\t" + "\t".join(str(v) for v in _farm_spots(content, m)) + "\n")
     print(f"  farmtypes.dat: {len(rows)} farm types")
 
 
@@ -1914,6 +1936,17 @@ def write_world_text(content, out_dir):
         for k, v in load("Strings/StringsFromCSFiles.json").items():
             if k.startswith("Event.cs.10"):
                 f.write(f"cs:{_flat(k)}\t{_flat(v)}\n")
+        # the end of the day: the shipping screen's headings, the date scroll, the bed's question
+        for k, v in load("Strings/StringsFromCSFiles.json").items():
+            if k.startswith("ShippingMenu.cs.") or k in ("Utility.cs.5678", "SaveGameMenu.cs.11378"):
+                f.write(f"cs:{_flat(k)}\t{_flat(v)}\n")
+        try:   # the night sky behind the shipping screen: the gradient strip on the cursors sheet
+            from PIL import Image
+            im = Image.open(find_png(content, "LooseSprites/Cursors")).convert("RGBA")
+            cols = [im.getpixel((639, y)) for y in range(858, 1006, 4)]
+            f.write("ui:nightsky\t" + ",".join("%02x%02x%02x" % c[:3] for c in cols if c[3]) + "\n")
+        except Exception:
+            pass
         for k, v in load("Strings/Notes.json").items():
             f.write(f"note:{_flat(k)}\t{_flat(v)}\n")
         for k, v in load("Data/SecretNotes.json").items():

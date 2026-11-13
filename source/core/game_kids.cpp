@@ -155,6 +155,10 @@ void Game::kidsAsk() {
 }
 
 bool Game::kidsChoice(const std::string& what, const std::string& key) {
+    if (what == "bed") {   // "Go to sleep for the night?"
+        if (key == "bed:yes") sleepFade = 1.0f;
+        return true;
+    }
     if (what != "baby") return false;
     if (key == "baby:yes") {
         babyDue = 14;

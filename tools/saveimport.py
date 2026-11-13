@@ -269,7 +269,8 @@ def import_save(save_path, root):
     out.append(["money", num(p, "money") or num(sg, "money")])
     out.append(["earned", num(p, "totalMoneyEarned")])
     out.append(["date", SEASONS.get(txt(sg, "currentSeason", "spring").lower(), 0), num(sg, "dayOfMonth", 1), num(sg, "year", 1)])
-    out.append(["farmtype", num(sg, "whichFarm")])
+    wf = txt(sg, "whichFarm", "0").strip()   # 0-6 for the built-in farms, a name for the others (MeadowlandsFarm, mod farms)
+    out.append(["farmtype", int(wf) if wf.lstrip("-").isdigit() else clean(wf)])
     out.append(["gender", "female" if txt(p, "gender", "Male") == "Female" or not truthy(p, "isMale") and p.find("isMale") is not None else "male"])
     xp = p.find("experiencePoints")
     if xp is not None:

@@ -29,6 +29,13 @@ struct Ui {
     bool ptrOn = false;
     float quitAsk = 0;        // "tap again to quit" is showing (seconds left)
     bool quitNoSave = false;  // leaving by "Quit without saving"
+    // the end of the day, on the top screen: 1 what was shipped (under a night sky), 2 the date scroll and the save
+    int night = 0;
+    float nightT = 0;
+    bool nightSaved = false;
+    int battery = -1;         // the console's battery in fifths (0-5), -1 = not known (set by the platform)
+    int batteryPct = -1;      // and in percent when the console says
+    bool charging = false;
     int padProState = 0;      // 0 off, 1 looking, 2 connected (set by the platform)
     int padCal[4] = {0, 0, 0, 0};   // centre x, y and range x, y from the title screen's calibration (0 = none)
     std::string status;
@@ -79,6 +86,7 @@ void touchBottom(sv::Game& g, Ui& ui, int x, int y, const std::string& savePath)
 void loadUiSettings(Ui& ui, const std::string& path);
 void saveUiSettings(const Ui& ui, const std::string& path);
 void dialogueAdvance(sv::Game& g, Ui& ui);
+void nightAdvance(sv::Game& g, Ui& ui);   // A or a tap during the end-of-day screens
 void summaryAdvance(sv::Game& g, Ui& ui);    // A / tap on the morning screens (level-ups first)
 void summaryMove(sv::Game& g, Ui& ui, int dir);   // left/right between profession cards
 // While fishing, the touch screen feeds the game input (hold to reel, tap to hook).

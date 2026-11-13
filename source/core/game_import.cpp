@@ -39,13 +39,21 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
     if (lines.empty() || lines[0][0] != "version") return false;
 
     // the right kind of farm first (Riverland, Forest, ...): the world is started again on that map
-    for (auto& f : lines)
-        if (f[0] == "farmtype" && I(f, 1) != me.farmType && I(f, 1) >= 0 && I(f, 1) < (int)data.farmTypes.size()) {
+    for (auto& f : lines) {
+        if (f[0] != "farmtype" || f.size() < 2) continue;
+        int want = -1;   // 0-6 for the built-in farms, the farm's id for the rest (MeadowlandsFarm, mod farms)
+        if (!f[1].empty() && (isdigit((unsigned char)f[1][0]) )) want = I(f, 1);
+        else
+            for (size_t i = 0; i < data.farmTypes.size(); i++)
+                if (data.farmTypes[i].key == f[1]) want = (int)i;
+        if (want != me.farmType && want >= 0 && want < (int)data.farmTypes.size()) {
             Character who = me;
-            who.farmType = I(f, 1);
+            who.farmType = want;
             if (!newGame(rngState, who)) return false;
         }
+    }
 
+    bool rehouse = false;
     // the PC farm replaces the starting one
     int fw = farm->map.width();
     for (auto& d : farm->debris) d = DEB_NONE;
@@ -198,7 +206,11 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
         else if (k == "cookedever" && f.size() > 2) cookedEver[I(f, 1)] = I(f, 2);
         else if (k == "earned") totalEarned = std::max(totalEarned, (long long)I(f, 1));
         else if (k == "backpack") invSlots = I(f, 1) >= 36 ? 36 : I(f, 1) >= 24 ? 24 : 12;
-        else if (k == "house") { houseLevel = std::max(0, std::min(3, I(f, 1))); locations.erase("FarmHouse"); }
+        else if (k == "house") {   // the house is loaded again at its new size (step outside first if we're standing in it)
+            houseLevel = std::max(0, std::min(3, I(f, 1)));
+            if (cur && cur->name == "FarmHouse") { cur = farm; rehouse = true; }
+            locations.erase("FarmHouse");
+        }
         else if (k == "craftrecipe" && f.size() > 1) mailReceived.insert("craft:" + f[1]);
         else if (k == "cookrecipe" && f.size() > 1) mailReceived.insert("cook:" + f[1]);
         else if (k == "building" && f.size() > 5 && data.buildingType(f[1])) {
@@ -336,6 +348,7 @@ bool Game::applyImport(const std::string& path, std::string* summary) {
             }
         }
     }
+    if (rehouse) wakeUp();
     museumRewardsCheck(false);   // rewards you already got on the PC
     ensureGreenhouse();
     farm->spawnDay = absoluteDay();

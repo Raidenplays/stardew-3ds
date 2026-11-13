@@ -337,6 +337,7 @@ bool Game::newGame(uint32_t seed, const Character& who, std::string* err) {
 }
 
 bool Game::newGame(uint32_t seed, std::string* err) {
+    data.useFarm(me.farmType);
     rngState = seed ? seed : 1;
     maxEnergy = MAX_ENERGY;
     maxHealth = 100;
@@ -404,7 +405,13 @@ bool Game::newGame(uint32_t seed, std::string* err) {
         inv[slot].count = 1;
         slot++;
     }
-    if (data.cropForSeed(OBJ_PARSNIP_SEEDS)) {
+    // the Meadowlands farm starts with hay and a coop of two chickens instead of parsnip seeds
+    bool meadow = data.farmTypes[me.farmType].key == "MeadowlandsFarm" && data.buildingType("Coop") && data.object(178);
+    if (meadow) {
+        inv[slot].type = SLOT_OBJECT;
+        inv[slot].id = 178;
+        inv[slot].count = 15;
+    } else if (data.cropForSeed(OBJ_PARSNIP_SEEDS)) {
         inv[slot].type = SLOT_OBJECT;
         inv[slot].id = OBJ_PARSNIP_SEEDS;
         inv[slot].count = 15;
@@ -422,6 +429,7 @@ bool Game::newGame(uint32_t seed, std::string* err) {
     if (!debrisFromMap(r)) spawnDebris(diggable / 6, r);
     rngState = r;
     ensureGreenhouse();
+    if (meadow) startingCoop();
     // the first two quests of a new farm
     addQuest("9");
     addQuest("6");
@@ -1134,7 +1142,7 @@ bool Game::tryInteract(int tx, int ty) {
         if (fd != data.furniture.end()) { bw = fd->second.boxW; bh = fd->second.boxH; }
     }
     if (cur->name == L.bedMap && tx >= bx && tx < bx + bw && ty >= by && ty < by + bh) {
-        goToBed();
+        askSleep();
         return true;
     }
     if (runMapAction(cur->map.action(tx, ty), false)) return true;
@@ -1406,6 +1414,11 @@ void Game::updateEffects(float dt) {
 void Game::update(float dt, const Input& in) {
     g_farmerFemale = me.outfit.female;   // for lines written one way for him and another for her
     if (toastTime > 0) toastTime -= dt;
+    if (sleepFade >= 0) {   // in bed: the room goes dark, then the day turns
+        sleepFade -= dt;
+        if (sleepFade < 0) { sleepFade = -1; goToBed(); }
+        return;
+    }
     if (arcade.game) { arcadeUpdate(dt, in); return; }
     if (packAsk > 0) packAsk -= dt;
     petUpdate(dt);
@@ -1650,13 +1663,52 @@ void Game::update(float dt, const Input& in) {
     }
 }
 
+void Game::askSleep() {
+    if (hasMap(data.layout.bedMap) && !canSleepHere()) { say("Go home to sleep"); return; }
+    DialoguePage p;
+    p.text = gameLine("loc:FarmHouse_Bed_GoToSleep", "Go to sleep for the night?", "", "");
+    DialogueChoice c;
+    c.label = "Yes"; c.responseKey = "bed:yes"; p.choices.push_back(c);
+    c.label = "No"; c.responseKey = ""; p.choices.push_back(c);
+    dialogue = DialogueBox();
+    dialogue.active = true;
+    dialogue.pages.push_back(p);
+    pendingChoice = "bed";
+}
+
+std::string Game::dateLine(int d, int s, int y) {
+    std::string sn = seasonName(s);
+    sn[0] = (char)toupper((unsigned char)sn[0]);
+    std::string out = gameLine("cs:Utility.cs.5678", "Day {0} of {1}, Year {2}", std::to_string(d), sn);
+    size_t at = out.find("{2}");
+    if (at != std::string::npos) out.replace(at, 3, std::to_string(y));
+    return out;
+}
+
 bool Game::goToBed() {
     if (!passedOut && hasMap(data.layout.bedMap) && !canSleepHere()) {
         say("Go home to sleep");
         return false;
     }
     int earned = 0;
+    for (auto& c : lastShip) c = ShipCat();
+    lastShipped = !shipped.empty();
+    prevDay = day; prevSeason = season; prevYear = year;
+    sleepFade = -1;
     for (auto& s : shipped) {
+        {   // which heading of the shipping screen it counts under
+            int cat = 4;
+            if (s.type == SLOT_OBJECT)
+                if (const ObjectDef* o = data.object(s.id)) {
+                    int k = o->category;
+                    cat = k == -75 || k == -79 || k == -80 || k == -5 || k == -6 || k == -18 || k == -26 || k == -14 ? 0
+                        : k == -81 || k == -27 || k == -23 ? 1
+                        : k == -4 ? 2
+                        : k == -2 || k == -12 || k == -15 ? 3 : 4;
+                }
+            if (!lastShip[cat].kinds++) lastShip[cat].first = s;
+            lastShip[cat].total += itemPrice(s) * s.count;
+        }
         earned += itemPrice(s) * s.count;
         if (s.type == SLOT_OBJECT) {
             shippedEver[s.id] += s.count;
@@ -2057,6 +2109,7 @@ bool Game::load(const std::string& path, std::string* err) {
     me.outfit = data.layout.outfit;
     if (version >= 11) me.farmType = r.i32();
     if (me.farmType < 0 || me.farmType >= (int)data.farmTypes.size()) me.farmType = 0;
+    data.useFarm(me.farmType);
     locations.clear();
     farm = loadLocation("Farm", err);
     if (!farm) { fclose(f); return false; }

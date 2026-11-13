@@ -70,6 +70,17 @@ void Game::ensurePetBowl() {
     const BuildingType* t = data.buildingType("Pet Bowl");
     if (!t || !farm) return;
     for (auto& b : buildings) if (b.type == "Pet Bowl") return;
+    if (me.farmType >= 0 && me.farmType < (int)data.farmTypes.size()) {   // where the farm's map has it
+        const FarmType& ft = data.farmTypes[me.farmType];
+        if (farmSpotFree(ft.petX, ft.petY, t->w, t->h)) {
+            FarmBuilding b;
+            b.id = nextBuildingId++;
+            b.type = "Pet Bowl";
+            b.x = ft.petX; b.y = ft.petY;
+            buildings.push_back(b);
+            return;
+        }
+    }
     for (int r = 3; r < 14; r++)
         for (int dy = 1; dy <= r; dy++)
             for (int dx = -r; dx <= r; dx++) {

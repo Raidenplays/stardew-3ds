@@ -120,6 +120,8 @@ int main() {
     gfxInitDefault();
     irrstInit();   // the New 3DS C-stick and ZL/ZR (does nothing on an old 3DS)
     romfsInit();   // built-in art: the ItsRaiden logo and the 3DS sign
+    ptmuInit();    // battery level and whether it's charging
+    bool haveMcu = R_SUCCEEDED(mcuHwcInit());   // the battery in percent (not every way of launching allows it)
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(12288);   // both eyes + bottom screen per frame
     C2D_Prepare();
@@ -433,6 +435,15 @@ int main() {
         in.walk = kHeld & KEY_B;
         in.sx = (kHeld & KEY_A) ? 1 : (kHeld & KEY_Y) ? -1 : 0;
         in.sy = (kHeld & KEY_B) ? 1 : (kHeld & KEY_X) ? -1 : 0;
+        {   // the battery, read every couple of seconds
+            static int batTick = 0;
+            if (batTick++ % 120 == 0) {
+                u8 lv = 0, chg = 0, pct = 0;
+                ui.battery = R_SUCCEEDED(PTMU_GetBatteryLevel(&lv)) ? std::min(5, (int)lv) : -1;
+                ui.charging = R_SUCCEEDED(PTMU_GetBatteryChargeState(&chg)) && chg;
+                ui.batteryPct = haveMcu && R_SUCCEEDED(MCUHWC_GetBatteryLevel(&pct)) ? std::min(100, (int)pct) : -1;
+            }
+        }
         {   // a Circle Pad Pro, when it's switched on in Options: its stick aims, ZL / ZR step through the toolbar
             static bool padOn = false;
             static bool lastZl = false, lastZr = false;
@@ -512,6 +523,11 @@ int main() {
         if (game.dialogue.active) {
             if (kDown & KEY_A) dialogueAdvance(game, ui);
             in = Input();
+        }
+        if (ui.night) {   // the end-of-day screens: nothing else moves
+            if (kDown & KEY_A) nightAdvance(game, ui);
+            in = Input();
+            dt = 0;
         }
         if (ui.showSummary) {
             if (kDown & (KEY_DLEFT | KEY_CPAD_LEFT)) summaryMove(game, ui, -1);
@@ -597,7 +613,7 @@ int main() {
         {   // ...or when something it shows has changed (money, energy, the bag, the tab, a new perf reading)
             static uint32_t lastSig = 0;
             uint32_t sig = (uint32_t)game.money * 31u + (uint32_t)game.energy * 131u + (uint32_t)game.health * 17u + (uint32_t)game.selected * 7u +
-                           (uint32_t)ui.tab * 1009u + (uint32_t)(ui.shopScroll + ui.craftScroll * 3 + ui.questScroll * 5 + ui.socialScroll * 7 + ui.colScroll * 11) * 419u + (uint32_t)(ui.padProState + (ui.padPro ? 4 : 0)) * 811u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf;
+                           (uint32_t)ui.tab * 1009u + (uint32_t)(ui.shopScroll + ui.craftScroll * 3 + ui.questScroll * 5 + ui.socialScroll * 7 + ui.colScroll * 11) * 419u + (uint32_t)(ui.padProState + (ui.padPro ? 4 : 0)) * 811u + (uint32_t)(ui.battery * 3 + ui.batteryPct * 5 + ui.charging) * 613u + (uint32_t)game.day * 53u + (uint32_t)(game.timeOfDay / 10) * 3u + (uint32_t)ui.showPerf + (uint32_t)(ui.night * 2 + (ui.nightT >= 1.5f)) * 977u;
             for (int k = 0; k < game.invSlots; k++) sig = sig * 16777619u ^ (uint32_t)(game.inv[k].id * 64 + game.inv[k].count + game.inv[k].type * 7919);
             for (char ch : ui.status) sig = sig * 16777619u ^ (uint8_t)ch;
             if (ui.showPerf) for (const char* p = perfLine1; *p; p++) sig = sig * 16777619u ^ (uint8_t)*p;
@@ -692,6 +708,8 @@ int main() {
     C2D_Fini();
     C3D_Fini();
     cpp_pad::stop();
+    if (haveMcu) mcuHwcExit();
+    ptmuExit();
     romfsExit();
     irrstExit();
     gfxExit();

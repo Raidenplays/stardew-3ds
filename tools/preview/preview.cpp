@@ -25,11 +25,17 @@ using namespace sv;
 static std::string g_root, g_out, g_save = "/tmp/stardew3ds_preview.sav";
 static uint32_t g_timeMs = 0;
 static int g_shot = 0;
+static bool g_nightShow = false;
 
 static void step(Game& g, Ui& ui, const Input& in, int frames) {
     for (int i = 0; i < frames; i++) {
         g.update(1.0f / 60, in);
         sceneAfterUpdate(g, ui, g_save);
+        if (ui.night && !g_nightShow) {   // the other tours skip the end-of-day screens (saved, as they would be)
+            g.save(g_save);
+            ui.night = 0;
+            ui.showSummary = !g.levelUps.empty();
+        }
         g_timeMs += 16;
     }
 }
@@ -535,6 +541,35 @@ int main(int argc, char** argv) {
     if (!walkUntilWarp(g, ui, 0, 1)) printf("  ! couldn't leave the farmhouse\n");
     step(g, ui, none, 20);
     shot(c, g, ui, "farm_morning");
+    if (const char* b = getenv("BATTERY")) { ui.battery = atoi(b); ui.batteryPct = atoi(b) * 20 - 7; ui.charging = atoi(b) == 2; }
+    if (getenv("NIGHT")) {   // the end of a day: the bed's question, the shipping screen, the date scroll
+        g_nightShow = true;
+        g.teleport("FarmHouse", 9, 8);
+        g.askSleep();
+        shot(c, g, ui, "night_ask");
+        g.dialogue = DialogueBox();
+        Slot a; a.type = SLOT_OBJECT; a.id = 176; a.count = 3;
+        Slot b = a; b.id = 24; b.count = 5;
+        Slot d = a; d.id = 16; d.count = 2;
+        Slot e = a; e.id = 771; e.count = 4;
+        g.shipped = {a, b, d, e};
+        g.sleepFade = 1.0f;
+        step(g, ui, none, 40);
+        shot(c, g, ui, "night_fade");
+        step(g, ui, none, 30);
+        step(g, ui, none, 50);
+        shot(c, g, ui, "night_rows");
+        step(g, ui, none, 70);
+        shot(c, g, ui, "night_shipped");
+        nightAdvance(g, ui);
+        step(g, ui, none, 60);
+        shot(c, g, ui, "night_scroll_old");
+        step(g, ui, none, 80);
+        shot(c, g, ui, "night_scroll_new");
+        step(g, ui, none, 140);
+        shot(c, g, ui, "night_done");
+        return 0;
+    }
     if (importArg) {   // a PC save brought over: the farm, then the greenhouse
         std::string note;
         bool ok = g.applyImport(std::string(argv[1]) + "import.txt", &note);
